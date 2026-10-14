@@ -43,6 +43,7 @@ public partial class MainViewModel : ObservableObject
         ServerOutput = new OutputChannel("Language Server");
         OutputChannels = [BuildOutput, DebugOutput, ServerOutput];
         SelectedOutput = BuildOutput;
+        InitializeDebugging();
     }
 
     public IDialogService? Dialogs { get; set; }
@@ -99,6 +100,7 @@ public partial class MainViewModel : ObservableObject
     public partial ProjectInfo? StartupProject { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StartButtonText))]
     public partial string? LaunchProfile { get; set; }
 
     [ObservableProperty]
@@ -214,6 +216,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(RecentSolutions));
         var state = Settings.For(path);
         Configuration = state.Configuration;
+        LoadDebugState(state);
 
         foreach (var p in solution.Projects.Where(p => p.IsRunnable))
             StartupProjects.Add(p);
@@ -251,10 +254,13 @@ public partial class MainViewModel : ObservableObject
             var state = Settings.For(Solution.FilePath);
             state.OpenDocuments = Documents.Select(d => d.FilePath).ToList();
             state.ActiveDocument = ActiveDocument?.FilePath;
+            SaveDebugState(state);
             Settings.Save();
         }
 
-        Stop();
+        _runProcess?.Kill();
+        if (_session is { } debugSession)
+            await debugSession.TerminateAsync();
         _buildCts?.Cancel();
         foreach (var doc in Documents)
             doc.Dispose();
@@ -267,6 +273,8 @@ public partial class MainViewModel : ObservableObject
         _buildErrors.Clear();
         FindResults.Clear();
         RefreshErrorList();
+        Breakpoints.Load(new Dictionary<string, List<int>>());
+        Watches.Clear();
         Solution = null;
         SetStatus("Ready", StatusKind.NoSolution);
         return true;
@@ -279,6 +287,7 @@ public partial class MainViewModel : ObservableObject
         var state = Settings.For(Solution.FilePath);
         state.OpenDocuments = Documents.Select(d => d.FilePath).ToList();
         state.ActiveDocument = ActiveDocument?.FilePath;
+        SaveDebugState(state);
         Settings.Save();
     }
 
@@ -407,6 +416,9 @@ public partial class MainViewModel : ObservableObject
             }
             existing = new DocumentViewModel(host);
             Wire(existing);
+            host.AttachBreakpoints(Breakpoints);
+            if (Mode == DebugMode.Break)
+                host.DataTipProvider = EvaluateDataTipAsync;
             Documents.Add(existing);
             if (_lsp is not null)
                 host.Attach(_lsp);
@@ -673,7 +685,7 @@ public partial class MainViewModel : ObservableObject
         var verbLabel = verb == "clean" ? "Clean" : verb == "rebuild" ? "Rebuild All" : "Build";
         BuildOutput.Append($"========== {verbLabel}: {(ok ? "succeeded" : "failed")}, {errors} error(s), {warnings} warning(s), {succeeded} project(s) built ==========");
         BuildOutput.Append($"========== {verbLabel} completed at {DateTime.Now:HH:mm} and took {sw.Elapsed.TotalSeconds:0.000} seconds ==========");
-        SetStatus(ok ? $"{verbLabel} succeeded" : $"{verbLabel} failed", IsRunning ? StatusKind.Running : StatusKind.Ready);
+        SetStatus(ok ? $"{verbLabel} succeeded" : $"{verbLabel} failed", IsRunning || IsDebugging ? StatusKind.Running : StatusKind.Ready);
         if (!ok && errors > 0)
             BottomTabIndex = 0;
         return ok;
@@ -691,7 +703,7 @@ public partial class MainViewModel : ObservableObject
 
     // ---- Run ---------------------------------------------------------------------------------------------------
 
-    bool CanStart => Solution is not null && StartupProject is not null && !IsBuilding && !IsRunning;
+    bool CanStart => Solution is not null && StartupProject is not null && !IsBuilding && !IsRunning && Mode == DebugMode.Design;
 
     [RelayCommand(CanExecute = nameof(CanStart))]
     async Task StartWithoutDebugging()
@@ -737,18 +749,6 @@ public partial class MainViewModel : ObservableObject
         IsRunning = false;
         SetStatus("Ready", Solution is null ? StatusKind.NoSolution : StatusKind.Ready);
     }
-
-    [RelayCommand(CanExecute = nameof(CanStart))]
-    Task StartDebugging()
-    {
-        DebugOutput.Append("Debugger is not available yet; starting without debugging (Ctrl+F5).");
-        return StartWithoutDebugging();
-    }
-
-    bool CanStop => IsRunning;
-
-    [RelayCommand(CanExecute = nameof(CanStop))]
-    void Stop() => _runProcess?.Kill();
 
     static void OpenBrowser(string url)
     {

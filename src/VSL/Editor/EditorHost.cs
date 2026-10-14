@@ -11,6 +11,7 @@ using AvaloniaEdit.CodeCompletion;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Rendering;
 using AvaloniaEdit.TextMate;
+using VSL.Debugging;
 using VSL.Lsp;
 
 namespace VSL.Editor;
@@ -19,7 +20,7 @@ namespace VSL.Editor;
 /// One open file: the AvaloniaEdit control plus its language-server session (sync, IntelliSense, squiggles,
 /// hover, navigation). Kept alive per document so undo history and scroll position survive tab switches.
 /// </summary>
-public sealed class EditorHost : IDisposable
+public sealed class EditorHost : IDisposable, IDebugLineSource
 {
     static readonly IBrush EditorBackground = new SolidColorBrush(Color.Parse("#1E1E1E"));
     static readonly IBrush EditorForeground = new SolidColorBrush(Color.Parse("#DCDCDC"));
@@ -39,6 +40,9 @@ public sealed class EditorHost : IDisposable
     CancellationTokenSource? _diagnosticsCts;
     CancellationTokenSource? _completionCts;
     CancellationTokenSource? _hoverCts;
+    BreakpointStore? _breakpoints;
+    readonly List<TextAnchor> _breakpointAnchors = [];
+    int? _executionLine;
 
     public EditorHost(string filePath)
     {
@@ -80,6 +84,7 @@ public sealed class EditorHost : IDisposable
         Editor.TextArea.TextView.BackgroundRenderers.Add(_diagnostics);
 
         Document.Changing += OnDocumentChanging;
+        Document.Changed += (_, _) => SyncBreakpointsFromAnchors();
         Document.UndoStack.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(UndoStack.IsOriginalFile))
@@ -110,6 +115,103 @@ public sealed class EditorHost : IDisposable
     public event Action<string>? StatusMessage;
     public event Func<IReadOnlyDictionary<string, IReadOnlyList<LspTextEdit>>, Task>? WorkspaceEditRequested;
     public event Func<string, Task<string?>>? PromptRequested;
+
+    // ---- Debugging ------------------------------------------------------------------------------------------
+
+    /// <summary>Evaluates an expression for a hover data tip while the debugger is in break mode.</summary>
+    public Func<string, Task<string?>>? DataTipProvider { get; set; }
+
+    public static bool SupportsBreakpoints(string path) =>
+        path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase);
+
+    public void AttachBreakpoints(BreakpointStore store)
+    {
+        if (!SupportsBreakpoints(FilePath) || _breakpoints is not null)
+            return;
+        _breakpoints = store;
+        store.Changed += OnBreakpointsChanged;
+        store.VerificationChanged += OnVerificationChanged;
+        Editor.TextArea.LeftMargins.Insert(0, new BreakpointMargin(this));
+        Editor.TextArea.TextView.BackgroundRenderers.Add(new DebugLineRenderer(this));
+        RebuildBreakpointAnchors();
+    }
+
+    public IReadOnlyCollection<int> BreakpointLines => _breakpoints?.For(FilePath) ?? [];
+
+    public bool? IsBreakpointVerified(int line) => _breakpoints?.IsVerified(FilePath, line);
+
+    public int? ExecutionLine => _executionLine;
+
+    public void ToggleBreakpoint(int line) => _breakpoints?.Toggle(FilePath, line);
+
+    /// <summary>Shows (or clears) the yellow current-statement marker and brings it into view.</summary>
+    public void SetExecutionLine(int? line)
+    {
+        _executionLine = line;
+        RedrawDebugAdornments();
+        if (line is { } l && l >= 1 && l <= Document.LineCount)
+        {
+            Editor.CaretOffset = Document.GetLineByNumber(l).Offset;
+            Editor.ScrollToLine(l);
+        }
+    }
+
+    void OnBreakpointsChanged(string file, bool fromEditor)
+    {
+        if (file != FilePath)
+            return;
+        if (!fromEditor)
+            RebuildBreakpointAnchors();
+        RedrawDebugAdornments();
+    }
+
+    void OnVerificationChanged(string file)
+    {
+        if (file == FilePath)
+            RedrawDebugAdornments();
+    }
+
+    void RebuildBreakpointAnchors()
+    {
+        _breakpointAnchors.Clear();
+        foreach (var line in BreakpointLines.Where(l => l >= 1 && l <= Document.LineCount))
+        {
+            var anchor = Document.CreateAnchor(Document.GetLineByNumber(line).Offset);
+            anchor.MovementType = AnchorMovementType.BeforeInsertion;
+            anchor.SurviveDeletion = true;
+            _breakpointAnchors.Add(anchor);
+        }
+    }
+
+    /// <summary>Breakpoints follow their code when lines are inserted or removed above them.</summary>
+    void SyncBreakpointsFromAnchors()
+    {
+        if (_breakpoints is null || _breakpointAnchors.Count == 0)
+            return;
+        _breakpoints.Replace(FilePath, _breakpointAnchors.Select(a => a.Line));
+    }
+
+    void RedrawDebugAdornments()
+    {
+        Editor.TextArea.TextView.InvalidateLayer(KnownLayer.Background);
+        foreach (var margin in Editor.TextArea.LeftMargins.OfType<BreakpointMargin>())
+            margin.InvalidateVisual();
+    }
+
+    /// <summary>The expression under the pointer for a data tip: identifiers joined by dots (this.Order.Total).</summary>
+    string? ExpressionAt(int offset)
+    {
+        if (offset >= Document.TextLength || !IsIdentifierChar(Document.GetCharAt(offset)))
+            return null;
+        var start = offset;
+        while (start > 0 && (IsIdentifierChar(Document.GetCharAt(start - 1)) || Document.GetCharAt(start - 1) == '.'))
+            start--;
+        var end = offset;
+        while (end < Document.TextLength && IsIdentifierChar(Document.GetCharAt(end)))
+            end++;
+        var text = Document.GetText(start, end - start).Trim('.');
+        return text.Length == 0 || char.IsDigit(text[0]) ? null : text;
+    }
 
     // ---- Language server session ------------------------------------------------------------------------
 
@@ -389,6 +491,9 @@ public sealed class EditorHost : IDisposable
             return;
         var offset = Document.GetOffset(p.Location);
         var diagnostics = _diagnostics.At(offset).ToList();
+        string? dataTip = null;
+        if (DataTipProvider is { } provider && ExpressionAt(offset) is { } expression && await provider(expression) is { } value)
+            dataTip = $"{expression} = {value}";
         string? hover = null;
         if (_lsp is { } lsp)
         {
@@ -406,9 +511,9 @@ public sealed class EditorHost : IDisposable
             if (cts.IsCancellationRequested)
                 return;
         }
-        if (string.IsNullOrWhiteSpace(hover) && diagnostics.Count == 0)
+        if (string.IsNullOrWhiteSpace(hover) && diagnostics.Count == 0 && dataTip is null)
             return;
-        ToolTip.SetTip(Editor, QuickInfo.Build(hover, diagnostics));
+        ToolTip.SetTip(Editor, QuickInfo.Build(hover, diagnostics, dataTip));
         ToolTip.SetIsOpen(Editor, true);
     }
 
@@ -462,6 +567,10 @@ public sealed class EditorHost : IDisposable
                 break;
             case Key.F2:
                 _ = RenameAsync();
+                e.Handled = true;
+                break;
+            case Key.F9 when _breakpoints is not null:
+                ToggleBreakpoint(Editor.TextArea.Caret.Line);
                 e.Handled = true;
                 break;
         }
@@ -695,15 +804,28 @@ public sealed class EditorHost : IDisposable
             _ = lsp.DidCloseAsync(FilePath);
         _lsp = null;
         _textMate?.Dispose();
+        if (_breakpoints is not null)
+        {
+            _breakpoints.Changed -= OnBreakpointsChanged;
+            _breakpoints.VerificationChanged -= OnVerificationChanged;
+        }
     }
 }
 
 /// <summary>Builds the Quick Info tooltip (hover text + diagnostics) in VS style.</summary>
 public static class QuickInfo
 {
-    public static Control Build(string? markdown, IReadOnlyList<LspDiagnostic> diagnostics)
+    public static Control Build(string? markdown, IReadOnlyList<LspDiagnostic> diagnostics, string? dataTip = null)
     {
         var panel = new StackPanel { Spacing = 6, MaxWidth = 720 };
+        if (dataTip is not null)
+            panel.Children.Add(new SelectableTextBlock
+            {
+                Text = dataTip,
+                FontFamily = Application.Current?.FindResource("VsCodeFont") as FontFamily ?? FontFamily.Default,
+                Foreground = new SolidColorBrush(Color.Parse("#FFE400")),
+                TextWrapping = TextWrapping.Wrap,
+            });
         if (!string.IsNullOrWhiteSpace(markdown))
         {
             var parts = markdown.Split("```");

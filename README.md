@@ -22,10 +22,12 @@ Requires the .NET 10 SDK (`~/.dotnet` or `DOTNET_ROOT`). On first solution open 
 | Editor | Syntax highlighting (VS Dark), C# and Razor IntelliSense, parameter info, Quick Info hover, squiggles, Go To Definition / Implementation, Find All References, Rename, Format Document, comment/uncomment, find (Ctrl+F) and Find in Files |
 | Build | Build / Rebuild / Clean via `dotnet`, Output window, Error List (Build + IntelliSense) |
 | Run | Startup project and `launchSettings.json` profiles, Start Without Debugging (Ctrl+F5), Stop; opens the browser for `launchBrowser` profiles |
+| Debug | F5 with netcoredbg (MIT, installed on first use): breakpoints (F9 / margin click, kept per solution and moved with edits), current-statement arrow, Continue, Break All, Restart, Step Over/Into/Out (F10/F11/Shift+F11), Locals, Watch, Call Stack, hover data tips |
 | Session | Restores open documents, startup project, profile and configuration per solution |
 
-Not yet: the debugger (F5 currently runs without debugging), lightbulb code actions (Ctrl+.),
-Test Explorer, NuGet package manager UI, Git integration, WinForms/WPF designers (Windows-only).
+Not yet: conditional breakpoints, exception settings, Immediate window, debugging Blazor WebAssembly code
+(it runs in the browser), lightbulb code actions (Ctrl+.), Test Explorer, NuGet package manager UI,
+Git integration, WinForms/WPF designers (Windows-only).
 
 ## Keyboard shortcuts
 
@@ -39,6 +41,7 @@ src/VSL/
   Lsp/         JSON-RPC, Roslyn client, client-side file watching, HTML service for Razor cohosting
   Workspace/   solution/project loading and the Solution Explorer tree
   Build/       dotnet process runner and MSBuild output parser
+  Debugging/   DAP client, netcoredbg installer, debug session, breakpoint store
   Editor/      AvaloniaEdit host: sync, completion, hover, squiggles, TextMate theme
   ViewModels/  main window state, documents, Error List, Output
   Views/       main window (XAML), icons, dialogs
@@ -60,5 +63,5 @@ Headless UI tests write screenshots to `$TMPDIR/vsl-test-artifacts`.
 
 ## Third-party
 
-Cascadia Mono font (SIL OFL 1.1, `src/VSL/Assets/Fonts`), roslyn-language-server (MIT, downloaded at runtime),
+Cascadia Mono font (SIL OFL 1.1, `src/VSL/Assets/Fonts`), roslyn-language-server and netcoredbg (MIT, downloaded at runtime),
 Avalonia, AvaloniaEdit and TextMateSharp (MIT).

@@ -62,11 +62,22 @@ public sealed partial class OutputChannel : ObservableObject
             Dispatcher.UIThread.Post(() => AppendCore(line));
     }
 
-    void AppendCore(string line)
+    /// <summary>Appends text as-is (debuggee output already carries its own newlines).</summary>
+    public void AppendRaw(string text)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+            AppendText(text);
+        else
+            Dispatcher.UIThread.Post(() => AppendText(text));
+    }
+
+    void AppendCore(string line) => AppendText(line + "\n");
+
+    void AppendText(string text)
     {
         if (Document.TextLength > MaxLength)
             Document.Remove(0, Document.TextLength / 2);
-        Document.Insert(Document.TextLength, line + "\n");
+        Document.Insert(Document.TextLength, text);
         Appended?.Invoke();
     }
 

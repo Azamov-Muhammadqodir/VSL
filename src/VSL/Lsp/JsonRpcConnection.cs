@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -19,9 +18,7 @@ public sealed class JsonRpcConnection : IAsyncDisposable
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    readonly Stream _input;
-    readonly Stream _output;
-    readonly SemaphoreSlim _writeLock = new(1, 1);
+    readonly MessageFraming _framing;
     readonly ConcurrentDictionary<long, TaskCompletionSource<JsonElement>> _pending = new();
     readonly ConcurrentDictionary<string, Func<JsonElement, Task<object?>>> _requestHandlers = new();
     readonly ConcurrentDictionary<string, Action<JsonElement>> _notificationHandlers = new();
@@ -29,11 +26,7 @@ public sealed class JsonRpcConnection : IAsyncDisposable
     long _nextId;
     Task? _readLoop;
 
-    public JsonRpcConnection(Stream input, Stream output)
-    {
-        _input = input;
-        _output = output;
-    }
+    public JsonRpcConnection(Stream input, Stream output) => _framing = new MessageFraming(input, output);
 
     /// <summary>Raised once when the stream closes or a framing error occurs.</summary>
     public event Action<Exception?>? Disconnected;
@@ -85,22 +78,7 @@ public sealed class JsonRpcConnection : IAsyncDisposable
         _ => JsonSerializer.SerializeToNode(value, value.GetType(), JsonOptions),
     };
 
-    async Task WriteAsync(JsonObject message)
-    {
-        var body = Encoding.UTF8.GetBytes(message.ToJsonString(JsonOptions));
-        var header = Encoding.ASCII.GetBytes($"Content-Length: {body.Length}\r\n\r\n");
-        await _writeLock.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            await _output.WriteAsync(header).ConfigureAwait(false);
-            await _output.WriteAsync(body).ConfigureAwait(false);
-            await _output.FlushAsync().ConfigureAwait(false);
-        }
-        finally
-        {
-            _writeLock.Release();
-        }
-    }
+    Task WriteAsync(JsonObject message) => _framing.WriteAsync(message.ToJsonString(JsonOptions));
 
     async Task ReadLoopAsync()
     {
@@ -109,11 +87,9 @@ public sealed class JsonRpcConnection : IAsyncDisposable
         {
             while (!_cts.IsCancellationRequested)
             {
-                var length = await ReadHeadersAsync().ConfigureAwait(false);
-                if (length < 0)
+                var buffer = await _framing.ReadAsync(_cts.Token).ConfigureAwait(false);
+                if (buffer is null)
                     break;
-                var buffer = new byte[length];
-                await _input.ReadExactlyAsync(buffer, _cts.Token).ConfigureAwait(false);
                 using var doc = JsonDocument.Parse(buffer);
                 Dispatch(doc.RootElement.Clone());
             }
@@ -130,38 +106,6 @@ public sealed class JsonRpcConnection : IAsyncDisposable
             tcs.TrySetException(new IOException("Language server connection closed.", error));
         _pending.Clear();
         Disconnected?.Invoke(error);
-    }
-
-    /// <summary>Reads header lines; returns Content-Length, or -1 at end of stream.</summary>
-    async Task<int> ReadHeadersAsync()
-    {
-        var length = -1;
-        var line = new StringBuilder();
-        var one = new byte[1];
-        while (true)
-        {
-            var n = await _input.ReadAsync(one, _cts.Token).ConfigureAwait(false);
-            if (n == 0)
-                return -1;
-            if (one[0] == '\n')
-            {
-                var text = line.ToString().TrimEnd('\r');
-                line.Clear();
-                if (text.Length == 0)
-                {
-                    if (length >= 0)
-                        return length;
-                    continue;
-                }
-                var colon = text.IndexOf(':');
-                if (colon > 0 && text[..colon].Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
-                    length = int.Parse(text[(colon + 1)..].Trim());
-            }
-            else
-            {
-                line.Append((char)one[0]);
-            }
-        }
     }
 
     void Dispatch(JsonElement message)

@@ -91,6 +91,70 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Debugs_with_breakpoints_locals_watch_and_stepping()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var vm = new MainViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1600, Height = 1000 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+        var program = SampleSolution.PathOf(sln, "Web/Program.cs");
+        var doc = vm.OpenDocument(program)!;
+        var host = doc.Host;
+
+        // Breakpoints follow their line when text is inserted above them (editor anchors).
+        host.ToggleBreakpoint(4);
+        host.Document.Insert(0, "// moved\n");
+        Assert.Equal([5], vm.Breakpoints.For(program));
+        host.Editor.Undo();
+        Assert.Equal([4], vm.Breakpoints.For(program));
+        host.ToggleBreakpoint(4);
+        Assert.Empty(vm.Breakpoints.For(program));
+        Assert.False(doc.IsDirty);
+
+        // F9 equivalent on "var app = builder.Build();", then F5.
+        host.ToggleBreakpoint(2);
+        await vm.StartDebuggingCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.Mode == DebugMode.Break, TimeSpan.FromMinutes(2));
+        Assert.True(vm.Mode == DebugMode.Break, "did not break; output:\n" + vm.DebugOutput.Document.Text);
+        Assert.Equal(2, vm.CallStack[0].Line);
+        Assert.Equal(vm.CallStack[0], vm.SelectedFrame);
+        await WaitUntil(() => host.ExecutionLine == 2 && vm.Locals.Count > 0, TimeSpan.FromSeconds(10));
+        Assert.Equal(2, host.ExecutionLine);
+        Assert.Contains(vm.Locals, v => v.Name == "builder");
+        Assert.True(vm.Breakpoints.IsVerified(program, 2));
+
+        // Watch window and hover data tip evaluate in the selected frame.
+        await vm.AddWatchCommand.ExecuteAsync("builder.Environment.EnvironmentName");
+        Assert.Equal("\"Development\"", vm.Watches.Single().Value);
+        Assert.Equal("\"Development\"", await host.DataTipProvider!("builder.Environment.EnvironmentName"));
+        Snapshot(window, "debug-break");
+
+        // F10 steps to the next statement.
+        await vm.StepOverCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.Mode == DebugMode.Break && vm.CallStack.Count > 0 && vm.CallStack[0].Line == 4, TimeSpan.FromSeconds(30));
+        Assert.Equal(4, vm.CallStack[0].Line);
+        await WaitUntil(() => host.ExecutionLine == 4, TimeSpan.FromSeconds(5));
+        Assert.Equal(4, host.ExecutionLine);
+
+        // F5 continues; the host starts; Shift+F5 stops and clears debug state.
+        await vm.StartDebuggingCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.DebugOutput.Document.Text.Contains("Now listening on: http://localhost:5280"), TimeSpan.FromSeconds(60));
+        Assert.Equal(DebugMode.Running, vm.Mode);
+        Assert.Null(host.ExecutionLine);
+        await vm.StopCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.Mode == DebugMode.Design, TimeSpan.FromSeconds(30));
+        Assert.Equal(DebugMode.Design, vm.Mode);
+        Assert.Empty(vm.CallStack);
+        Assert.Contains("has exited with code", vm.DebugOutput.Document.Text);
+
+        // Breakpoints and watches persist with the solution.
+        host.ToggleBreakpoint(2);
+        vm.RemoveWatchCommand.Execute(vm.Watches.Single());
+        Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
     public async Task Start_window_renders_without_solution()
     {
         var vm = new MainViewModel();

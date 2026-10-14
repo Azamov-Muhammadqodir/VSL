@@ -16,6 +16,8 @@ public sealed class Settings
         public string? StartupProject { get; set; }
         public string? LaunchProfile { get; set; }
         public string Configuration { get; set; } = "Debug";
+        public Dictionary<string, List<int>> Breakpoints { get; set; } = [];
+        public List<string> Watches { get; set; } = [];
     }
 
     static string FilePath => Path.Combine(

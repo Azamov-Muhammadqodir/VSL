@@ -22,6 +22,11 @@
     <KeyBinding Gesture="Ctrl+F4" Command="{Binding CloseDocumentCommand}" />
     <KeyBinding Gesture="Ctrl+Shift+O" Command="{Binding OpenSolutionCommand}" />
     <KeyBinding Gesture="Ctrl+Pause" Command="{Binding CancelBuildCommand}" />
+    <KeyBinding Gesture="F10" Command="{Binding StepOverCommand}" />
+    <KeyBinding Gesture="F11" Command="{Binding StepIntoCommand}" />
+    <KeyBinding Gesture="Shift+F11" Command="{Binding StepOutCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+F5" Command="{Binding RestartCommand}" />
+    <KeyBinding Gesture="Ctrl+Alt+Pause" Command="{Binding BreakAllCommand}" />
   </Window.KeyBindings>
 
   <DockPanel>
@@ -74,9 +79,22 @@
         <MenuItem Header="Cance_l" InputGesture="Ctrl+Pause" Command="{Binding CancelBuildCommand}" />
       </MenuItem>
       <MenuItem Header="_Debug">
-        <MenuItem Header="_Start Debugging" InputGesture="F5" Command="{Binding StartDebuggingCommand}" />
+        <MenuItem Header="{Binding StartButtonText, StringFormat={}Start / {0}}" InputGesture="F5" Command="{Binding StartDebuggingCommand}" />
         <MenuItem Header="Start _Without Debugging" InputGesture="Ctrl+F5" Command="{Binding StartWithoutDebuggingCommand}" />
         <MenuItem Header="Stop _Debugging" InputGesture="Shift+F5" Command="{Binding StopCommand}" />
+        <MenuItem Header="_Restart" InputGesture="Ctrl+Shift+F5" Command="{Binding RestartCommand}" />
+        <MenuItem Header="Brea_k All" InputGesture="Ctrl+Alt+Pause" Command="{Binding BreakAllCommand}" />
+        <Separator />
+        <MenuItem Header="Step _Into" InputGesture="F11" Command="{Binding StepIntoCommand}" />
+        <MenuItem Header="Step _Over" InputGesture="F10" Command="{Binding StepOverCommand}" />
+        <MenuItem Header="Step Ou_t" InputGesture="Shift+F11" Command="{Binding StepOutCommand}" />
+        <Separator />
+        <MenuItem Header="Toggle _Breakpoint" InputGesture="F9" Click="OnToggleBreakpoint" />
+        <MenuItem Header="Delete _All Breakpoints" Command="{Binding DeleteAllBreakpointsCommand}" />
+        <Separator />
+        <MenuItem Header="_Locals" Click="OnShowLocals" />
+        <MenuItem Header="_Watch" Click="OnShowWatch" />
+        <MenuItem Header="_Call Stack" Click="OnShowCallStack" />
       </MenuItem>
       <MenuItem Header="_Tools">
         <MenuItem Header="_Restart Language Server" Command="{Binding RestartLanguageServerCommand}" />
@@ -101,17 +119,35 @@
         <ComboBox Classes="tb" Width="160" ItemsSource="{Binding StartupProjects}" SelectedItem="{Binding StartupProject}" ToolTip.Tip="Startup Project" />
         <Button Classes="tb" Command="{Binding StartDebuggingCommand}" ToolTip.Tip="Start (F5)">
           <StackPanel Orientation="Horizontal" Spacing="4">
-            <TextBlock Text="▶" Foreground="#89D185" />
-            <TextBlock Text="{Binding LaunchProfile, FallbackValue=Start, TargetNullValue=Start}" />
+            <PathIcon Data="{StaticResource IconStart}" Foreground="#89D185" Width="12" Height="12" />
+            <TextBlock Text="{Binding StartButtonText}" />
           </StackPanel>
         </Button>
         <ComboBox Classes="tb" Width="22" ItemsSource="{Binding LaunchProfiles}" SelectedItem="{Binding LaunchProfile}" ToolTip.Tip="Launch Profile" />
         <Button Classes="tb" Command="{Binding StartWithoutDebuggingCommand}" ToolTip.Tip="Start Without Debugging (Ctrl+F5)">
-          <TextBlock Text="▷" Foreground="#89D185" />
+          <PathIcon Data="{StaticResource IconStartNoDebug}" Foreground="#89D185" Width="12" Height="12" />
         </Button>
         <Button Classes="tb" Command="{Binding StopCommand}" ToolTip.Tip="Stop (Shift+F5)">
-          <TextBlock Text="■" Foreground="#F48771" />
+          <PathIcon Data="{StaticResource IconStop}" Foreground="#F48771" Width="11" Height="11" />
         </Button>
+        <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding IsDebugging}">
+          <Button Classes="tb" Command="{Binding BreakAllCommand}" ToolTip.Tip="Break All (Ctrl+Alt+Break)">
+            <PathIcon Data="{StaticResource IconPause}" Foreground="#75BEFF" Width="11" Height="11" />
+          </Button>
+          <Button Classes="tb" Command="{Binding RestartCommand}" ToolTip.Tip="Restart (Ctrl+Shift+F5)">
+            <PathIcon Data="{StaticResource IconRestart}" Foreground="#89D185" Width="12" Height="12" />
+          </Button>
+          <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
+          <Button Classes="tb" Command="{Binding StepIntoCommand}" ToolTip.Tip="Step Into (F11)">
+            <PathIcon Data="{StaticResource IconStepInto}" Foreground="#75BEFF" Width="12" Height="12" />
+          </Button>
+          <Button Classes="tb" Command="{Binding StepOverCommand}" ToolTip.Tip="Step Over (F10)">
+            <PathIcon Data="{StaticResource IconStepOver}" Foreground="#75BEFF" Width="13" Height="12" />
+          </Button>
+          <Button Classes="tb" Command="{Binding StepOutCommand}" ToolTip.Tip="Step Out (Shift+F11)">
+            <PathIcon Data="{StaticResource IconStepOut}" Foreground="#75BEFF" Width="12" Height="12" />
+          </Button>
+        </StackPanel>
         <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
         <Button Classes="tb" Command="{Binding BuildSolutionCommand}" ToolTip.Tip="Build Solution (Ctrl+Shift+B)">🔨 Build</Button>
       </StackPanel>
@@ -270,6 +306,81 @@
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
+            </TabItem>
+
+            <!-- Locals -->
+            <TabItem Header="Locals">
+              <DockPanel>
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="260,*,220" Background="#2D2D30" Height="22">
+                  <TextBlock Text="Name" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  <TextBlock Grid.Column="1" Text="Value" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  <TextBlock Grid.Column="2" Text="Type" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                </Grid>
+                <TreeView Name="LocalsTree" ItemsSource="{Binding Locals}" Background="Transparent">
+                  <TreeView.Styles>
+                    <Style Selector="TreeViewItem" x:DataType="vm:VariableNode">
+                      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                    </Style>
+                  </TreeView.Styles>
+                  <TreeView.ItemTemplate>
+                    <TreeDataTemplate x:DataType="vm:VariableNode" ItemsSource="{Binding Children}">
+                      <Grid ColumnDefinitions="236,*,220" Height="20">
+                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Foreground="#9CDCFE" TextTrimming="CharacterEllipsis" />
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" VerticalAlignment="Center" FontFamily="{StaticResource VsCodeFont}" />
+                        <TextBlock Grid.Column="2" Text="{Binding Type}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" TextTrimming="CharacterEllipsis" />
+                      </Grid>
+                    </TreeDataTemplate>
+                  </TreeView.ItemTemplate>
+                </TreeView>
+              </DockPanel>
+            </TabItem>
+
+            <!-- Watch -->
+            <TabItem Header="Watch 1">
+              <DockPanel>
+                <TextBox Name="WatchInput" DockPanel.Dock="Top" Classes="search" Margin="4"
+                         PlaceholderText="Add item to watch (Enter)" KeyDown="OnWatchInputKeyDown" />
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="260,*,220,28" Background="#2D2D30" Height="22">
+                  <TextBlock Text="Name" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  <TextBlock Grid.Column="1" Text="Value" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  <TextBlock Grid.Column="2" Text="Type" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                </Grid>
+                <ListBox Classes="dense" ItemsSource="{Binding Watches}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:WatchItem">
+                      <Grid ColumnDefinitions="256,*,220,28">
+                        <TextBlock Text="{Binding Expression}" Foreground="#9CDCFE" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" VerticalAlignment="Center" FontFamily="{StaticResource VsCodeFont}" />
+                        <TextBlock Grid.Column="2" Text="{Binding Type}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" TextTrimming="CharacterEllipsis" />
+                        <Button Grid.Column="3" Classes="tb" Padding="3,0" MinHeight="16" ToolTip.Tip="Delete Watch"
+                                Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RemoveWatchCommand}"
+                                CommandParameter="{Binding}">✕</Button>
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </DockPanel>
+            </TabItem>
+
+            <!-- Call Stack -->
+            <TabItem Header="Call Stack">
+              <DockPanel>
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="24,*,200" Background="#2D2D30" Height="22">
+                  <TextBlock Grid.Column="1" Text="Name" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  <TextBlock Grid.Column="2" Text="Location" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                </Grid>
+                <ListBox Classes="dense" ItemsSource="{Binding CallStack}" SelectedItem="{Binding SelectedFrame}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:StackFrameItem">
+                      <Grid ColumnDefinitions="24,*,200">
+                        <TextBlock Text="➜" Foreground="#FFE400" IsVisible="{Binding HasSource}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Display}" FontFamily="{StaticResource VsCodeFont}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="2" Text="{Binding Location}" Foreground="{StaticResource VsGrayTextBrush}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </DockPanel>
             </TabItem>
           </TabControl>
         </Border>

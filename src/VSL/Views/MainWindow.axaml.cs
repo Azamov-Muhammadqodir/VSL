@@ -23,6 +23,12 @@ public partial class MainWindow : Window, IDialogService
             if (DataContext is MainViewModel vm)
             {
                 vm.Dialogs = this;
+                vm.BreakModeEntered += () =>
+                {
+                    if (WindowState == WindowState.Minimized)
+                        WindowState = WindowState.Normal;
+                    Activate();
+                };
                 foreach (var channel in vm.OutputChannels)
                     channel.Appended += ScrollOutputToEnd;
             }
@@ -288,14 +294,48 @@ public partial class MainWindow : Window, IDialogService
 
     void OnExit(object? sender, RoutedEventArgs e) => Close();
 
+    // ---- Debug menu ---------------------------------------------------------------------------------------
+
+    void OnToggleBreakpoint(object? sender, RoutedEventArgs e)
+    {
+        if (ActiveHost is { } h)
+            h.ToggleBreakpoint(h.Editor.TextArea.Caret.Line);
+    }
+
+    void OnShowLocals(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.LocalsTab);
+
+    void OnShowWatch(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.WatchTab);
+
+    void OnShowCallStack(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.CallStackTab);
+
+    void ShowBottomTab(int index)
+    {
+        if (Vm is { } vm)
+            vm.BottomTabIndex = index;
+    }
+
+    void OnWatchInputKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || Vm is not { } vm)
+            return;
+        vm.AddWatchCommand.Execute(WatchInput.Text);
+        WatchInput.Text = "";
+        e.Handled = true;
+    }
+
     async void OnShortcuts(object? sender, RoutedEventArgs e)
     {
         const string text = """
             Ctrl+Shift+O      Open solution
             Ctrl+S / Ctrl+Shift+S   Save / Save all
             Ctrl+Shift+B      Build solution
-            F5 / Ctrl+F5      Start / Start without debugging
+            F5 / Ctrl+F5      Start or Continue / Start without debugging
             Shift+F5          Stop
+            Ctrl+Shift+F5     Restart
+            F9                Toggle breakpoint (or click the left margin)
+            F10 / F11         Step over / Step into
+            Shift+F11         Step out
+            Ctrl+Alt+Break    Break all
             Ctrl+Space        IntelliSense completion
             Ctrl+Shift+Space  Parameter info
             F12 / Ctrl+Click  Go to definition
