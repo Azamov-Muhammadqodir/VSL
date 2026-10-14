@@ -138,6 +138,19 @@ public sealed class RoslynClient : IAsyncDisposable
             implementation = new { },
             formatting = new { },
             rename = new { prepareSupport = false },
+            codeAction = new
+            {
+                dataSupport = true,
+                isPreferredSupport = true,
+                resolveSupport = new { properties = new[] { "edit" } },
+                codeActionLiteralSupport = new
+                {
+                    codeActionKind = new
+                    {
+                        valueSet = new[] { "", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite", "source", "source.organizeImports" },
+                    },
+                },
+            },
         },
         window = new { workDoneProgress = true },
     };
@@ -332,6 +345,31 @@ public sealed class RoslynClient : IAsyncDisposable
                 edits[new Uri(file.Name).LocalPath] = LspParse.TextEdits(file.Value);
         }
         return edits;
+    }
+
+    /// <summary>Quick Actions and Refactorings (Ctrl+.) for a range, given the diagnostics it overlaps.</summary>
+    public async Task<IReadOnlyList<LspCodeAction>> CodeActionsAsync(string path, LspRange range, IReadOnlyList<LspDiagnostic> diagnostics, CancellationToken ct) =>
+        LspParse.CodeActions(await _rpc.RequestAsync("textDocument/codeAction", new
+        {
+            textDocument = new { uri = ToUri(path) },
+            range,
+            context = new
+            {
+                // The server matches fixes to diagnostics by their original JSON, so send them back verbatim.
+                diagnostics = diagnostics.Where(d => d.Raw.ValueKind == JsonValueKind.Object).Select(d => d.Raw).ToArray(),
+                triggerKind = 1,
+            },
+        }, ct));
+
+    /// <summary>Computes the edit for a code action (codeAction/resolve unless the server already sent it).</summary>
+    public async Task<IReadOnlyList<LspFileOperation>> ResolveCodeActionAsync(LspCodeAction action, CancellationToken ct)
+    {
+        if (action.Raw.TryGetProperty("edit", out var inline))
+            return LspParse.WorkspaceEdit(inline);
+        var resolved = await _rpc.RequestAsync("codeAction/resolve", action.Raw, ct);
+        return resolved.ValueKind == JsonValueKind.Object && resolved.TryGetProperty("edit", out var edit)
+            ? LspParse.WorkspaceEdit(edit)
+            : [];
     }
 
     public async ValueTask DisposeAsync()

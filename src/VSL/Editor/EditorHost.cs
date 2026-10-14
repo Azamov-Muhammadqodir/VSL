@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaEdit;
@@ -97,6 +98,8 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
         Editor.PointerHoverStopped += (_, _) => ToolTip.SetIsOpen(Editor, false);
         Editor.AddHandler(InputElement.KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
         Editor.TextArea.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
+        Editor.TextArea.RightClickMovesCaret = true;
+        Editor.ContextMenu = BuildContextMenu();
     }
 
     public string FilePath { get; }
@@ -115,6 +118,9 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
     public event Action<string>? StatusMessage;
     public event Func<IReadOnlyDictionary<string, IReadOnlyList<LspTextEdit>>, Task>? WorkspaceEditRequested;
     public event Func<string, Task<string?>>? PromptRequested;
+
+    /// <summary>Applies a code action's edit, which may touch other files or create/rename them.</summary>
+    public event Func<IReadOnlyList<LspFileOperation>, Task>? WorkspaceOperationsRequested;
 
     // ---- Debugging ------------------------------------------------------------------------------------------
 
@@ -569,6 +575,11 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
                 _ = RenameAsync();
                 e.Handled = true;
                 break;
+            case Key.OemPeriod when ctrl:
+            case Key.Enter when e.KeyModifiers == KeyModifiers.Alt:
+                ShowQuickActions();
+                e.Handled = true;
+                break;
             case Key.F9 when _breakpoints is not null:
                 ToggleBreakpoint(Editor.TextArea.Caret.Line);
                 e.Handled = true;
@@ -586,6 +597,142 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
             e.Handled = true;
             _ = GoToAsync(Document.GetOffset(p.Location), implementation: false);
         }
+    }
+
+    // ---- Quick Actions (Ctrl+.) ---------------------------------------------------------------------------
+
+    /// <summary>Code actions for the selection, or for the diagnostic under (or on the line of) the caret.</summary>
+    internal async Task<IReadOnlyList<LspCodeAction>> GetQuickActionsAsync()
+    {
+        if (_lsp is not { } lsp)
+            return [];
+        FlushChanges();
+        var caret = Editor.CaretOffset;
+        var line = Document.GetLineByOffset(caret).LineNumber - 1;
+        var diagnostics = _diagnostics.At(caret).ToList();
+        if (diagnostics.Count == 0)
+            diagnostics = Diagnostics.Where(d => d.Range.Start.Line <= line && d.Range.End.Line >= line).ToList();
+        LspRange range;
+        var selection = Editor.TextArea.Selection;
+        if (!selection.IsEmpty)
+            range = new LspRange(TextPositions.ToPosition(Document, selection.SurroundingSegment.Offset),
+                TextPositions.ToPosition(Document, selection.SurroundingSegment.EndOffset));
+        else if (diagnostics.Count > 0 && _diagnostics.At(caret).Any())
+            range = diagnostics[0].Range;
+        else
+            range = new LspRange(TextPositions.ToPosition(Document, caret), TextPositions.ToPosition(Document, caret));
+        try
+        {
+            return await lsp.CodeActionsAsync(FilePath, range, diagnostics, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is LspException or IOException)
+        {
+            StatusMessage?.Invoke(ex.Message);
+            return [];
+        }
+    }
+
+    public async void ShowQuickActions() => await ShowQuickActionsAsync();
+
+    /// <summary>Opens the Quick Actions menu at the caret; returns it (null when there is nothing to offer).</summary>
+    internal async Task<ContextMenu?> ShowQuickActionsAsync()
+    {
+        var actions = await GetQuickActionsAsync();
+        if (actions.Count == 0)
+        {
+            StatusMessage?.Invoke("No quick actions available here.");
+            return null;
+        }
+        var menu = new ContextMenu { ItemsSource = actions.Select(QuickActionItem).ToList() };
+        var view = Editor.TextArea.TextView;
+        var caret = Editor.TextArea.Caret.CalculateCaretRectangle();
+        var anchor = view.TranslatePoint(new Point(caret.X - view.HorizontalOffset, caret.Y - view.VerticalOffset), Editor) ?? default;
+        menu.Placement = PlacementMode.Bottom;
+        menu.PlacementRect = new Rect(anchor.X, anchor.Y, 1, caret.Height);
+        menu.Opened += (_, _) =>
+        {
+            if (menu.ItemsView.Count > 0 && menu.ContainerFromIndex(0) is MenuItem first)
+                first.Focus(NavigationMethod.Directional);
+        };
+        menu.Closed += (_, _) => Editor.TextArea.Focus();
+        menu.Open(Editor);
+        return menu;
+    }
+
+    MenuItem QuickActionItem(LspCodeAction action)
+    {
+        var item = new MenuItem
+        {
+            Header = action.Title,
+            Icon = new TextBlock { Text = "💡", FontSize = 11, VerticalAlignment = VerticalAlignment.Center },
+        };
+        if (action.Children.Count > 0)
+            item.ItemsSource = action.Children.Select(QuickActionItem).ToList();
+        else
+            item.Click += (_, _) => _ = ApplyCodeActionAsync(action);
+        return item;
+    }
+
+    internal async Task ApplyCodeActionAsync(LspCodeAction action)
+    {
+        if (_lsp is not { } lsp)
+            return;
+        IReadOnlyList<LspFileOperation> ops;
+        try
+        {
+            ops = await lsp.ResolveCodeActionAsync(action, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is LspException or IOException)
+        {
+            StatusMessage?.Invoke(ex.Message);
+            return;
+        }
+        if (ops.Count == 0)
+            return;
+        if (WorkspaceOperationsRequested is not null)
+            await WorkspaceOperationsRequested.Invoke(ops);
+        else
+            foreach (var op in ops.Where(o => o.Kind == "edit" && o.Path == FilePath))
+                ApplyEdits(op.Edits);
+        StatusMessage?.Invoke($"Applied: {action.Title}");
+    }
+
+    ContextMenu BuildContextMenu()
+    {
+        static object Header(string text, string gesture) => new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            Children =
+            {
+                new TextBlock { Text = text },
+                new TextBlock { Text = gesture, Margin = new Thickness(32, 0, 0, 0), Foreground = Brushes.Gray, [Grid.ColumnProperty] = 1 },
+            },
+        };
+        MenuItem Item(string text, string gesture, Action action)
+        {
+            var item = new MenuItem { Header = Header(text, gesture) };
+            item.Click += (_, _) => action();
+            return item;
+        }
+        return new ContextMenu
+        {
+            ItemsSource = new object[]
+            {
+                Item("Quick Actions and Refactorings...", "Ctrl+.", ShowQuickActions),
+                Item("Rename...", "F2", () => _ = RenameAsync()),
+                new Separator(),
+                Item("Go To Definition", "F12", () => _ = GoToAsync(Editor.CaretOffset, implementation: false)),
+                Item("Go To Implementation", "Ctrl+F12", () => _ = GoToAsync(Editor.CaretOffset, implementation: true)),
+                Item("Find All References", "Shift+F12", () => _ = FindReferencesAsync(Editor.CaretOffset)),
+                new Separator(),
+                Item("Format Document", "Ctrl+K, Ctrl+D", () => _ = FormatDocumentAsync()),
+                Item("Toggle Breakpoint", "F9", () => ToggleBreakpoint(Editor.TextArea.Caret.Line)),
+                new Separator(),
+                Item("Cut", "Ctrl+X", Editor.Cut),
+                Item("Copy", "Ctrl+C", Editor.Copy),
+                Item("Paste", "Ctrl+V", Editor.Paste),
+            },
+        };
     }
 
     public async Task GoToAsync(int offset, bool implementation)
@@ -873,6 +1020,8 @@ public static class QuickInfo
                 },
             });
         }
+        if (diagnostics.Count > 0)
+            panel.Children.Add(new TextBlock { Text = "Show potential fixes (Ctrl+.)", Foreground = new SolidColorBrush(Color.Parse("#3794FF")) });
         return panel;
     }
 

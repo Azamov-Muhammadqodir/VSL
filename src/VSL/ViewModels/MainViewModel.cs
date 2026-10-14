@@ -451,6 +451,7 @@ public partial class MainViewModel : ObservableObject
         };
         host.ReferencesFound += (symbol, refs) => ShowFindResults($"'{symbol}' references", refs);
         host.WorkspaceEditRequested += ApplyWorkspaceEditAsync;
+        host.WorkspaceOperationsRequested += ApplyWorkspaceOperationsAsync;
         host.PromptRequested += initial => Dialogs?.PromptAsync("Rename", "New name:", initial) ?? Task.FromResult<string?>(null);
     }
 
@@ -556,6 +557,52 @@ public partial class MainViewModel : ObservableObject
         }
         SetStatus($"Renamed across {edits.Count} file(s). Use Save All to write them.");
         await Task.CompletedTask;
+    }
+
+    /// <summary>Applies a code action's workspace edit: file creates/renames/deletes and text edits, in order.</summary>
+    async Task ApplyWorkspaceOperationsAsync(IReadOnlyList<LspFileOperation> ops)
+    {
+        var filesChanged = false;
+        foreach (var op in ops)
+        {
+            switch (op.Kind)
+            {
+                case "create":
+                    if (!File.Exists(op.Path))
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(op.Path)!);
+                        await File.WriteAllTextAsync(op.Path, "");
+                        filesChanged = true;
+                    }
+                    break;
+                case "rename" when op.NewPath is not null:
+                    if (Documents.FirstOrDefault(d => d.FilePath == op.Path) is { } open)
+                    {
+                        if (open.IsDirty)
+                            open.Host.Save();
+                        Documents.Remove(open);
+                        open.Dispose();
+                    }
+                    File.Move(op.Path, op.NewPath);
+                    filesChanged = true;
+                    break;
+                case "delete":
+                    if (Documents.FirstOrDefault(d => d.FilePath == op.Path) is { } deleted)
+                    {
+                        Documents.Remove(deleted);
+                        deleted.Dispose();
+                    }
+                    File.Delete(op.Path);
+                    filesChanged = true;
+                    break;
+                case "edit":
+                    // Edits land in the editor buffer (undoable, synced to the server); the user saves as usual.
+                    OpenDocument(op.Path, activate: false)?.Host.ApplyEdits(op.Edits);
+                    break;
+            }
+        }
+        if (filesChanged)
+            await RefreshExplorer();
     }
 
     void ShowFindResults(string title, IReadOnlyList<LspLocation> locations)

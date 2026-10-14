@@ -103,3 +103,50 @@ public class SolutionLoaderTests
         Assert.Equal(["Greeting.razor.cs", "Greeting.razor.css"], greeting.Children.Select(c => c.Name));
     }
 }
+
+public class CodeActionTests
+{
+    [Fact]
+    public async Task Add_using_quick_fix_resolves_to_an_edit()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var sln = await SampleSolution.GetAsync();
+        var install = await RoslynServerLocator.EnsureInstalledAsync(_ => { }, ct);
+        var ready = new TaskCompletionSource();
+        await using var lsp = await RoslynClient.StartAsync(install, sln, Path.Combine(Path.GetTempPath(), "vsl-test-logs"), ct);
+        lsp.ProjectsLoaded += () => ready.TrySetResult();
+        await ready.Task.WaitAsync(TimeSpan.FromMinutes(5), ct);
+
+        var cs = SampleSolution.PathOf(sln, "Components/Greeting.razor.cs");
+        var text = File.ReadAllText(cs).Replace("public string Name", "public StringBuilder Sb { get; } = new();\n    public string Name");
+        await lsp.DidOpenAsync(cs, text);
+        var missing = (await lsp.DiagnosticsAsync(cs, ct)).First(d => d.Code == "CS0246");
+
+        var actions = await lsp.CodeActionsAsync(cs, missing.Range, [missing], ct);
+        var addUsing = Assert.Single(actions, a => a.Title == "using System.Text;");
+        Assert.Equal("quickfix", addUsing.Kind);
+        Assert.Contains(actions, a => a.Title.StartsWith("Generate class", StringComparison.Ordinal));
+
+        var ops = await lsp.ResolveCodeActionAsync(addUsing, ct);
+        var edit = Assert.Single(ops);
+        Assert.Equal("edit", edit.Kind);
+        Assert.Equal(cs, edit.Path);
+        var applied = ApplyEdits(text, edit.Edits);
+        Assert.StartsWith("using System.Text;\nusing Microsoft.AspNetCore.Components;", applied);
+    }
+
+    /// <summary>Applies LSP edits to a string the way the editor does: back to front so offsets stay valid.</summary>
+    static string ApplyEdits(string text, IReadOnlyList<LspTextEdit> edits)
+    {
+        int Offset(LspPosition p)
+        {
+            var offset = 0;
+            for (var i = 0; i < p.Line; i++)
+                offset = text.IndexOf('\n', offset) + 1;
+            return offset + p.Character;
+        }
+        foreach (var e in edits.OrderByDescending(e => (e.Range.Start.Line, e.Range.Start.Character)))
+            text = text[..Offset(e.Range.Start)] + e.NewText + text[Offset(e.Range.End)..];
+        return text;
+    }
+}

@@ -21,7 +21,14 @@ public enum DiagnosticSeverity
     Hint = 4,
 }
 
-public sealed record LspDiagnostic(LspRange Range, DiagnosticSeverity Severity, string Code, string Message, bool IsUnnecessary);
+/// <summary>A diagnostic; <see cref="Raw"/> is the server's original object, which code actions need back verbatim.</summary>
+public sealed record LspDiagnostic(LspRange Range, DiagnosticSeverity Severity, string Code, string Message, bool IsUnnecessary, JsonElement Raw = default);
+
+/// <summary>A Quick Action / refactoring offered by the server; resolved lazily into a workspace edit.</summary>
+public sealed record LspCodeAction(string Title, string? Kind, bool IsPreferred, JsonElement Raw, IReadOnlyList<LspCodeAction> Children);
+
+/// <summary>One step of a workspace edit, applied in order: create/rename/delete a file or edit its text.</summary>
+public sealed record LspFileOperation(string Kind, string Path, string? NewPath, IReadOnlyList<LspTextEdit> Edits);
 
 /// <summary>A content change for textDocument/didChange; a null range means full-document replace.</summary>
 public sealed record LspContentChange(LspRange? Range, string Text);
@@ -97,7 +104,7 @@ public static class LspParse
             var code = d.TryGetProperty("code", out var c) ? c.ToString() : "";
             var unnecessary = d.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Array
                 && tags.EnumerateArray().Any(t => t.GetInt32() == 1);
-            list.Add(new LspDiagnostic(Range(d.GetProperty("range")), severity, code, d.GetProperty("message").GetString() ?? "", unnecessary));
+            list.Add(new LspDiagnostic(Range(d.GetProperty("range")), severity, code, d.GetProperty("message").GetString() ?? "", unnecessary, d));
         }
         return list;
     }
@@ -150,6 +157,60 @@ public static class LspParse
 
         return new LspCompletionItem(label, Str("filterText"), Str("sortText"), Str("insertText"), format == 2, kind,
             Str("detail"), edit, additional, raw);
+    }
+
+    /// <summary>Parses textDocument/codeAction results; Roslyn groups variants under data.NestedCodeActions.</summary>
+    public static IReadOnlyList<LspCodeAction> CodeActions(JsonElement result)
+    {
+        if (result.ValueKind != JsonValueKind.Array)
+            return [];
+        return result.EnumerateArray().Select(CodeAction).OfType<LspCodeAction>().ToList();
+    }
+
+    static LspCodeAction? CodeAction(JsonElement a)
+    {
+        // Bare Commands (title + command string) have no edit to apply; VSL only shows code actions.
+        if (!a.TryGetProperty("title", out var title) || (a.TryGetProperty("command", out var cmd) && cmd.ValueKind == JsonValueKind.String))
+            return null;
+        var children = a.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object
+            && data.TryGetProperty("NestedCodeActions", out var nested) && nested.ValueKind == JsonValueKind.Array
+                ? nested.EnumerateArray().Select(CodeAction).OfType<LspCodeAction>().ToList()
+                : [];
+        return new LspCodeAction(
+            title.GetString() ?? "",
+            a.TryGetProperty("kind", out var k) ? k.GetString() : null,
+            a.TryGetProperty("isPreferred", out var p) && p.ValueKind == JsonValueKind.True,
+            a,
+            children);
+    }
+
+    /// <summary>Flattens a WorkspaceEdit (documentChanges or changes) into ordered file operations.</summary>
+    public static IReadOnlyList<LspFileOperation> WorkspaceEdit(JsonElement edit)
+    {
+        var ops = new List<LspFileOperation>();
+        if (edit.ValueKind != JsonValueKind.Object)
+            return ops;
+        static string PathOf(string uri) => new Uri(uri).LocalPath;
+        if (edit.TryGetProperty("documentChanges", out var changes) && changes.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var c in changes.EnumerateArray())
+            {
+                if (c.TryGetProperty("textDocument", out var td))
+                    ops.Add(new LspFileOperation("edit", PathOf(td.GetProperty("uri").GetString()!), null, TextEdits(c.GetProperty("edits"))));
+                else if (c.TryGetProperty("kind", out var kind))
+                    ops.Add(kind.GetString() switch
+                    {
+                        "rename" => new LspFileOperation("rename", PathOf(c.GetProperty("oldUri").GetString()!), PathOf(c.GetProperty("newUri").GetString()!), []),
+                        var k => new LspFileOperation(k ?? "", PathOf(c.GetProperty("uri").GetString()!), null, []),
+                    });
+            }
+        }
+        else if (edit.TryGetProperty("changes", out var map) && map.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var file in map.EnumerateObject())
+                ops.Add(new LspFileOperation("edit", PathOf(file.Name), null, TextEdits(file.Value)));
+        }
+        return ops;
     }
 
     /// <summary>Extracts plain text from MarkupContent / MarkedString / string documentation.</summary>

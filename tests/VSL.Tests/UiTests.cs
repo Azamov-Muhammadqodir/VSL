@@ -155,6 +155,47 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Quick_action_adds_missing_using()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var vm = new MainViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+        var doc = vm.OpenDocument(SampleSolution.PathOf(sln, "Components/Greeting.razor.cs"))!;
+        var host = doc.Host;
+        await WaitUntil(() => vm.ServerStatus == "IntelliSense: ready", TimeSpan.FromMinutes(5));
+
+        var text = host.Document.Text;
+        host.Editor.CaretOffset = text.IndexOf("    [Parameter]", StringComparison.Ordinal);
+        host.Editor.TextArea.PerformTextInput("    public StringBuilder Sb { get; } = new();\n");
+        await WaitUntil(() => host.Diagnostics.Any(d => d.Code == "CS0246"), TimeSpan.FromSeconds(60));
+        host.Editor.CaretOffset = host.Document.Text.IndexOf("StringBuilder", StringComparison.Ordinal) + 3;
+
+        // Ctrl+. opens the lightbulb menu at the caret.
+        var menu = await host.ShowQuickActionsAsync();
+        Assert.NotNull(menu);
+        Assert.True(menu.IsOpen);
+        Assert.Contains(menu.Items.OfType<Avalonia.Controls.MenuItem>(), i => (string?)i.Header == "using System.Text;");
+        menu.Close();
+
+        // Applying a fix edits the buffer as a single undo step.
+        var actions = await host.GetQuickActionsAsync();
+        Assert.Contains(actions, a => a.Title.StartsWith("Generate class", StringComparison.Ordinal));
+        await host.ApplyCodeActionAsync(actions.Single(a => a.Title == "using System.Text;"));
+        Assert.StartsWith("using System.Text;", host.Document.Text);
+        await WaitUntil(() => !host.Diagnostics.Any(d => d.Code == "CS0246"), TimeSpan.FromSeconds(30));
+        Assert.DoesNotContain(host.Diagnostics, d => d.Code == "CS0246");
+
+        host.Editor.Undo();
+        Assert.False(host.Document.Text.StartsWith("using System.Text;", StringComparison.Ordinal));
+        while (host.Editor.CanUndo)
+            host.Editor.Undo();
+        Assert.False(doc.IsDirty);
+        Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
     public async Task Start_window_renders_without_solution()
     {
         var vm = new MainViewModel();

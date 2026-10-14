@@ -336,6 +336,7 @@ public partial class MainWindow : Window, IDialogService
             F10 / F11         Step over / Step into
             Shift+F11         Step out
             Ctrl+Alt+Break    Break all
+            Ctrl+. / Alt+Enter Quick Actions and Refactorings
             Ctrl+Space        IntelliSense completion
             Ctrl+Shift+Space  Parameter info
             F12 / Ctrl+Click  Go to definition
