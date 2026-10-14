@@ -61,6 +61,10 @@ Headless UI tests write screenshots to `$TMPDIR/vsl-test-artifacts`.
 - Razor cohosting sends `razor/updateHtml` plus HTML `textDocument/*` requests to the client;
   `HtmlLanguageService` answers them (HTML tags/attributes) so Razor can merge in component completions.
 
+## License
+
+VSL is released under the [MIT License](LICENSE).
+
 ## Third-party
 
 Cascadia Mono font (SIL OFL 1.1, `src/VSL/Assets/Fonts`), roslyn-language-server and netcoredbg (MIT, downloaded at runtime),
