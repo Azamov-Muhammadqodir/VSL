@@ -1,0 +1,91 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="{StaticResource VsUiFont}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <Style Selector="Menu">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Menu > MenuItem">
+    <Setter Property="Padding" Value="8,4" />
+  </Style>
+  <Style Selector="MenuItem">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <!-- Flat toolbar buttons -->
+  <Style Selector="Button.tb">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="5,2" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.tb:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#3E3E40" />
+  </Style>
+  <Style Selector="Button.tb:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.tb:disabled">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+  <Style Selector="ToggleButton.tb">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Padding" Value="6,2" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="ToggleButton.tb:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#3E3E40" />
+    <Setter Property="BorderBrush" Value="#007ACC" />
+  </Style>
+
+  <Style Selector="ComboBox.tb">
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Background" Value="#333337" />
+    <Setter Property="BorderBrush" Value="#434346" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- Dense tree and lists, like VS tool windows -->
+  <Style Selector="TreeViewItem">
+    <Setter Property="MinHeight" Value="20" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="ListBox.dense > ListBoxItem">
+    <Setter Property="Padding" Value="4,1" />
+    <Setter Property="MinHeight" Value="20" />
+  </Style>
+  <Style Selector="ListBox.dense">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="TextBox.search">
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Padding" Value="6,2" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Background" Value="#333337" />
+    <Setter Property="BorderBrush" Value="#434346" />
+  </Style>
+
+  <Style Selector="GridSplitter">
+    <Setter Property="Background" Value="#2D2D30" />
+  </Style>
+
+  <Style Selector="TextBlock.toolTitle">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="#D0D0D0" />
+    <Setter Property="Margin" Value="8,4" />
+  </Style>
+</Styles>

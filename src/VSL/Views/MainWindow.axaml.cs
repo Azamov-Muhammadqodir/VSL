@@ -1,0 +1,327 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using VSL.ViewModels;
+using VSL.Workspace;
+
+namespace VSL.Views;
+
+public partial class MainWindow : Window, IDialogService
+{
+    bool _closingConfirmed;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is MainViewModel vm)
+            {
+                vm.Dialogs = this;
+                foreach (var channel in vm.OutputChannels)
+                    channel.Appended += ScrollOutputToEnd;
+            }
+        };
+        Activated += (_, _) => Vm?.CheckExternalChanges();
+        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+        RecentMenu.SubmenuOpened += (_, _) => BuildRecentMenu();
+        BuildRecentMenu();
+    }
+
+    MainViewModel? Vm => DataContext as MainViewModel;
+
+    Editor.EditorHost? ActiveHost => Vm?.ActiveDocument?.Host;
+
+    protected override async void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        if (_closingConfirmed || Vm is not { } vm)
+            return;
+        e.Cancel = true;
+        vm.SaveSession();
+        if (await vm.CloseSolutionCoreAsync())
+        {
+            _closingConfirmed = true;
+            Close();
+        }
+    }
+
+    void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        if (ctrl && e.Key == Key.OemSemicolon)
+        {
+            ExplorerSearch.Focus();
+            e.Handled = true;
+        }
+        else if (ctrl && e.Key == Key.Tab && Vm is { Documents.Count: > 1 } vm)
+        {
+            var i = vm.ActiveDocument is null ? 0 : vm.Documents.IndexOf(vm.ActiveDocument);
+            var step = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1;
+            vm.ActiveDocument = vm.Documents[(i + step + vm.Documents.Count) % vm.Documents.Count];
+            e.Handled = true;
+        }
+    }
+
+    void BuildRecentMenu()
+    {
+        if (Vm is not { } vm)
+            return;
+        RecentMenu.Items.Clear();
+        foreach (var path in vm.RecentSolutions)
+        {
+            var item = new MenuItem { Header = path, Command = vm.OpenRecentCommand, CommandParameter = path };
+            RecentMenu.Items.Add(item);
+        }
+        RecentMenu.IsEnabled = RecentMenu.Items.Count > 0;
+    }
+
+    // ---- IDialogService ----------------------------------------------------------------------------------
+
+    public async Task<string?> PickSolutionAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open Project/Solution",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Solution files") { Patterns = ["*.sln", "*.slnx"] },
+                new FilePickerFileType("All files") { Patterns = ["*"] },
+            ],
+        });
+        return files.Count == 0 ? null : files[0].TryGetLocalPath();
+    }
+
+    public async Task<string?> PromptAsync(string title, string label, string initial)
+    {
+        var box = new TextBox { Text = initial, Width = 340 };
+        var dialog = CreateDialog(title, new StackPanel { Spacing = 8, Children = { new TextBlock { Text = label }, box } },
+            ("OK", true), ("Cancel", false));
+        box.AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            box.Focus();
+            box.SelectAll();
+        });
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+                dialog.Close(true);
+        };
+        var ok = await dialog.ShowDialog<bool?>(this);
+        return ok == true ? box.Text : null;
+    }
+
+    public Task<bool?> ConfirmSaveAsync(string fileName)
+    {
+        var dialog = CreateDialog("VSL", new TextBlock { Text = $"Save changes to the following item?\n\n{fileName}", TextWrapping = TextWrapping.Wrap },
+            ("Save", true), ("Don't Save", false), ("Cancel", null));
+        return dialog.ShowDialog<bool?>(this);
+    }
+
+    Window CreateDialog(string title, Control body, params (string Text, bool? Result)[] buttons)
+    {
+        var dialog = new Window
+        {
+            Title = title,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = (IBrush)this.FindResource("VsEnvironmentBrush")!,
+            ShowInTaskbar = false,
+        };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        foreach (var (text, result) in buttons)
+        {
+            var b = new Button { Content = text, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
+            b.Click += (_, _) => dialog.Close(result);
+            row.Children.Add(b);
+        }
+        dialog.Content = new StackPanel { Margin = new Thickness(16), Spacing = 16, Children = { body, row } };
+        return dialog;
+    }
+
+    // ---- Solution Explorer ---------------------------------------------------------------------------------
+
+    void OnExplorerDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (ExplorerTree.SelectedItem is ExplorerNode node && Vm is { } vm)
+        {
+            if (node.Kind is NodeKind.File)
+                vm.OpenNode(node);
+        }
+    }
+
+    void OnExplorerKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && ExplorerTree.SelectedItem is ExplorerNode node && Vm is { } vm)
+        {
+            if (node.Kind == NodeKind.File)
+                vm.OpenNode(node);
+            else
+                node.IsExpanded = !node.IsExpanded;
+            e.Handled = true;
+        }
+    }
+
+    CancellationTokenSource? _searchCts;
+
+    async void OnExplorerSearchChanged(object? sender, TextChangedEventArgs e)
+    {
+        var text = ExplorerSearch.Text ?? "";
+        _searchCts?.Cancel();
+        if (text.Length < 2 || Vm is not { } vm)
+        {
+            ExplorerSearchResults.IsVisible = false;
+            ExplorerTree.IsVisible = true;
+            return;
+        }
+        var cts = _searchCts = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(200, cts.Token);
+            var results = await Task.Run(() => vm.SearchFiles(text).Take(500).ToList(), cts.Token);
+            if (cts.IsCancellationRequested)
+                return;
+            ExplorerSearchResults.ItemsSource = results;
+            ExplorerSearchResults.IsVisible = true;
+            ExplorerTree.IsVisible = false;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    void OnSearchResultDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (ExplorerSearchResults.SelectedItem is ExplorerNode node)
+            Vm?.OpenNode(node);
+    }
+
+    void OnSyncWithActiveDocument(object? sender, RoutedEventArgs e)
+    {
+        ExplorerSearch.Text = "";
+        if (Vm?.SyncWithActiveDocument() is { } node)
+            Dispatcher.UIThread.Post(() => ExplorerTree.SelectedItem = node, DispatcherPriority.Loaded);
+    }
+
+    // ---- Tool windows ---------------------------------------------------------------------------------------
+
+    void OnErrorDoubleTapped(object? sender, TappedEventArgs e) =>
+        Vm?.NavigateToErrorCommand.Execute(ErrorListBox.SelectedItem as ErrorItem);
+
+    void OnFindResultDoubleTapped(object? sender, TappedEventArgs e) =>
+        Vm?.NavigateToFindResultCommand.Execute(FindResultsBox.SelectedItem as FindResultItem);
+
+    void ScrollOutputToEnd()
+    {
+        if (OutputEditor.Document is { } doc && Vm?.SelectedOutput.Document == doc)
+            OutputEditor.ScrollToEnd();
+    }
+
+    void OnClearOutput(object? sender, RoutedEventArgs e) => Vm?.SelectedOutput.Clear();
+
+    void OnShowSolutionExplorer(object? sender, RoutedEventArgs e) => ExplorerTree.Focus();
+
+    void OnShowErrorList(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is { } vm)
+            vm.BottomTabIndex = 0;
+    }
+
+    void OnShowOutput(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is { } vm)
+            vm.BottomTabIndex = 1;
+    }
+
+    // ---- Edit menu -> active editor ------------------------------------------------------------------------
+
+    void OnUndo(object? sender, RoutedEventArgs e) => ActiveHost?.Editor.Undo();
+
+    void OnRedo(object? sender, RoutedEventArgs e) => ActiveHost?.Editor.Redo();
+
+    void OnFind(object? sender, RoutedEventArgs e) => ActiveHost?.Editor.SearchPanel.Open();
+
+    async void OnFindInFiles(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm || vm.Solution is null)
+            return;
+        var initial = ActiveHost?.Editor.SelectedText ?? "";
+        if (await PromptAsync("Find in Files", "Find what:", initial) is { Length: > 0 } text)
+            await vm.FindInFilesAsync(text);
+    }
+
+    void OnFormatDocument(object? sender, RoutedEventArgs e) => _ = ActiveHost?.FormatDocumentAsync();
+
+    void OnGoToDefinition(object? sender, RoutedEventArgs e)
+    {
+        if (ActiveHost is { } h)
+            _ = h.GoToAsync(h.Editor.CaretOffset, implementation: false);
+    }
+
+    void OnGoToImplementation(object? sender, RoutedEventArgs e)
+    {
+        if (ActiveHost is { } h)
+            _ = h.GoToAsync(h.Editor.CaretOffset, implementation: true);
+    }
+
+    void OnFindReferences(object? sender, RoutedEventArgs e)
+    {
+        if (ActiveHost is { } h)
+            _ = h.FindReferencesAsync(h.Editor.CaretOffset);
+    }
+
+    void OnRename(object? sender, RoutedEventArgs e)
+    {
+        if (ActiveHost is { } h)
+        {
+            h.Editor.TextArea.Focus();
+            h.Editor.TextArea.RaiseEvent(new KeyEventArgs { RoutedEvent = KeyDownEvent, Key = Key.F2 });
+        }
+    }
+
+    void OnExit(object? sender, RoutedEventArgs e) => Close();
+
+    async void OnShortcuts(object? sender, RoutedEventArgs e)
+    {
+        const string text = """
+            Ctrl+Shift+O      Open solution
+            Ctrl+S / Ctrl+Shift+S   Save / Save all
+            Ctrl+Shift+B      Build solution
+            F5 / Ctrl+F5      Start / Start without debugging
+            Shift+F5          Stop
+            Ctrl+Space        IntelliSense completion
+            Ctrl+Shift+Space  Parameter info
+            F12 / Ctrl+Click  Go to definition
+            Ctrl+F12          Go to implementation
+            Shift+F12         Find all references
+            F2                Rename
+            Ctrl+K, Ctrl+D    Format document
+            Ctrl+K, Ctrl+C/U  Comment / uncomment lines
+            Ctrl+F            Find in file
+            Ctrl+Shift+F      Find in files
+            Ctrl+;            Search Solution Explorer
+            Ctrl+Tab          Next document
+            Ctrl+F4           Close document
+            """;
+        var body = new TextBlock { Text = text, FontFamily = (FontFamily)this.FindResource("VsCodeFont")! };
+        await CreateDialog("Keyboard Shortcuts", body, ("OK", true)).ShowDialog<bool?>(this);
+    }
+
+    async void OnAbout(object? sender, RoutedEventArgs e)
+    {
+        var body = new TextBlock
+        {
+            Text = "VSL — Visual Studio for Linux\n\nNative Avalonia IDE for C#, ASP.NET Core and Blazor.\nIntelliSense: Roslyn language server (MIT) with Razor cohosting.\nBuild/Run: .NET SDK.",
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 420,
+        };
+        await CreateDialog("About VSL", body, ("OK", true)).ShowDialog<bool?>(this);
+    }
+}

@@ -1,0 +1,329 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VSL.ViewModels"
+        xmlns:ws="using:VSL.Workspace"
+        xmlns:v="using:VSL.Views"
+        xmlns:ae="https://github.com/avaloniaui/avaloniaedit"
+        x:Class="VSL.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="{Binding WindowTitle}"
+        Width="1600" Height="1000"
+        WindowStartupLocation="CenterScreen"
+        Icon="/Assets/vsl.png"
+        Background="{StaticResource VsEnvironmentBrush}"
+        Foreground="{StaticResource VsTextBrush}">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding SaveAllCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+B" Command="{Binding BuildSolutionCommand}" />
+    <KeyBinding Gesture="Ctrl+F5" Command="{Binding StartWithoutDebuggingCommand}" />
+    <KeyBinding Gesture="F5" Command="{Binding StartDebuggingCommand}" />
+    <KeyBinding Gesture="Shift+F5" Command="{Binding StopCommand}" />
+    <KeyBinding Gesture="Ctrl+F4" Command="{Binding CloseDocumentCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+O" Command="{Binding OpenSolutionCommand}" />
+    <KeyBinding Gesture="Ctrl+Pause" Command="{Binding CancelBuildCommand}" />
+  </Window.KeyBindings>
+
+  <DockPanel>
+    <!-- ===== Menu ===== -->
+    <Menu DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}">
+      <MenuItem Header="_File">
+        <MenuItem Header="_Open Solution..." InputGesture="Ctrl+Shift+O" Command="{Binding OpenSolutionCommand}" />
+        <MenuItem Name="RecentMenu" Header="Recent _Solutions" />
+        <MenuItem Header="_Close Solution" Command="{Binding CloseSolutionCommand}" />
+        <Separator />
+        <MenuItem Header="_Save" InputGesture="Ctrl+S" Command="{Binding SaveCommand}" />
+        <MenuItem Header="Save A_ll" InputGesture="Ctrl+Shift+S" Command="{Binding SaveAllCommand}" />
+        <MenuItem Header="Close _Document" InputGesture="Ctrl+F4" Command="{Binding CloseDocumentCommand}" />
+        <Separator />
+        <MenuItem Header="E_xit" Click="OnExit" />
+      </MenuItem>
+      <MenuItem Header="_Edit">
+        <MenuItem Header="_Undo" InputGesture="Ctrl+Z" Click="OnUndo" />
+        <MenuItem Header="_Redo" InputGesture="Ctrl+Y" Click="OnRedo" />
+        <Separator />
+        <MenuItem Header="_Find..." InputGesture="Ctrl+F" Click="OnFind" />
+        <MenuItem Header="Find in _Files..." InputGesture="Ctrl+Shift+F" Click="OnFindInFiles" />
+        <Separator />
+        <MenuItem Header="_Advanced">
+          <!-- Avalonia's KeyGesture cannot express chords, so the chord is shown as text. -->
+          <MenuItem Click="OnFormatDocument">
+            <MenuItem.Header>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Format Document" />
+                <TextBlock Grid.Column="1" Text="Ctrl+K, Ctrl+D" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+              </Grid>
+            </MenuItem.Header>
+          </MenuItem>
+        </MenuItem>
+        <MenuItem Header="_Go To Definition" InputGesture="F12" Click="OnGoToDefinition" />
+        <MenuItem Header="Go To _Implementation" InputGesture="Ctrl+F12" Click="OnGoToImplementation" />
+        <MenuItem Header="Find All _References" InputGesture="Shift+F12" Click="OnFindReferences" />
+        <MenuItem Header="Re_name..." InputGesture="F2" Click="OnRename" />
+      </MenuItem>
+      <MenuItem Header="_View">
+        <MenuItem Header="Solution _Explorer" Click="OnShowSolutionExplorer" />
+        <MenuItem Header="E_rror List" Click="OnShowErrorList" />
+        <MenuItem Header="_Output" Click="OnShowOutput" />
+      </MenuItem>
+      <MenuItem Header="_Build">
+        <MenuItem Header="_Build Solution" InputGesture="Ctrl+Shift+B" Command="{Binding BuildSolutionCommand}" />
+        <MenuItem Header="_Rebuild Solution" Command="{Binding RebuildSolutionCommand}" />
+        <MenuItem Header="_Clean Solution" Command="{Binding CleanSolutionCommand}" />
+        <Separator />
+        <MenuItem Header="Cance_l" InputGesture="Ctrl+Pause" Command="{Binding CancelBuildCommand}" />
+      </MenuItem>
+      <MenuItem Header="_Debug">
+        <MenuItem Header="_Start Debugging" InputGesture="F5" Command="{Binding StartDebuggingCommand}" />
+        <MenuItem Header="Start _Without Debugging" InputGesture="Ctrl+F5" Command="{Binding StartWithoutDebuggingCommand}" />
+        <MenuItem Header="Stop _Debugging" InputGesture="Shift+F5" Command="{Binding StopCommand}" />
+      </MenuItem>
+      <MenuItem Header="_Tools">
+        <MenuItem Header="_Restart Language Server" Command="{Binding RestartLanguageServerCommand}" />
+      </MenuItem>
+      <MenuItem Header="_Help">
+        <MenuItem Header="_Keyboard Shortcuts" Click="OnShortcuts" />
+        <MenuItem Header="_About VSL" Click="OnAbout" />
+      </MenuItem>
+    </Menu>
+
+    <!-- ===== Standard toolbar ===== -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="0,0,0,1" Padding="4,2">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+        <Button Classes="tb" ToolTip.Tip="Open Solution (Ctrl+Shift+O)" Command="{Binding OpenSolutionCommand}">📂</Button>
+        <Button Classes="tb" ToolTip.Tip="Save (Ctrl+S)" Command="{Binding SaveCommand}">💾</Button>
+        <Button Classes="tb" ToolTip.Tip="Save All (Ctrl+Shift+S)" Command="{Binding SaveAllCommand}">⧉</Button>
+        <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
+        <Button Classes="tb" ToolTip.Tip="Undo (Ctrl+Z)" Click="OnUndo">↶</Button>
+        <Button Classes="tb" ToolTip.Tip="Redo (Ctrl+Y)" Click="OnRedo">↷</Button>
+        <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
+        <ComboBox Classes="tb" Width="90" ItemsSource="{Binding Configurations}" SelectedItem="{Binding Configuration}" ToolTip.Tip="Solution Configurations" />
+        <ComboBox Classes="tb" Width="160" ItemsSource="{Binding StartupProjects}" SelectedItem="{Binding StartupProject}" ToolTip.Tip="Startup Project" />
+        <Button Classes="tb" Command="{Binding StartDebuggingCommand}" ToolTip.Tip="Start (F5)">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBlock Text="▶" Foreground="#89D185" />
+            <TextBlock Text="{Binding LaunchProfile, FallbackValue=Start, TargetNullValue=Start}" />
+          </StackPanel>
+        </Button>
+        <ComboBox Classes="tb" Width="22" ItemsSource="{Binding LaunchProfiles}" SelectedItem="{Binding LaunchProfile}" ToolTip.Tip="Launch Profile" />
+        <Button Classes="tb" Command="{Binding StartWithoutDebuggingCommand}" ToolTip.Tip="Start Without Debugging (Ctrl+F5)">
+          <TextBlock Text="▷" Foreground="#89D185" />
+        </Button>
+        <Button Classes="tb" Command="{Binding StopCommand}" ToolTip.Tip="Stop (Shift+F5)">
+          <TextBlock Text="■" Foreground="#F48771" />
+        </Button>
+        <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
+        <Button Classes="tb" Command="{Binding BuildSolutionCommand}" ToolTip.Tip="Build Solution (Ctrl+Shift+B)">🔨 Build</Button>
+      </StackPanel>
+    </Border>
+
+    <!-- ===== Status bar ===== -->
+    <Border DockPanel.Dock="Bottom" Height="23" Background="{Binding Status, Converter={x:Static v:StatusBrushConverter.Instance}}">
+      <Grid ColumnDefinitions="*,Auto,Auto" Margin="8,0">
+        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="White" TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="1" Text="{Binding ServerStatus}" VerticalAlignment="Center" Foreground="White" Margin="0,0,24,0" />
+        <TextBlock Grid.Column="2" Text="{Binding CaretText}" VerticalAlignment="Center" Foreground="White" MinWidth="120" />
+      </Grid>
+    </Border>
+
+    <!-- ===== Main area: [documents / bottom tool windows] | Solution Explorer ===== -->
+    <Grid Name="MainGrid" ColumnDefinitions="*,4,340">
+      <Grid Name="LeftGrid" RowDefinitions="*,4,250">
+
+        <!-- Document well -->
+        <Panel Background="{StaticResource VsEnvironmentBrush}">
+          <TabControl Name="DocumentTabs"
+                      ItemsSource="{Binding Documents}"
+                      SelectedItem="{Binding ActiveDocument}"
+                      ItemContainerTheme="{StaticResource VsDocumentTab}"
+                      Padding="0"
+                      IsVisible="{Binding !!Documents.Count}">
+            <TabControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:DocumentViewModel">
+                <StackPanel Orientation="Horizontal" Spacing="4" ToolTip.Tip="{Binding FilePath}">
+                  <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                  <Button Classes="tb" Padding="3,0" MinHeight="16" FontSize="11"
+                          Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).CloseDocumentCommand}"
+                          CommandParameter="{Binding}">✕</Button>
+                </StackPanel>
+              </DataTemplate>
+            </TabControl.ItemTemplate>
+            <TabControl.ContentTemplate>
+              <DataTemplate x:DataType="vm:DocumentViewModel">
+                <Border BorderBrush="#007ACC" BorderThickness="0,2,0,0">
+                  <ContentControl Content="{Binding Host.Editor}" />
+                </Border>
+              </DataTemplate>
+            </TabControl.ContentTemplate>
+          </TabControl>
+
+          <!-- Start window (no solution open) -->
+          <StackPanel IsVisible="{Binding !HasSolution}" Margin="60,50" Spacing="14" MaxWidth="720" HorizontalAlignment="Left">
+            <TextBlock Text="VSL" FontSize="34" FontWeight="Light" />
+            <TextBlock Text="Visual Studio for Linux" FontSize="16" Foreground="{StaticResource VsGrayTextBrush}" />
+            <Button Command="{Binding OpenSolutionCommand}" Padding="16,10" Margin="0,16,0,0" Background="#333337">
+              <StackPanel Spacing="2">
+                <TextBlock Text="Open a project or solution" FontSize="14" />
+                <TextBlock Text="Open a local .sln or .slnx file" Foreground="{StaticResource VsGrayTextBrush}" />
+              </StackPanel>
+            </Button>
+            <TextBlock Text="Open recent" FontSize="14" Margin="0,16,0,0" />
+            <ItemsControl ItemsSource="{Binding RecentSolutions}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <Button Classes="tb" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,6"
+                          Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenRecentCommand}"
+                          CommandParameter="{Binding}">
+                    <TextBlock Text="{Binding}" />
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Panel>
+
+        <GridSplitter Grid.Row="1" ResizeDirection="Rows" />
+
+        <!-- Bottom tool windows -->
+        <Border Grid.Row="2" Background="{StaticResource VsToolWindowBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="1,1,1,0">
+          <TabControl Name="BottomTabs" TabStripPlacement="Bottom" Padding="0"
+                      SelectedIndex="{Binding BottomTabIndex}"
+                      ItemContainerTheme="{StaticResource VsToolTab}">
+            <!-- Error List -->
+            <TabItem Header="Error List">
+              <DockPanel>
+                <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" Padding="4,2">
+                  <StackPanel Orientation="Horizontal" Spacing="4">
+                    <ToggleButton Classes="tb" IsChecked="{Binding ShowErrors}">
+                      <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="⨂" Foreground="#F14C4C" />
+                        <TextBlock Text="{Binding ErrorCount, StringFormat={}{0} Errors}" />
+                      </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton Classes="tb" IsChecked="{Binding ShowWarnings}">
+                      <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="⚠" Foreground="#CCA700" />
+                        <TextBlock Text="{Binding WarningCount, StringFormat={}{0} Warnings}" />
+                      </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton Classes="tb" IsChecked="{Binding ShowMessages}">
+                      <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="ⓘ" Foreground="#3794FF" />
+                        <TextBlock Text="{Binding MessageCount, StringFormat={}{0} Messages}" />
+                      </StackPanel>
+                    </ToggleButton>
+                    <TextBlock Text="Build + IntelliSense" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+                  </StackPanel>
+                </Border>
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="28,90,*,130,200,60" Background="#2D2D30" Height="22">
+                  <TextBlock Grid.Column="1" Text="Code" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  <TextBlock Grid.Column="2" Text="Description" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  <TextBlock Grid.Column="3" Text="Project" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  <TextBlock Grid.Column="4" Text="File" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  <TextBlock Grid.Column="5" Text="Line" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                </Grid>
+                <ListBox Name="ErrorListBox" Classes="dense" ItemsSource="{Binding Errors}" DoubleTapped="OnErrorDoubleTapped">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ErrorItem">
+                      <Grid ColumnDefinitions="24,90,*,130,200,60" ToolTip.Tip="{Binding Description}">
+                        <TextBlock Text="{Binding SeverityGlyph}" Foreground="{Binding SeverityColor, Converter={x:Static v:ColorStringConverter.Instance}}" HorizontalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding Code}" Foreground="#3794FF" />
+                        <TextBlock Grid.Column="2" Text="{Binding Description}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="3" Text="{Binding Project}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="4" Text="{Binding File}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="5" Text="{Binding LineText}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </DockPanel>
+            </TabItem>
+
+            <!-- Output -->
+            <TabItem Header="Output">
+              <DockPanel>
+                <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" Padding="4,2">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="Show output from:" VerticalAlignment="Center" />
+                    <ComboBox Classes="tb" Width="200" ItemsSource="{Binding OutputChannels}" SelectedItem="{Binding SelectedOutput}" />
+                    <Button Classes="tb" Click="OnClearOutput" ToolTip.Tip="Clear All">🧹</Button>
+                  </StackPanel>
+                </Border>
+                <ae:TextEditor Name="OutputEditor"
+                               Document="{Binding SelectedOutput.Document}"
+                               IsReadOnly="True"
+                               FontFamily="{StaticResource VsCodeFont}"
+                               FontSize="12"
+                               Background="#1E1E1E"
+                               Foreground="#DCDCDC"
+                               HorizontalScrollBarVisibility="Auto"
+                               VerticalScrollBarVisibility="Auto" />
+              </DockPanel>
+            </TabItem>
+
+            <!-- Find Symbol Results -->
+            <TabItem Header="{Binding FindResultsTitle}">
+              <ListBox Name="FindResultsBox" Classes="dense" ItemsSource="{Binding FindResults}" DoubleTapped="OnFindResultDoubleTapped">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:FindResultItem">
+                    <TextBlock Text="{Binding Display}" FontFamily="{StaticResource VsCodeFont}" ToolTip.Tip="{Binding FilePath}" />
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </TabItem>
+          </TabControl>
+        </Border>
+      </Grid>
+
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
+
+      <!-- Solution Explorer -->
+      <Border Grid.Column="2" Background="{StaticResource VsToolWindowBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="1,0,0,0">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}">
+            <TextBlock Classes="toolTitle" Text="Solution Explorer" />
+          </Border>
+          <Border DockPanel.Dock="Top" Padding="4,2" Background="{StaticResource VsToolWindowBrush}">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <Button Classes="tb" Click="OnSyncWithActiveDocument" ToolTip.Tip="Sync with Active Document">⇄</Button>
+              <Button Classes="tb" Command="{Binding CollapseAllCommand}" ToolTip.Tip="Collapse All">⊟</Button>
+              <Button Classes="tb" Command="{Binding RefreshExplorerCommand}" ToolTip.Tip="Refresh">⟳</Button>
+            </StackPanel>
+          </Border>
+          <TextBox Name="ExplorerSearch" DockPanel.Dock="Top" Classes="search" Margin="4,0,4,4"
+                   PlaceholderText="Search Solution Explorer (Ctrl+;)" TextChanged="OnExplorerSearchChanged" />
+          <Panel>
+            <TreeView Name="ExplorerTree" ItemsSource="{Binding ExplorerRoots}" DoubleTapped="OnExplorerDoubleTapped"
+                      KeyDown="OnExplorerKeyDown" Background="Transparent">
+              <TreeView.Styles>
+                <Style Selector="TreeViewItem" x:DataType="ws:ExplorerNode">
+                  <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                </Style>
+              </TreeView.Styles>
+              <TreeView.ItemTemplate>
+                <TreeDataTemplate x:DataType="ws:ExplorerNode" ItemsSource="{Binding Children}">
+                  <StackPanel Orientation="Horizontal" Spacing="6" Height="20">
+                    <ContentControl Content="{Binding IconKey, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  </StackPanel>
+                </TreeDataTemplate>
+              </TreeView.ItemTemplate>
+            </TreeView>
+            <ListBox Name="ExplorerSearchResults" Classes="dense" IsVisible="False" DoubleTapped="OnSearchResultDoubleTapped">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="ws:ExplorerNode">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <ContentControl Content="{Binding IconKey, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Panel>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>
