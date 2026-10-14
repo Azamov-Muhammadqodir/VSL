@@ -48,6 +48,14 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
     readonly List<TextAnchor> _breakpointAnchors = [];
     int? _executionLine;
 
+    /// <summary>Editor font size at 100 % (Cascadia Mono 10 pt, Visual Studio's default).</summary>
+    public const double BaseFontSize = 13.33;
+
+    public const double MinZoom = 0.2, MaxZoom = 4.0;
+
+    /// <summary>Zoom applied to newly opened documents; follows the last zoom the user picked.</summary>
+    public static double DefaultZoom { get; set; } = 1.0;
+
     public EditorHost(string filePath)
     {
         FilePath = filePath;
@@ -64,7 +72,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
             Document = Document,
             ShowLineNumbers = true,
             FontFamily = Application.Current?.FindResource("VsCodeFont") as FontFamily ?? new FontFamily("monospace"),
-            FontSize = 13,
+            FontSize = BaseFontSize * DefaultZoom,
             Background = EditorBackground,
             Foreground = EditorForeground,
             LineNumbersForeground = LineNumberBrush,
@@ -104,6 +112,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
         Editor.PointerHover += OnPointerHover;
         Editor.PointerHoverStopped += (_, _) => ToolTip.SetIsOpen(Editor, false);
         Editor.AddHandler(InputElement.KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
+        Editor.AddHandler(InputElement.PointerWheelChangedEvent, OnPointerWheel, RoutingStrategies.Tunnel);
         Editor.TextArea.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
         Editor.TextArea.RightClickMovesCaret = true;
         Editor.ContextMenu = BuildContextMenu();
@@ -129,6 +138,38 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
 
     /// <summary>Applies a code action's edit, which may touch other files or create/rename them.</summary>
     public event Func<IReadOnlyList<LspFileOperation>, Task>? WorkspaceOperationsRequested;
+
+    // ---- Zoom (Ctrl+wheel, Ctrl+Shift+. / Ctrl+Shift+,) ------------------------------------------------------
+
+    public double Zoom => Editor.FontSize / BaseFontSize;
+
+    public event Action? ZoomChanged;
+
+    public void SetZoom(double zoom)
+    {
+        zoom = Math.Clamp(Math.Round(zoom, 2), MinZoom, MaxZoom);
+        if (Math.Abs(zoom - Zoom) < 0.001)
+            return;
+        Editor.FontSize = BaseFontSize * zoom;
+        DefaultZoom = zoom;
+        ZoomChanged?.Invoke();
+    }
+
+    /// <summary>Steps by 10 % like VS: up from 100 % to 110 %, down to 90 %.</summary>
+    public void ZoomIn() => SetZoom(Math.Floor(Zoom * 10 + 0.001) / 10 + 0.1);
+
+    public void ZoomOut() => SetZoom(Math.Ceiling(Zoom * 10 - 0.001) / 10 - 0.1);
+
+    void OnPointerWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.Delta.Y == 0)
+            return;
+        if (e.Delta.Y > 0)
+            ZoomIn();
+        else
+            ZoomOut();
+        e.Handled = true;
+    }
 
     // ---- Git change margin ---------------------------------------------------------------------------------
 
@@ -619,9 +660,26 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
                 _ = RenameAsync();
                 e.Handled = true;
                 break;
-            case Key.OemPeriod when ctrl:
+            case Key.OemPeriod when ctrl && !shift:
             case Key.Enter when e.KeyModifiers == KeyModifiers.Alt:
                 ShowQuickActions();
+                e.Handled = true;
+                break;
+            case Key.OemPeriod when ctrl && shift:
+            case Key.OemPlus when ctrl:
+            case Key.Add when ctrl:
+                ZoomIn();
+                e.Handled = true;
+                break;
+            case Key.OemComma when ctrl && shift:
+            case Key.OemMinus when ctrl:
+            case Key.Subtract when ctrl:
+                ZoomOut();
+                e.Handled = true;
+                break;
+            case Key.D0 when ctrl:
+            case Key.NumPad0 when ctrl:
+                SetZoom(1.0);
                 e.Handled = true;
                 break;
             case Key.F9 when _breakpoints is not null:

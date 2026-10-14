@@ -6,6 +6,7 @@ namespace VSL.Services;
 public sealed class Settings
 {
     public string? LastSolution { get; set; }
+    public double EditorZoom { get; set; } = 1.0;
     public List<string> RecentSolutions { get; set; } = [];
     public Dictionary<string, SolutionState> Solutions { get; set; } = [];
 

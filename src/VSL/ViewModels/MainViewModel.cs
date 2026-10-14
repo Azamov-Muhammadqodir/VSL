@@ -46,6 +46,7 @@ public partial class MainViewModel : ObservableObject
         OutputChannels = [BuildOutput, DebugOutput, ServerOutput, GitOutput];
         SelectedOutput = BuildOutput;
         InitializeDebugging();
+        EditorHost.DefaultZoom = Math.Clamp(Settings.EditorZoom, EditorHost.MinZoom, EditorHost.MaxZoom);
     }
 
     public IDialogService? Dialogs { get; set; }
@@ -461,6 +462,7 @@ public partial class MainViewModel : ObservableObject
         host.WorkspaceEditRequested += ApplyWorkspaceEditAsync;
         host.WorkspaceOperationsRequested += ApplyWorkspaceOperationsAsync;
         host.Saved += () => _ = RefreshGitAsync();
+        host.ZoomChanged += () => Settings.EditorZoom = host.Zoom;
         host.PromptRequested += initial => Dialogs?.PromptAsync("Rename", "New name:", initial) ?? Task.FromResult<string?>(null);
     }
 

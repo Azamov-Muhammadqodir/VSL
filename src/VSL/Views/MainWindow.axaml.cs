@@ -37,6 +37,14 @@ public partial class MainWindow : Window, IDialogService
         Activated += (_, _) => Vm?.CheckExternalChanges();
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
         RecentMenu.SubmenuOpened += (_, _) => BuildRecentMenu();
+        // Ctrl+wheel zooms the Output window too, independently of the editors.
+        OutputEditor.AddHandler(PointerWheelChangedEvent, (_, e) =>
+        {
+            if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.Delta.Y == 0)
+                return;
+            OutputEditor.FontSize = Math.Clamp(OutputEditor.FontSize + (e.Delta.Y > 0 ? 1 : -1), 6, 48);
+            e.Handled = true;
+        }, RoutingStrategies.Tunnel);
         BuildRecentMenu();
     }
 
@@ -361,6 +369,28 @@ public partial class MainWindow : Window, IDialogService
 
     void OnExit(object? sender, RoutedEventArgs e) => Close();
 
+    // ---- Zoom -------------------------------------------------------------------------------------------------
+
+    void OnZoomIn(object? sender, RoutedEventArgs e) => ActiveHost?.ZoomIn();
+
+    void OnZoomOut(object? sender, RoutedEventArgs e) => ActiveHost?.ZoomOut();
+
+    void OnZoomReset(object? sender, RoutedEventArgs e) => ActiveHost?.SetZoom(1.0);
+
+    void OnZoomButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: DocumentViewModel doc } button)
+            return;
+        var menu = new MenuFlyout();
+        foreach (var level in DocumentViewModel.ZoomLevels)
+        {
+            var item = new MenuItem { Header = $"{level} %" };
+            item.Click += (_, _) => doc.Host.SetZoom(level / 100.0);
+            menu.Items.Add(item);
+        }
+        menu.ShowAt(button);
+    }
+
     // ---- Debug menu ---------------------------------------------------------------------------------------
 
     void OnToggleBreakpoint(object? sender, RoutedEventArgs e)
@@ -416,6 +446,7 @@ public partial class MainWindow : Window, IDialogService
             Ctrl+R, L         Repeat last test run
             Ctrl+R, Ctrl+R    Rename
             Ctrl+E, T         Test Explorer
+            Ctrl+Wheel        Zoom the editor (also Ctrl+Shift+. / Ctrl+Shift+, ; Ctrl+0 resets)
             Ctrl+Space        IntelliSense completion
             Ctrl+Shift+Space  Parameter info
             F12 / Ctrl+Click  Go to definition

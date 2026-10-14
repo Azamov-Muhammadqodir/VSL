@@ -13,6 +13,30 @@ public partial class DocumentViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(IsDirty));
             OnPropertyChanged(nameof(Title));
         };
+        host.ZoomChanged += () => OnPropertyChanged(nameof(ZoomText));
+        host.DiagnosticsChanged += () =>
+        {
+            OnPropertyChanged(nameof(IssuesText));
+            OnPropertyChanged(nameof(HasIssues));
+        };
+    }
+
+    /// <summary>Presets of VS's zoom drop-down in the editor's bottom-left corner.</summary>
+    public static IReadOnlyList<int> ZoomLevels { get; } = [20, 50, 70, 100, 150, 200, 400];
+
+    public string ZoomText => $"{Math.Round(Host.Zoom * 100)} %";
+
+    public bool HasIssues => Host.Diagnostics.Any(d => d.Severity is Lsp.DiagnosticSeverity.Error or Lsp.DiagnosticSeverity.Warning);
+
+    /// <summary>VS's document health indicator next to the zoom box.</summary>
+    public string IssuesText
+    {
+        get
+        {
+            var errors = Host.Diagnostics.Count(d => d.Severity == Lsp.DiagnosticSeverity.Error);
+            var warnings = Host.Diagnostics.Count(d => d.Severity == Lsp.DiagnosticSeverity.Warning);
+            return errors + warnings == 0 ? "✔ No issues found" : $"⨂ {errors}   ⚠ {warnings}";
+        }
     }
 
     public EditorHost Host { get; }

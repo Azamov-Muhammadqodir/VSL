@@ -19,7 +19,7 @@ Requires the .NET 10 SDK (`~/.dotnet` or `DOTNET_ROOT`). On first solution open 
 | Area | Details |
 |---|---|
 | Solutions | `.sln` / `.slnx`, solution folders, Solution Explorer with VS file nesting (`X.razor.cs`, `X.razor.css`, `appsettings.*.json`, `*.Designer.cs`), Dependencies (frameworks, packages, projects), search (Ctrl+;) |
-| Editor | Syntax highlighting (VS Dark), C# and Razor IntelliSense, parameter info, Quick Info hover, squiggles, Quick Actions and Refactorings (Ctrl+. lightbulb: add using, generate type/method, refactorings), Go To Definition / Implementation, Find All References, Rename, Format Document, comment/uncomment, find (Ctrl+F) and Find in Files, VS-style editor context menu |
+| Editor | Syntax highlighting (VS Dark), C# and Razor IntelliSense, parameter info, Quick Info hover, squiggles, Quick Actions and Refactorings (Ctrl+. lightbulb: add using, generate type/method, refactorings), Go To Definition / Implementation, Find All References, Rename, Format Document, comment/uncomment, find (Ctrl+F) and Find in Files, VS-style editor context menu, zoom (Ctrl+wheel, Ctrl+Shift+. / Ctrl+Shift+, , Ctrl+0, 20–400 % picker) with the document health indicator |
 | Build | Build / Rebuild / Clean via `dotnet`, Output window, Error List (Build + IntelliSense) |
 | Run | Startup project and `launchSettings.json` profiles, Start Without Debugging (Ctrl+F5), Stop; opens the browser for `launchBrowser` profiles |
 | Debug | F5 with netcoredbg (MIT, installed on first use): breakpoints (F9 / margin click, kept per solution and moved with edits), current-statement arrow, Continue, Break All, Restart, Step Over/Into/Out (F10/F11/Shift+F11), Locals, Watch, Call Stack, hover data tips |

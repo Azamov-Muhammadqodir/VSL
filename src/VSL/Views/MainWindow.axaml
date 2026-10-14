@@ -70,6 +70,31 @@
         <MenuItem Header="Solution _Explorer" Click="OnShowSolutionExplorer" />
         <MenuItem Header="E_rror List" Click="OnShowErrorList" />
         <MenuItem Header="_Output" Click="OnShowOutput" />
+        <Separator />
+        <MenuItem Click="OnZoomIn">
+          <MenuItem.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Zoom In" />
+              <TextBlock Grid.Column="1" Text="Ctrl+Shift+." Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+            </Grid>
+          </MenuItem.Header>
+        </MenuItem>
+        <MenuItem Click="OnZoomOut">
+          <MenuItem.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Zoom Out" />
+              <TextBlock Grid.Column="1" Text="Ctrl+Shift+," Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+            </Grid>
+          </MenuItem.Header>
+        </MenuItem>
+        <MenuItem Click="OnZoomReset">
+          <MenuItem.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Reset Zoom" />
+              <TextBlock Grid.Column="1" Text="Ctrl+0" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+            </Grid>
+          </MenuItem.Header>
+        </MenuItem>
       </MenuItem>
       <MenuItem Header="_Build">
         <MenuItem Header="_Build Solution" InputGesture="Ctrl+Shift+B" Command="{Binding BuildSolutionCommand}" />
@@ -238,7 +263,20 @@
             <TabControl.ContentTemplate>
               <DataTemplate x:DataType="vm:DocumentViewModel">
                 <Border BorderBrush="#007ACC" BorderThickness="0,2,0,0">
-                  <ContentControl Content="{Binding Host.Editor}" />
+                  <DockPanel>
+                    <!-- VS's editor footer: zoom drop-down and the document health indicator -->
+                    <Border DockPanel.Dock="Bottom" Background="#2D2D30" Height="20">
+                      <StackPanel Orientation="Horizontal" Spacing="10" Margin="2,0">
+                        <Button Classes="tb" Padding="6,0" MinHeight="18" Click="OnZoomButtonClick"
+                                ToolTip.Tip="Zoom (Ctrl+Wheel, Ctrl+Shift+. / Ctrl+Shift+, , Ctrl+0)">
+                          <TextBlock Text="{Binding ZoomText, StringFormat={}{0} ▾}" FontSize="11" />
+                        </Button>
+                        <TextBlock Text="{Binding IssuesText}" FontSize="11" VerticalAlignment="Center"
+                                   Foreground="{StaticResource VsGrayTextBrush}" />
+                      </StackPanel>
+                    </Border>
+                    <ContentControl Content="{Binding Host.Editor}" />
+                  </DockPanel>
                 </Border>
               </DataTemplate>
             </TabControl.ContentTemplate>

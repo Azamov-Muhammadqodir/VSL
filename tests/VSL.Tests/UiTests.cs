@@ -323,6 +323,53 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Editor_zooms_with_ctrl_wheel_and_shortcuts()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var vm = new MainViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+        var doc = vm.OpenDocument(SampleSolution.PathOf(sln, "Web/Program.cs"))!;
+        var host = doc.Host;
+        host.SetZoom(1.0);
+        await WaitUntil(() => host.Editor.IsVisible && host.Editor.Bounds.Width > 0, TimeSpan.FromSeconds(5));
+        Assert.Equal("100 %", doc.ZoomText);
+        Assert.Equal("✔ No issues found", doc.IssuesText);
+
+        // Ctrl + mouse wheel over the editor, like VS.
+        var point = host.Editor.TranslatePoint(new Avalonia.Point(200, 100), window)!.Value;
+        window.MouseWheel(point, new Avalonia.Vector(0, 1), Avalonia.Input.RawInputModifiers.Control);
+        window.MouseWheel(point, new Avalonia.Vector(0, 1), Avalonia.Input.RawInputModifiers.Control);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1.2, host.Zoom, 3);
+        Assert.Equal("120 %", doc.ZoomText);
+        Assert.Equal(VSL.Editor.EditorHost.BaseFontSize * 1.2, host.Editor.FontSize, 3);
+        // A plain wheel still scrolls instead of zooming.
+        window.MouseWheel(point, new Avalonia.Vector(0, -1), Avalonia.Input.RawInputModifiers.None);
+        Assert.Equal(1.2, host.Zoom, 3);
+
+        // Keyboard: Ctrl+Shift+, zooms out, Ctrl+0 resets.
+        host.Editor.TextArea.Focus();
+        window.KeyPress(Avalonia.Input.Key.OemComma, Avalonia.Input.RawInputModifiers.Control | Avalonia.Input.RawInputModifiers.Shift,
+            Avalonia.Input.PhysicalKey.Comma, ",");
+        Assert.Equal(1.1, host.Zoom, 3);
+        window.KeyPress(Avalonia.Input.Key.D0, Avalonia.Input.RawInputModifiers.Control, Avalonia.Input.PhysicalKey.Digit0, "0");
+        Assert.Equal(1.0, host.Zoom, 3);
+
+        // The last zoom carries over to newly opened documents and is remembered in settings.
+        host.SetZoom(1.5);
+        Assert.Equal(1.5, vm.Settings.EditorZoom, 3);
+        var other = vm.OpenDocument(SampleSolution.PathOf(sln, "Components/Greeting.razor.cs"))!;
+        Assert.Equal(1.5, other.Host.Zoom, 3);
+        Snapshot(window, "editor-zoom");
+
+        host.SetZoom(1.0);
+        other.Host.SetZoom(1.0);
+        Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
     public async Task Start_window_renders_without_solution()
     {
         var vm = new MainViewModel();
