@@ -123,3 +123,61 @@ public sealed class DebugLineRenderer(IDebugLineSource source) : IBackgroundRend
         }
     }
 }
+
+/// <summary>Git change bars between the line numbers and the text: added (green), modified (blue), deleted (red).</summary>
+public sealed class GitChangeMargin(Func<IReadOnlyList<VSL.Git.LineChange>> changes) : AbstractMargin
+{
+    static readonly IBrush AddedBrush = new SolidColorBrush(Color.Parse("#57A64A"));
+    static readonly IBrush ModifiedBrush = new SolidColorBrush(Color.Parse("#1B81A8"));
+    static readonly IBrush DeletedBrush = new SolidColorBrush(Color.Parse("#E51400"));
+
+    protected override Size MeasureOverride(Size availableSize) => new(5, 0);
+
+    protected override void OnTextViewChanged(TextView? oldTextView, TextView? newTextView)
+    {
+        if (oldTextView is not null)
+            oldTextView.VisualLinesChanged -= OnVisualLinesChanged;
+        base.OnTextViewChanged(oldTextView, newTextView);
+        if (newTextView is not null)
+            newTextView.VisualLinesChanged += OnVisualLinesChanged;
+        InvalidateVisual();
+    }
+
+    void OnVisualLinesChanged(object? sender, EventArgs e) => InvalidateVisual();
+
+    public override void Render(DrawingContext dc)
+    {
+        var view = TextView;
+        var list = changes();
+        if (view is null || !view.VisualLinesValid || list.Count == 0)
+            return;
+        foreach (var visual in view.VisualLines)
+        {
+            var line = visual.FirstDocumentLine.LineNumber;
+            var top = visual.VisualTop - view.VerticalOffset;
+            foreach (var c in list)
+            {
+                if (c.Kind == VSL.Git.LineChangeKind.Deleted)
+                {
+                    if (c.Line != line)
+                        continue;
+                    // A small wedge at the bottom of the line after which lines were removed.
+                    var y = top + visual.Height;
+                    var wedge = new StreamGeometry();
+                    using (var ctx = wedge.Open())
+                    {
+                        ctx.BeginFigure(new Point(0, y - 4), true);
+                        ctx.LineTo(new Point(5, y));
+                        ctx.LineTo(new Point(0, y + 4));
+                        ctx.EndFigure(true);
+                    }
+                    dc.DrawGeometry(DeletedBrush, null, wedge);
+                }
+                else if (line >= c.Line && line < c.Line + c.Count)
+                {
+                    dc.FillRectangle(c.Kind == VSL.Git.LineChangeKind.Added ? AddedBrush : ModifiedBrush, new Rect(1, top, 3, visual.Height));
+                }
+            }
+        }
+    }
+}

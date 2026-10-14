@@ -42,6 +42,9 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
     CancellationTokenSource? _completionCts;
     CancellationTokenSource? _hoverCts;
     BreakpointStore? _breakpoints;
+    string[]? _gitBaseline;
+    IReadOnlyList<Git.LineChange> _gitChanges = [];
+    DispatcherTimer? _gitTimer;
     readonly List<TextAnchor> _breakpointAnchors = [];
     int? _executionLine;
 
@@ -85,7 +88,11 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
         Editor.TextArea.TextView.BackgroundRenderers.Add(_diagnostics);
 
         Document.Changing += OnDocumentChanging;
-        Document.Changed += (_, _) => SyncBreakpointsFromAnchors();
+        Document.Changed += (_, _) =>
+        {
+            SyncBreakpointsFromAnchors();
+            ScheduleGitChanges();
+        };
         Document.UndoStack.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(UndoStack.IsOriginalFile))
@@ -111,6 +118,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
     public IReadOnlyList<LspDiagnostic> Diagnostics { get; private set; } = [];
 
     public event Action? DirtyChanged;
+    public event Action? Saved;
     public event Action? CaretMoved;
     public event Action? DiagnosticsChanged;
     public event Action<IReadOnlyList<LspLocation>>? DefinitionsFound;
@@ -121,6 +129,42 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
 
     /// <summary>Applies a code action's edit, which may touch other files or create/rename them.</summary>
     public event Func<IReadOnlyList<LspFileOperation>, Task>? WorkspaceOperationsRequested;
+
+    // ---- Git change margin ---------------------------------------------------------------------------------
+
+    public IReadOnlyList<Git.LineChange> GitChanges => _gitChanges;
+
+    /// <summary>
+    /// Sets the HEAD version to compare against: null hides the margin (file outside a repository),
+    /// an empty string marks every line as added (untracked file).
+    /// </summary>
+    public void SetGitBaseline(string? headText)
+    {
+        _gitBaseline = headText is null ? null : headText.Length == 0 ? [] : Git.LineDiff.SplitLines(headText);
+        if (_gitBaseline is not null && !Editor.TextArea.LeftMargins.OfType<GitChangeMargin>().Any())
+            Editor.TextArea.LeftMargins.Add(new GitChangeMargin(() => _gitChanges));
+        RecomputeGitChanges();
+    }
+
+    void ScheduleGitChanges()
+    {
+        if (_gitBaseline is null)
+            return;
+        _gitTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) =>
+        {
+            _gitTimer!.Stop();
+            RecomputeGitChanges();
+        });
+        _gitTimer.Stop();
+        _gitTimer.Start();
+    }
+
+    void RecomputeGitChanges()
+    {
+        _gitChanges = _gitBaseline is null ? [] : Git.LineDiff.Compute(_gitBaseline, Git.LineDiff.SplitLines(Document.Text));
+        foreach (var margin in Editor.TextArea.LeftMargins.OfType<GitChangeMargin>())
+            margin.InvalidateVisual();
+    }
 
     // ---- Debugging ------------------------------------------------------------------------------------------
 
@@ -899,6 +943,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
             FlushChanges();
             _ = lsp.DidSaveAsync(FilePath);
         }
+        Saved?.Invoke();
     }
 
     /// <summary>Reloads from disk when another tool (git, a formatter) changed the file and we have no edits.</summary>
@@ -951,6 +996,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
             _ = lsp.DidCloseAsync(FilePath);
         _lsp = null;
         _textMate?.Dispose();
+        _gitTimer?.Stop();
         if (_breakpoints is not null)
         {
             _breakpoints.Changed -= OnBreakpointsChanged;

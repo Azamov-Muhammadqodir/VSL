@@ -42,6 +42,31 @@ public partial class ExplorerNode : ObservableObject
 
     public string DisplayName => Detail is null ? Name : $"{Name} {Detail}";
 
+    /// <summary>Supplies a file's git status letter (M/A/D/U); set by the view model when the solution is a repository.</summary>
+    public static Func<string, string?>? GitStatusProvider { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GitBadgeColor))]
+    public partial string? GitBadge { get; set; }
+
+    public string GitBadgeColor => GitBadge switch
+    {
+        "A" or "U" => "#73C991",
+        "D" => "#C74E39",
+        "C" => "#E4676B",
+        _ => "#E2C08D",
+    };
+
+    /// <summary>Re-reads git badges for this node and every child that has already been loaded.</summary>
+    public void RefreshGitBadges()
+    {
+        GitBadge = Kind == NodeKind.File && Path is not null ? GitStatusProvider?.Invoke(Path) : null;
+        if (_loader is not null)
+            return;
+        foreach (var child in Children)
+            child.RefreshGitBadges();
+    }
+
     /// <summary>Icon key resolved by the view (see Views/Icons.cs).</summary>
     public string IconKey => Kind switch
     {
@@ -94,7 +119,10 @@ public partial class ExplorerNode : ObservableObject
         }
         Children.Clear();
         foreach (var n in nodes)
+        {
+            n.RefreshGitBadges();
             Children.Add(n);
+        }
     }
 
     /// <summary>Depth-first search that forces lazy folders to load along the way.</summary>

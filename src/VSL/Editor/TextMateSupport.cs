@@ -24,6 +24,13 @@ public static class TextMateSupport
     [
         // The HTML grammar flags capitalised tags as illegal (red + underline); in Razor they are components.
         ("invalid.illegal.unrecognized-tag.html", "#4EC9B0", ""),
+        // Diff view (Git > Compare): the stock theme leaves these uncolored.
+        ("markup.inserted", "#89D185", ""),
+        ("markup.deleted", "#F48771", ""),
+        ("markup.changed", "#569CD6", ""),
+        ("meta.diff.range", "#C586C0", ""),
+        ("meta.diff.header", "#569CD6", ""),
+        ("meta.diff.index", "#808080", ""),
     ];
 
     public static TextMate.Installation? Install(TextEditor editor, string filePath)

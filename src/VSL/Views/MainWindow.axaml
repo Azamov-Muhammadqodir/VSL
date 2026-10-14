@@ -126,6 +126,16 @@
           </MenuItem.Header>
         </MenuItem>
       </MenuItem>
+      <MenuItem Header="_Git" IsEnabled="{Binding HasGit}">
+        <MenuItem Header="_Commit or Stash..." Command="{Binding ShowGitChangesCommand}" />
+        <Separator />
+        <MenuItem Header="_Fetch" Command="{Binding FetchCommand}" />
+        <MenuItem Header="_Pull" Command="{Binding PullCommand}" />
+        <MenuItem Header="P_ush" Command="{Binding PushCommand}" />
+        <MenuItem Header="_Sync (Pull then Push)" Command="{Binding SyncCommand}" />
+        <Separator />
+        <MenuItem Header="_New Branch..." Command="{Binding NewBranchCommand}" />
+      </MenuItem>
       <MenuItem Header="_Tools">
         <MenuItem Header="_Restart Language Server" Command="{Binding RestartLanguageServerCommand}" />
       </MenuItem>
@@ -185,10 +195,21 @@
 
     <!-- ===== Status bar ===== -->
     <Border DockPanel.Dock="Bottom" Height="23" Background="{Binding Status, Converter={x:Static v:StatusBrushConverter.Instance}}">
-      <Grid ColumnDefinitions="*,Auto,Auto" Margin="8,0">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="8,0">
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="White" TextTrimming="CharacterEllipsis" />
         <TextBlock Grid.Column="1" Text="{Binding ServerStatus}" VerticalAlignment="Center" Foreground="White" Margin="0,0,24,0" />
-        <TextBlock Grid.Column="2" Text="{Binding CaretText}" VerticalAlignment="Center" Foreground="White" MinWidth="120" />
+        <TextBlock Grid.Column="2" Text="{Binding CaretText}" VerticalAlignment="Center" Foreground="White" MinWidth="120" Margin="0,0,16,0" />
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" IsVisible="{Binding HasGit}">
+          <Button Classes="tb" Padding="6,0" MinHeight="20" Command="{Binding ShowGitChangesCommand}" ToolTip.Tip="Pending changes">
+            <TextBlock Text="{Binding GitChangeCount, StringFormat=✎ {0}}" Foreground="White" />
+          </Button>
+          <Button Classes="tb" Padding="6,0" MinHeight="20" Click="OnBranchButtonClick" ToolTip.Tip="Branch">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="{Binding GitSyncText}" Foreground="White" />
+              <TextBlock Text="{Binding GitBranch, StringFormat=⎇ {0}}" Foreground="White" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 
@@ -451,6 +472,8 @@
                         <ContentControl Content="{Binding IconKey, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                        <TextBlock Text="{Binding GitBadge}" VerticalAlignment="Center" FontWeight="SemiBold"
+                                   Foreground="{Binding GitBadgeColor, Converter={x:Static v:ColorStringConverter.Instance}}" />
                       </StackPanel>
                     </TreeDataTemplate>
                   </TreeView.ItemTemplate>
@@ -548,6 +571,76 @@
                 </StackPanel>
               </ScrollViewer>
             </Grid>
+          </TabItem>
+
+          <!-- Git Changes -->
+          <TabItem Header="Git Changes">
+            <DockPanel>
+              <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}">
+                <TextBlock Classes="toolTitle" Text="Git Changes" />
+              </Border>
+              <StackPanel DockPanel.Dock="Top" Margin="8,6" Spacing="6" IsVisible="{Binding HasGit}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <Button Classes="tb" Click="OnBranchButtonClick" HorizontalAlignment="Left" ToolTip.Tip="Switch or create a branch">
+                    <TextBlock Text="{Binding GitBranch, StringFormat=⎇ {0} ▾}" FontWeight="SemiBold" />
+                  </Button>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                    <Button Classes="tb" Command="{Binding FetchCommand}" ToolTip.Tip="Fetch">⟳</Button>
+                    <Button Classes="tb" Command="{Binding PullCommand}" ToolTip.Tip="Pull">↓</Button>
+                    <Button Classes="tb" Command="{Binding PushCommand}" ToolTip.Tip="Push">↑</Button>
+                    <Button Classes="tb" Command="{Binding SyncCommand}" ToolTip.Tip="Sync (Pull then Push)">⇅</Button>
+                  </StackPanel>
+                </Grid>
+                <TextBlock Text="{Binding GitSyncText, StringFormat=Outgoing / incoming: {0}}" Foreground="{StaticResource VsGrayTextBrush}" IsVisible="{Binding !!GitSyncText.Length}" />
+                <TextBox Text="{Binding CommitMessage}" PlaceholderText="Enter a message &lt;Required&gt;" AcceptsReturn="True" TextWrapping="Wrap"
+                         MinHeight="60" MaxHeight="140" Background="#333337" BorderBrush="#434346" />
+                <Button Command="{Binding CommitCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="#0E639C" Foreground="White">
+                  <TextBlock Text="{Binding CommitButtonText}" />
+                </Button>
+              </StackPanel>
+              <TextBlock DockPanel.Dock="Top" Margin="8" TextWrapping="Wrap" Foreground="{StaticResource VsGrayTextBrush}"
+                         IsVisible="{Binding !HasGit}" Text="The open solution is not in a Git repository." />
+              <ScrollViewer IsVisible="{Binding HasGit}">
+                <StackPanel Margin="4,0" Spacing="2">
+                  <Grid ColumnDefinitions="*,Auto" Margin="4,4,4,0">
+                    <TextBlock Text="{Binding StagedChanges.Count, StringFormat=Staged Changes ({0})}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="tb" Command="{Binding UnstageAllCommand}" ToolTip.Tip="Unstage All">−</Button>
+                  </Grid>
+                  <ListBox Classes="dense" ItemsSource="{Binding StagedChanges}" DoubleTapped="OnGitItemDoubleTapped">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:GitFileItem">
+                        <Grid ColumnDefinitions="18,Auto,*,Auto" ToolTip.Tip="{Binding Change.RelativePath}">
+                          <TextBlock Text="{Binding Letter}" FontWeight="SemiBold" Foreground="{Binding LetterColor, Converter={x:Static v:ColorStringConverter.Instance}}" />
+                          <TextBlock Grid.Column="1" Text="{Binding FileName}" />
+                          <TextBlock Grid.Column="2" Text="{Binding Folder}" Margin="8,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" TextTrimming="CharacterEllipsis" />
+                          <Button Grid.Column="3" Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Unstage"
+                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).UnstageCommand}" CommandParameter="{Binding}">−</Button>
+                        </Grid>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <Grid ColumnDefinitions="*,Auto" Margin="4,8,4,0">
+                    <TextBlock Text="{Binding UnstagedChanges.Count, StringFormat=Changes ({0})}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="tb" Command="{Binding StageAllCommand}" ToolTip.Tip="Stage All">+</Button>
+                  </Grid>
+                  <ListBox Classes="dense" ItemsSource="{Binding UnstagedChanges}" DoubleTapped="OnGitItemDoubleTapped">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:GitFileItem">
+                        <Grid ColumnDefinitions="18,Auto,*,Auto,Auto" ToolTip.Tip="{Binding Change.RelativePath}">
+                          <TextBlock Text="{Binding Letter}" FontWeight="SemiBold" Foreground="{Binding LetterColor, Converter={x:Static v:ColorStringConverter.Instance}}" />
+                          <TextBlock Grid.Column="1" Text="{Binding FileName}" />
+                          <TextBlock Grid.Column="2" Text="{Binding Folder}" Margin="8,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" TextTrimming="CharacterEllipsis" />
+                          <Button Grid.Column="3" Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Undo Changes"
+                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).DiscardCommand}" CommandParameter="{Binding}">↶</Button>
+                          <Button Grid.Column="4" Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Stage"
+                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).StageCommand}" CommandParameter="{Binding}">+</Button>
+                        </Grid>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                </StackPanel>
+              </ScrollViewer>
+            </DockPanel>
           </TabItem>
         </TabControl>
       </Border>

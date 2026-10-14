@@ -27,6 +27,8 @@ public interface IDialogService
     Task<string?> PromptAsync(string title, string label, string initial);
     /// <summary>Returns true = save, false = discard, null = cancel.</summary>
     Task<bool?> ConfirmSaveAsync(string fileName);
+    /// <summary>Yes/No question; returns true for Yes.</summary>
+    Task<bool?> ConfirmAsync(string title, string message);
 }
 
 public partial class MainViewModel : ObservableObject
@@ -41,7 +43,7 @@ public partial class MainViewModel : ObservableObject
         BuildOutput = new OutputChannel("Build");
         DebugOutput = new OutputChannel("Debug");
         ServerOutput = new OutputChannel("Language Server");
-        OutputChannels = [BuildOutput, DebugOutput, ServerOutput];
+        OutputChannels = [BuildOutput, DebugOutput, ServerOutput, GitOutput];
         SelectedOutput = BuildOutput;
         InitializeDebugging();
     }
@@ -232,6 +234,7 @@ public partial class MainViewModel : ObservableObject
         Settings.Save();
 
         SetStatus("Ready", StatusKind.Ready);
+        await OpenGitAsync(solution);
         await StartLanguageServerAsync();
     }
 
@@ -278,6 +281,7 @@ public partial class MainViewModel : ObservableObject
         Breakpoints.Load(new Dictionary<string, List<int>>());
         Watches.Clear();
         ResetTesting();
+        CloseGit();
         Solution = null;
         SetStatus("Ready", StatusKind.NoSolution);
         return true;
@@ -420,6 +424,7 @@ public partial class MainViewModel : ObservableObject
             existing = new DocumentViewModel(host);
             Wire(existing);
             host.AttachBreakpoints(Breakpoints);
+            _ = RefreshGitBaselineAsync(existing);
             if (Mode == DebugMode.Break)
                 host.DataTipProvider = EvaluateDataTipAsync;
             Documents.Add(existing);
@@ -455,6 +460,7 @@ public partial class MainViewModel : ObservableObject
         host.ReferencesFound += (symbol, refs) => ShowFindResults($"'{symbol}' references", refs);
         host.WorkspaceEditRequested += ApplyWorkspaceEditAsync;
         host.WorkspaceOperationsRequested += ApplyWorkspaceOperationsAsync;
+        host.Saved += () => _ = RefreshGitAsync();
         host.PromptRequested += initial => Dialogs?.PromptAsync("Rename", "New name:", initial) ?? Task.FromResult<string?>(null);
     }
 
@@ -545,6 +551,11 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Called when the window regains focus: pick up edits made outside VSL (git checkout etc.).</summary>
     public void CheckExternalChanges()
     {
+        if (HasGit)
+        {
+            _ = RefreshGitAsync();
+            _ = RefreshAllGitBaselinesAsync();
+        }
         foreach (var doc in Documents)
             if (doc.Host.ReloadIfChangedOnDisk())
                 SetStatus($"{doc.FileName} was reloaded because it changed on disk.");
@@ -836,6 +847,7 @@ public partial class MainViewModel : ObservableObject
         if (Solution is null)
             return;
         var reloaded = await SolutionLoader.LoadAsync(Solution.FilePath);
+        reloaded.Root.RefreshGitBadges();
         ExplorerRoots.Clear();
         ExplorerRoots.Add(reloaded.Root);
     }

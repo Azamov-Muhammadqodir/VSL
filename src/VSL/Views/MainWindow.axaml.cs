@@ -161,6 +161,37 @@ public partial class MainWindow : Window, IDialogService
         return dialog.ShowDialog<bool?>(this);
     }
 
+    public Task<bool?> ConfirmAsync(string title, string message)
+    {
+        var dialog = CreateDialog(title, new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, MaxWidth = 420 },
+            ("Yes", true), ("No", false));
+        return dialog.ShowDialog<bool?>(this);
+    }
+
+    void OnBranchButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm || sender is not Button button)
+            return;
+        var menu = new MenuFlyout();
+        foreach (var branch in vm.Branches)
+            menu.Items.Add(new MenuItem
+            {
+                Header = branch == vm.GitBranch ? "✓ " + branch : "   " + branch,
+                Command = vm.SwitchBranchCommand,
+                CommandParameter = branch,
+            });
+        menu.Items.Add(new Separator());
+        menu.Items.Add(new MenuItem { Header = "New Branch...", Command = vm.NewBranchCommand });
+        menu.Items.Add(new MenuItem { Header = "Git Changes", Command = vm.ShowGitChangesCommand });
+        menu.ShowAt(button);
+    }
+
+    void OnGitItemDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is ListBox { SelectedItem: GitFileItem item })
+            Vm?.OpenDiffCommand.Execute(item);
+    }
+
     Window CreateDialog(string title, Control body, params (string Text, bool? Result)[] buttons)
     {
         var dialog = new Window

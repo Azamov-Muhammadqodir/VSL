@@ -241,6 +241,88 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Git_changes_margin_badges_commit_and_branches()
+    {
+        // A fresh repository holding the sample sources (no bin/obj), committed once.
+        var dir = Path.Combine(Path.GetTempPath(), "vsl-gitui-" + Guid.NewGuid().ToString("N"));
+        var source = Path.Combine(AppContext.BaseDirectory, "TestAssets", "BlazorSample");
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var dest = Path.Combine(dir, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(file, dest);
+        }
+        // Like any real .NET repository: build and restore output is ignored.
+        File.WriteAllText(Path.Combine(dir, ".gitignore"), "bin/\nobj/\n");
+        TempRepo.Git(dir, "init", "-q", "-b", "main");
+        TempRepo.Git(dir, "config", "user.name", "VSL Tests");
+        TempRepo.Git(dir, "config", "user.email", "tests@example.invalid");
+        TempRepo.Git(dir, "config", "commit.gpgsign", "false");
+        TempRepo.Git(dir, "add", "-A");
+        TempRepo.Git(dir, "commit", "-q", "-m", "initial");
+
+        var vm = new MainViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1600, Height = 1000 };
+        window.Show();
+        await vm.OpenSolutionAsync(Path.Combine(dir, "BlazorSample.sln"));
+        await WaitUntil(() => vm.HasGit && vm.GitBranch == "main", TimeSpan.FromSeconds(10));
+        Assert.True(vm.GitChangeCount == 0, string.Join(", ", vm.UnstagedChanges.Concat(vm.StagedChanges).Select(c => c.Letter + " " + c.Change.RelativePath)));
+
+        // Typing shows a green "added" bar before anything is saved.
+        var program = Path.Combine(dir, "Web", "Program.cs");
+        var doc = vm.OpenDocument(program)!;
+        var host = doc.Host;
+        await WaitUntil(() => host.Editor.TextArea.LeftMargins.OfType<VSL.Editor.GitChangeMargin>().Any(), TimeSpan.FromSeconds(10));
+        host.Document.Insert(host.Document.TextLength, "// changed\n");
+        await WaitUntil(() => host.GitChanges.Any(c => c.Kind == VSL.Git.LineChangeKind.Added), TimeSpan.FromSeconds(5));
+        Assert.Contains(host.GitChanges, c => c.Kind == VSL.Git.LineChangeKind.Added);
+        host.Document.Insert(host.Document.GetLineByNumber(2).EndOffset, " // note");
+        await WaitUntil(() => host.GitChanges.Any(c => c.Kind == VSL.Git.LineChangeKind.Modified), TimeSpan.FromSeconds(5));
+        Assert.Contains(host.GitChanges, c => c is { Kind: VSL.Git.LineChangeKind.Modified, Line: 2 });
+        Snapshot(window, "git-margin");
+
+        // Saving lists the file under Changes and badges it in Solution Explorer.
+        vm.SaveCommand.Execute(null);
+        await WaitUntil(() => vm.UnstagedChanges.Any(c => c.FileName == "Program.cs"), TimeSpan.FromSeconds(10));
+        var web = vm.ExplorerRoots[0].Children.First(n => n.Name == "Web");
+        web.IsExpanded = true;
+        Assert.Equal("M", web.Children.First(n => n.Name == "Program.cs").GitBadge);
+        Assert.Equal("Commit All", vm.CommitButtonText);
+
+        // Stage, then Commit Staged clears the list and the margin.
+        await vm.StageCommand.ExecuteAsync(vm.UnstagedChanges.First(c => c.FileName == "Program.cs"));
+        Assert.Single(vm.StagedChanges);
+        Assert.Equal("Commit Staged", vm.CommitButtonText);
+        vm.CommitMessage = "Edit Program.cs";
+        await vm.CommitCommand.ExecuteAsync(null);
+        Assert.Equal(0, vm.GitChangeCount);
+        Assert.Equal("", vm.CommitMessage);
+        await WaitUntil(() => host.GitChanges.Count == 0, TimeSpan.FromSeconds(5));
+        Assert.Empty(host.GitChanges);
+
+        // New branch, a change on it, and the read-only diff view.
+        await vm.CreateBranchAsync("feature/x");
+        Assert.Equal("feature/x", vm.GitBranch);
+        Assert.Equal(["feature/x", "main"], vm.Branches);
+        host.Document.Insert(0, "// top\n");
+        vm.ActiveDocument = doc;
+        vm.SaveCommand.Execute(null);
+        await WaitUntil(() => vm.UnstagedChanges.Count == 1, TimeSpan.FromSeconds(10));
+        await vm.OpenDiffCommand.ExecuteAsync(vm.UnstagedChanges[0]);
+        Assert.Equal("Program.cs.diff", vm.ActiveDocument!.FileName);
+        Assert.Contains("+// top", vm.ActiveDocument.Host.Document.Text);
+        Assert.True(vm.ActiveDocument.Host.Editor.IsReadOnly);
+        vm.RightTabIndex = MainViewModel.GitChangesTab;
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        Snapshot(window, "git-changes");
+
+        await vm.SwitchBranchCommand.ExecuteAsync("main");
+        Assert.Equal("main", vm.GitBranch);
+        Assert.True(await vm.CloseSolutionCoreAsync());
+        Assert.False(vm.HasGit);
+    }
+
+    [AvaloniaFact]
     public async Task Start_window_renders_without_solution()
     {
         var vm = new MainViewModel();
