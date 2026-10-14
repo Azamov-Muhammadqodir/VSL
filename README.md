@@ -23,10 +23,11 @@ Requires the .NET 10 SDK (`~/.dotnet` or `DOTNET_ROOT`). On first solution open 
 | Build | Build / Rebuild / Clean via `dotnet`, Output window, Error List (Build + IntelliSense) |
 | Run | Startup project and `launchSettings.json` profiles, Start Without Debugging (Ctrl+F5), Stop; opens the browser for `launchBrowser` profiles |
 | Debug | F5 with netcoredbg (MIT, installed on first use): breakpoints (F9 / margin click, kept per solution and moved with edits), current-statement arrow, Continue, Break All, Restart, Step Over/Into/Out (F10/F11/Shift+F11), Locals, Watch, Call Stack, hover data tips |
+| Test | Test Explorer on the SDK's vstest (xUnit, NUnit, MSTest): build + discover, Run All / Run / Run Failed / Repeat Last / Cancel, Project › Namespace › Class › Method tree with theory rows, live outcomes and durations, error message and stack trace, double-click to source; Ctrl+R A, Ctrl+R L, Ctrl+E T |
 | Session | Restores open documents, startup project, profile and configuration per solution |
 
 Not yet: conditional breakpoints, exception settings, Immediate window, debugging Blazor WebAssembly code
-(it runs in the browser), Fix All for quick actions, Test Explorer, NuGet package manager UI,
+(it runs in the browser), Fix All for quick actions, debugging tests, NuGet package manager UI,
 Git integration, WinForms/WPF designers (Windows-only).
 
 ## Keyboard shortcuts
@@ -42,6 +43,7 @@ src/VSL/
   Workspace/   solution/project loading and the Solution Explorer tree
   Build/       dotnet process runner and MSBuild output parser
   Debugging/   DAP client, netcoredbg installer, debug session, breakpoint store
+  Testing/     vstest.console host (Microsoft.TestPlatform.TranslationLayer)
   Editor/      AvaloniaEdit host: sync, completion, hover, squiggles, TextMate theme
   ViewModels/  main window state, documents, Error List, Output
   Views/       main window (XAML), icons, dialogs

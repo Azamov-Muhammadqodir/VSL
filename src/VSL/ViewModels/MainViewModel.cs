@@ -67,6 +67,7 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     [NotifyPropertyChangedFor(nameof(HasSolution))]
     [NotifyCanExecuteChangedFor(nameof(BuildSolutionCommand), nameof(RebuildSolutionCommand), nameof(CleanSolutionCommand), nameof(StartWithoutDebuggingCommand), nameof(StartDebuggingCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunAllTestsCommand), nameof(RunFailedTestsCommand), nameof(RunSelectedTestsCommand), nameof(RepeatLastTestRunCommand), nameof(RefreshTestsCommand))]
     public partial SolutionInfo? Solution { get; set; }
 
     [ObservableProperty]
@@ -89,6 +90,7 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildSolutionCommand), nameof(RebuildSolutionCommand), nameof(CleanSolutionCommand), nameof(StartWithoutDebuggingCommand), nameof(StartDebuggingCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunAllTestsCommand), nameof(RunFailedTestsCommand), nameof(RunSelectedTestsCommand), nameof(RepeatLastTestRunCommand), nameof(RefreshTestsCommand))]
     public partial bool IsBuilding { get; set; }
 
     [ObservableProperty]
@@ -275,6 +277,7 @@ public partial class MainViewModel : ObservableObject
         RefreshErrorList();
         Breakpoints.Load(new Dictionary<string, List<int>>());
         Watches.Clear();
+        ResetTesting();
         Solution = null;
         SetStatus("Ready", StatusKind.NoSolution);
         return true;

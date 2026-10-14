@@ -78,7 +78,9 @@ public class SolutionLoaderTests
         var sln = await SampleSolution.GetAsync();
         var solution = await SolutionLoader.LoadAsync(sln, ct);
 
-        Assert.Equal(["Components", "Web"], solution.Projects.Select(p => p.Name).Order());
+        Assert.Equal(["Components", "Tests", "Web"], solution.Projects.Select(p => p.Name).Order());
+        Assert.True(solution.Projects.Single(p => p.Name == "Tests").IsTestProject);
+        Assert.False(solution.Projects.Single(p => p.Name == "Tests").IsRunnable);
         var web = solution.Projects.Single(p => p.Name == "Web");
         Assert.True(web.IsWeb);
         Assert.True(web.IsRunnable);

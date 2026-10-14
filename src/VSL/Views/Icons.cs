@@ -97,6 +97,29 @@ public sealed class StatusBrushConverter : IValueConverter
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
+/// <summary>Test outcome glyphs (even-odd paths, so the check/cross is cut out of the disc).</summary>
+public sealed class TestStateIconConverter : IValueConverter
+{
+    public static readonly TestStateIconConverter Instance = new();
+
+    static readonly Geometry Passed = Geometry.Parse("M7,0 A7,7 0 1 0 7,14 A7,7 0 1 0 7,0 Z M3.4,7.3 L5.9,9.8 L10.7,4.7 L9.6,3.7 L5.9,7.7 L4.5,6.2 Z");
+    static readonly Geometry Failed = Geometry.Parse("M7,0 A7,7 0 1 0 7,14 A7,7 0 1 0 7,0 Z M4.3,3.3 L7,6 L9.7,3.3 L10.7,4.3 L8,7 L10.7,9.7 L9.7,10.7 L7,8 L4.3,10.7 L3.3,9.7 L6,7 L3.3,4.3 Z");
+    static readonly Geometry Skipped = Geometry.Parse("M7,0.5 L14,13.5 L0,13.5 Z M6.2,4.5 L7.8,4.5 L7.8,9 L6.2,9 Z M6.2,10.2 L7.8,10.2 L7.8,11.8 L6.2,11.8 Z");
+    static readonly Geometry Pending = Geometry.Parse("M7,0 A7,7 0 1 0 7,14 A7,7 0 1 0 7,0 Z M7,2 A5,5 0 1 1 7,12 A5,5 0 1 1 7,2 Z");
+    static readonly Geometry Running = Geometry.Parse("M7,0 A7,7 0 1 0 7,14 A7,7 0 1 0 7,0 Z M7,2 A5,5 0 1 1 7,12 L7,7 Z");
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
+    {
+        VSL.Testing.TestState.Passed => Passed,
+        VSL.Testing.TestState.Failed => Failed,
+        VSL.Testing.TestState.Skipped => Skipped,
+        VSL.Testing.TestState.Running => Running,
+        _ => Pending,
+    };
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
 public sealed class ColorStringConverter : IValueConverter
 {
     public static readonly ColorStringConverter Instance = new();

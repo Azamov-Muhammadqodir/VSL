@@ -27,6 +27,7 @@
   <!-- Debug toolbar glyphs (14x14) -->
   <StreamGeometry x:Key="IconStart">M3,1 L13,7 L3,13 Z</StreamGeometry>
   <StreamGeometry x:Key="IconStartNoDebug">M3,1 L13,7 L3,13 Z M4.6,3.8 L4.6,10.2 L10,7 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconRunAll">M0,1 L6.5,7 L0,13 Z M6.5,1 L13,7 L6.5,13 Z</StreamGeometry>
   <StreamGeometry x:Key="IconStop">M2,2 L12,2 L12,12 L2,12 Z</StreamGeometry>
   <StreamGeometry x:Key="IconPause">M2,1 L5.5,1 L5.5,13 L2,13 Z M8.5,1 L12,1 L12,13 L8.5,13 Z</StreamGeometry>
   <StreamGeometry x:Key="IconRestart">M7,1.5 C3.4,1.5 1,4.2 1,7.5 C1,10.8 3.7,13.5 7,13.5 C10.3,13.5 13,10.8 13,7.5 L11,7.5 C11,9.7 9.2,11.5 7,11.5 C4.8,11.5 3,9.7 3,7.5 C3,5.3 4.8,3.5 7,3.5 L7,6 L10.5,2.5 L7,-1 Z</StreamGeometry>

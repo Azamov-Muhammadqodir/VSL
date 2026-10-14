@@ -96,6 +96,36 @@
         <MenuItem Header="_Watch" Click="OnShowWatch" />
         <MenuItem Header="_Call Stack" Click="OnShowCallStack" />
       </MenuItem>
+      <MenuItem Header="_Test">
+        <MenuItem Command="{Binding RunAllTestsCommand}">
+          <MenuItem.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Run All Tests" />
+              <TextBlock Grid.Column="1" Text="Ctrl+R, A" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+            </Grid>
+          </MenuItem.Header>
+        </MenuItem>
+        <MenuItem Command="{Binding RepeatLastTestRunCommand}">
+          <MenuItem.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Repeat Last Run" />
+              <TextBlock Grid.Column="1" Text="Ctrl+R, L" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+            </Grid>
+          </MenuItem.Header>
+        </MenuItem>
+        <MenuItem Header="Run _Failed Tests" Command="{Binding RunFailedTestsCommand}" />
+        <MenuItem Header="Re_fresh Tests" Command="{Binding RefreshTestsCommand}" />
+        <MenuItem Header="_Cancel Test Run" Command="{Binding CancelTestRunCommand}" />
+        <Separator />
+        <MenuItem Click="OnShowTestExplorer">
+          <MenuItem.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Test Explorer" />
+              <TextBlock Grid.Column="1" Text="Ctrl+E, T" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+            </Grid>
+          </MenuItem.Header>
+        </MenuItem>
+      </MenuItem>
       <MenuItem Header="_Tools">
         <MenuItem Header="_Restart Language Server" Command="{Binding RestartLanguageServerCommand}" />
       </MenuItem>
@@ -390,50 +420,136 @@
 
       <!-- Solution Explorer -->
       <Border Grid.Column="2" Background="{StaticResource VsToolWindowBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="1,0,0,0">
-        <DockPanel>
-          <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}">
-            <TextBlock Classes="toolTitle" Text="Solution Explorer" />
-          </Border>
-          <Border DockPanel.Dock="Top" Padding="4,2" Background="{StaticResource VsToolWindowBrush}">
-            <StackPanel Orientation="Horizontal" Spacing="2">
-              <Button Classes="tb" Click="OnSyncWithActiveDocument" ToolTip.Tip="Sync with Active Document">⇄</Button>
-              <Button Classes="tb" Command="{Binding CollapseAllCommand}" ToolTip.Tip="Collapse All">⊟</Button>
-              <Button Classes="tb" Command="{Binding RefreshExplorerCommand}" ToolTip.Tip="Refresh">⟳</Button>
-            </StackPanel>
-          </Border>
-          <TextBox Name="ExplorerSearch" DockPanel.Dock="Top" Classes="search" Margin="4,0,4,4"
-                   PlaceholderText="Search Solution Explorer (Ctrl+;)" TextChanged="OnExplorerSearchChanged" />
-          <Panel>
-            <TreeView Name="ExplorerTree" ItemsSource="{Binding ExplorerRoots}" DoubleTapped="OnExplorerDoubleTapped"
-                      KeyDown="OnExplorerKeyDown" Background="Transparent">
-              <TreeView.Styles>
-                <Style Selector="TreeViewItem" x:DataType="ws:ExplorerNode">
-                  <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                </Style>
-              </TreeView.Styles>
-              <TreeView.ItemTemplate>
-                <TreeDataTemplate x:DataType="ws:ExplorerNode" ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="6" Height="20">
-                    <ContentControl Content="{Binding IconKey, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+        <TabControl Name="RightTabs" TabStripPlacement="Bottom" Padding="0"
+                    SelectedIndex="{Binding RightTabIndex}"
+                    ItemContainerTheme="{StaticResource VsToolTab}">
+          <TabItem Header="Solution Explorer">
+            <DockPanel>
+              <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}">
+                <TextBlock Classes="toolTitle" Text="Solution Explorer" />
+              </Border>
+              <Border DockPanel.Dock="Top" Padding="4,2" Background="{StaticResource VsToolWindowBrush}">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <Button Classes="tb" Click="OnSyncWithActiveDocument" ToolTip.Tip="Sync with Active Document">⇄</Button>
+                  <Button Classes="tb" Command="{Binding CollapseAllCommand}" ToolTip.Tip="Collapse All">⊟</Button>
+                  <Button Classes="tb" Command="{Binding RefreshExplorerCommand}" ToolTip.Tip="Refresh">⟳</Button>
+                </StackPanel>
+              </Border>
+              <TextBox Name="ExplorerSearch" DockPanel.Dock="Top" Classes="search" Margin="4,0,4,4"
+                       PlaceholderText="Search Solution Explorer (Ctrl+;)" TextChanged="OnExplorerSearchChanged" />
+              <Panel>
+                <TreeView Name="ExplorerTree" ItemsSource="{Binding ExplorerRoots}" DoubleTapped="OnExplorerDoubleTapped"
+                          KeyDown="OnExplorerKeyDown" Background="Transparent">
+                  <TreeView.Styles>
+                    <Style Selector="TreeViewItem" x:DataType="ws:ExplorerNode">
+                      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                    </Style>
+                  </TreeView.Styles>
+                  <TreeView.ItemTemplate>
+                    <TreeDataTemplate x:DataType="ws:ExplorerNode" ItemsSource="{Binding Children}">
+                      <StackPanel Orientation="Horizontal" Spacing="6" Height="20">
+                        <ContentControl Content="{Binding IconKey, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                      </StackPanel>
+                    </TreeDataTemplate>
+                  </TreeView.ItemTemplate>
+                </TreeView>
+                <ListBox Name="ExplorerSearchResults" Classes="dense" IsVisible="False" DoubleTapped="OnSearchResultDoubleTapped">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="ws:ExplorerNode">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ContentControl Content="{Binding IconKey, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Panel>
+            </DockPanel>
+          </TabItem>
+          <!-- Test Explorer -->
+          <TabItem Header="Test Explorer">
+            <Grid RowDefinitions="Auto,Auto,Auto,*,4,170">
+              <Border Background="{StaticResource VsEnvironmentBrush}">
+                <TextBlock Classes="toolTitle" Text="Test Explorer" />
+              </Border>
+              <Border Grid.Row="1" Padding="4,2">
+                <WrapPanel Orientation="Horizontal">
+                  <Button Classes="tb" Command="{Binding RunAllTestsCommand}" ToolTip.Tip="Run All Tests (Ctrl+R, A)">
+                    <PathIcon Data="{StaticResource IconRunAll}" Foreground="#89D185" Width="13" Height="12" />
+                  </Button>
+                  <Button Classes="tb" Command="{Binding RunSelectedTestsCommand}" ToolTip.Tip="Run">
+                    <PathIcon Data="{StaticResource IconStart}" Foreground="#89D185" Width="12" Height="12" />
+                  </Button>
+                  <Button Classes="tb" Command="{Binding RunFailedTestsCommand}" ToolTip.Tip="Run Failed Tests">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                      <PathIcon Data="{StaticResource IconStart}" Foreground="#89D185" Width="10" Height="10" />
+                      <PathIcon Data="{Binding Source={x:Static vm:TestStateIcons.Failed}, Converter={x:Static v:TestStateIconConverter.Instance}}" Foreground="#F14C4C" Width="9" Height="9" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="tb" Command="{Binding RepeatLastTestRunCommand}" ToolTip.Tip="Repeat Last Run (Ctrl+R, L)">
+                    <PathIcon Data="{StaticResource IconRestart}" Foreground="#89D185" Width="12" Height="12" />
+                  </Button>
+                  <Button Classes="tb" Command="{Binding CancelTestRunCommand}" ToolTip.Tip="Cancel">
+                    <PathIcon Data="{StaticResource IconStop}" Foreground="#F48771" Width="10" Height="10" />
+                  </Button>
+                  <Button Classes="tb" Command="{Binding RefreshTestsCommand}" ToolTip.Tip="Build and discover tests">⟳</Button>
+                  <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
+                  <StackPanel Orientation="Horizontal" Spacing="4" Margin="4,0" VerticalAlignment="Center" ToolTip.Tip="Passed">
+                    <PathIcon Data="{Binding Source={x:Static vm:TestStateIcons.Passed}, Converter={x:Static v:TestStateIconConverter.Instance}}" Foreground="#89D185" Width="12" Height="12" />
+                    <TextBlock Text="{Binding PassedCount}" />
                   </StackPanel>
-                </TreeDataTemplate>
-              </TreeView.ItemTemplate>
-            </TreeView>
-            <ListBox Name="ExplorerSearchResults" Classes="dense" IsVisible="False" DoubleTapped="OnSearchResultDoubleTapped">
-              <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="ws:ExplorerNode">
+                  <StackPanel Orientation="Horizontal" Spacing="4" Margin="4,0" VerticalAlignment="Center" ToolTip.Tip="Failed">
+                    <PathIcon Data="{Binding Source={x:Static vm:TestStateIcons.Failed}, Converter={x:Static v:TestStateIconConverter.Instance}}" Foreground="#F14C4C" Width="12" Height="12" />
+                    <TextBlock Text="{Binding FailedCount}" />
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="4" Margin="4,0" VerticalAlignment="Center" ToolTip.Tip="Skipped">
+                    <PathIcon Data="{Binding Source={x:Static vm:TestStateIcons.Skipped}, Converter={x:Static v:TestStateIconConverter.Instance}}" Foreground="#CCA700" Width="12" Height="12" />
+                    <TextBlock Text="{Binding SkippedCount}" />
+                  </StackPanel>
+                </WrapPanel>
+              </Border>
+              <TextBlock Grid.Row="2" Text="{Binding TestSummary}" Margin="8,2" TextWrapping="Wrap" Foreground="{StaticResource VsGrayTextBrush}" />
+              <TreeView Grid.Row="3" Name="TestTree" ItemsSource="{Binding TestRoots}" SelectedItem="{Binding SelectedTest}"
+                        DoubleTapped="OnTestDoubleTapped" Background="Transparent">
+                <TreeView.Styles>
+                  <Style Selector="TreeViewItem" x:DataType="vm:TestNode">
+                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                  </Style>
+                </TreeView.Styles>
+                <TreeView.ItemTemplate>
+                  <TreeDataTemplate x:DataType="vm:TestNode" ItemsSource="{Binding Children}">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Height="20">
+                      <PathIcon Data="{Binding State, Converter={x:Static v:TestStateIconConverter.Instance}}"
+                                Foreground="{Binding StateColor, Converter={x:Static v:ColorStringConverter.Instance}}"
+                                Width="12" Height="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="2" Text="{Binding DurationText}" Margin="12,0,4,0" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                    </Grid>
+                  </TreeDataTemplate>
+                </TreeView.ItemTemplate>
+              </TreeView>
+              <GridSplitter Grid.Row="4" ResizeDirection="Rows" />
+              <ScrollViewer Grid.Row="5" Padding="8,4">
+                <StackPanel Spacing="4" DataContext="{Binding SelectedTest}" x:DataType="vm:TestNode">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Location}" Foreground="{StaticResource VsGrayTextBrush}" />
                   <StackPanel Orientation="Horizontal" Spacing="6">
-                    <ContentControl Content="{Binding IconKey, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                    <PathIcon Data="{Binding State, Converter={x:Static v:TestStateIconConverter.Instance}}"
+                              Foreground="{Binding StateColor, Converter={x:Static v:ColorStringConverter.Instance}}" Width="12" Height="12" />
+                    <TextBlock Text="{Binding State}" />
+                    <TextBlock Text="{Binding DurationText}" Foreground="{StaticResource VsGrayTextBrush}" />
                   </StackPanel>
-                </DataTemplate>
-              </ListBox.ItemTemplate>
-            </ListBox>
-          </Panel>
-        </DockPanel>
+                  <SelectableTextBlock Text="{Binding ErrorMessage}" Foreground="#F14C4C" TextWrapping="Wrap" FontFamily="{StaticResource VsCodeFont}" />
+                  <SelectableTextBlock Text="{Binding StackTrace}" TextWrapping="Wrap" FontFamily="{StaticResource VsCodeFont}" FontSize="11" />
+                  <SelectableTextBlock Text="{Binding Output}" TextWrapping="Wrap" FontFamily="{StaticResource VsCodeFont}" FontSize="11" Foreground="{StaticResource VsGrayTextBrush}" />
+                </StackPanel>
+              </ScrollViewer>
+            </Grid>
+          </TabItem>
+        </TabControl>
       </Border>
     </Grid>
   </DockPanel>

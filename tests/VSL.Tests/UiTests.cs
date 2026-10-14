@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using VSL.ViewModels;
+using VSL.Testing;
 using VSL.Views;
 
 [assembly: AvaloniaTestApplication(typeof(VSL.Tests.TestAppBuilder))]
@@ -193,6 +194,50 @@ public class UiTests
             host.Editor.Undo();
         Assert.False(doc.IsDirty);
         Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
+    public async Task Test_explorer_runs_tests_and_shows_results()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var vm = new MainViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1600, Height = 1000 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+
+        await vm.RunAllTestsCommand.ExecuteAsync(null);
+        Assert.Equal(1, vm.RightTabIndex);
+        Assert.False(vm.IsTesting);
+        Assert.Equal((3, 1, 1), (vm.PassedCount, vm.FailedCount, vm.SkippedCount));
+        Assert.StartsWith("Test run finished: 5 test(s) (3 Passed, 1 Failed, 1 Skipped)", vm.TestSummary);
+
+        // Project > Namespace > Class > tests, with theory rows grouped under their method.
+        var project = Assert.Single(vm.TestRoots);
+        Assert.Equal("Tests", project.Name);
+        Assert.Equal(TestState.Failed, project.State);
+        var cls = project.Children.Single().Children.Single();
+        Assert.Equal("GreetingTests", cls.Name);
+        var adds = cls.Children.Single(c => c.Name == "Adds");
+        Assert.Equal(TestNodeKind.Method, adds.Kind);
+        Assert.Equal(["Adds(a: 1, b: 2, sum: 3)", "Adds(a: 2, b: 2, sum: 4)"], adds.Children.Select(c => c.Name));
+        Assert.Equal(TestState.Passed, adds.State);
+        Assert.Equal(TestState.Skipped, cls.Children.Single(c => c.Name == "Skipped").State);
+        var failing = cls.Children.Single(c => c.Name == "Deliberately_failing");
+        Assert.Contains("Assert.Equal() Failure", failing.ErrorMessage);
+        vm.SelectedTest = failing;
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        Snapshot(window, "test-explorer");
+
+        // Run Failed reruns just that test; double-click navigates to it.
+        await vm.RunFailedTestsCommand.ExecuteAsync(null);
+        Assert.StartsWith("Test run finished: 1 test(s)", vm.TestSummary);
+        vm.NavigateToTest(failing);
+        await WaitUntil(() => vm.ActiveDocument?.FileName == "GreetingTests.cs", TimeSpan.FromSeconds(5));
+        await WaitUntil(() => vm.ActiveDocument!.Host.CaretPosition.Line == 17, TimeSpan.FromSeconds(5));
+        Assert.Equal(17, vm.ActiveDocument!.Host.CaretPosition.Line);
+
+        Assert.True(await vm.CloseSolutionCoreAsync());
+        Assert.Empty(vm.TestRoots);
     }
 
     [AvaloniaFact]

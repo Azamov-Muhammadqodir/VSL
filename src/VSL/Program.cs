@@ -8,6 +8,9 @@ static class Program
     public static void Main(string[] args)
     {
         App.StartupArgs = args;
+        // Child tools that look up `dotnet` on PATH (vstest.console, MSBuild nodes) must find the same SDK VSL uses,
+        // not a distro package that happens to be first on a desktop session's PATH.
+        Build.DotnetCli.ApplyToCurrentProcess();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

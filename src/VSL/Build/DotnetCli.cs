@@ -31,6 +31,17 @@ public static class DotnetCli
         return "dotnet";
     }
 
+    /// <summary>Puts the located dotnet first on this process's PATH and sets DOTNET_ROOT for everything VSL spawns.</summary>
+    public static void ApplyToCurrentProcess()
+    {
+        if (Executable == "dotnet")
+            return;
+        Environment.SetEnvironmentVariable("DOTNET_ROOT", Root);
+        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
+        if (path.Split(':')[0] != Root)
+            Environment.SetEnvironmentVariable("PATH", Root + ":" + path);
+    }
+
     /// <summary>Applies DOTNET_ROOT/PATH so apphosts and the SDK resolve the same installation.</summary>
     public static void ApplyEnvironment(ProcessStartInfo psi)
     {

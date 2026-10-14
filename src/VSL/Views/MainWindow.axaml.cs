@@ -14,6 +14,7 @@ namespace VSL.Views;
 public partial class MainWindow : Window, IDialogService
 {
     bool _closingConfirmed;
+    Key? _chord;
 
     public MainWindow()
     {
@@ -60,6 +61,36 @@ public partial class MainWindow : Window, IDialogService
     void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        if (e.Key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt)
+            return;
+        // Visual Studio chords: Ctrl+R, A / Ctrl+R, L / Ctrl+R, Ctrl+R / Ctrl+E, T.
+        if (_chord is { } first && Vm is { } chordVm)
+        {
+            _chord = null;
+            e.Handled = true;
+            switch (first, e.Key)
+            {
+                case (Key.R, Key.A):
+                    chordVm.RunAllTestsCommand.Execute(null);
+                    break;
+                case (Key.R, Key.L):
+                    chordVm.RepeatLastTestRunCommand.Execute(null);
+                    break;
+                case (Key.R, Key.R):
+                    OnRename(this, new RoutedEventArgs());
+                    break;
+                case (Key.E, Key.T):
+                    chordVm.RightTabIndex = 1;
+                    break;
+            }
+            return;
+        }
+        if (ctrl && !e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key is Key.R or Key.E)
+        {
+            _chord = e.Key;
+            e.Handled = true;
+            return;
+        }
         if (ctrl && e.Key == Key.OemSemicolon)
         {
             ExplorerSearch.Focus();
@@ -232,7 +263,12 @@ public partial class MainWindow : Window, IDialogService
 
     void OnClearOutput(object? sender, RoutedEventArgs e) => Vm?.SelectedOutput.Clear();
 
-    void OnShowSolutionExplorer(object? sender, RoutedEventArgs e) => ExplorerTree.Focus();
+    void OnShowSolutionExplorer(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is { } vm)
+            vm.RightTabIndex = 0;
+        ExplorerTree.Focus();
+    }
 
     void OnShowErrorList(object? sender, RoutedEventArgs e)
     {
@@ -304,6 +340,14 @@ public partial class MainWindow : Window, IDialogService
 
     void OnShowLocals(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.LocalsTab);
 
+    void OnShowTestExplorer(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is { } vm)
+            vm.RightTabIndex = 1;
+    }
+
+    void OnTestDoubleTapped(object? sender, TappedEventArgs e) => Vm?.NavigateToTest(TestTree.SelectedItem as TestNode);
+
     void OnShowWatch(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.WatchTab);
 
     void OnShowCallStack(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.CallStackTab);
@@ -337,6 +381,10 @@ public partial class MainWindow : Window, IDialogService
             Shift+F11         Step out
             Ctrl+Alt+Break    Break all
             Ctrl+. / Alt+Enter Quick Actions and Refactorings
+            Ctrl+R, A         Run all tests
+            Ctrl+R, L         Repeat last test run
+            Ctrl+R, Ctrl+R    Rename
+            Ctrl+E, T         Test Explorer
             Ctrl+Space        IntelliSense completion
             Ctrl+Shift+Space  Parameter info
             F12 / Ctrl+Click  Go to definition
