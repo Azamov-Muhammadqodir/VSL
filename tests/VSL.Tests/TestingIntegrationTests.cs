@@ -5,6 +5,7 @@ using VSL.Testing;
 namespace VSL.Tests;
 
 /// <summary>Discovers and runs the sample's xUnit tests through the SDK's vstest.console.</summary>
+[Collection(SampleSolutionCollection.Name)]
 public class TestingIntegrationTests
 {
     [Fact]

@@ -4,6 +4,16 @@ using VSL.Build;
 namespace VSL.Tests;
 
 /// <summary>
+/// Tests that build or run the shared sample solution must not run in parallel: concurrent MSBuild runs over the
+/// same obj/ folders fail with "file is being used by another process".
+/// </summary>
+[CollectionDefinition(Name)]
+public sealed class SampleSolutionCollection
+{
+    public const string Name = "Sample solution";
+}
+
+/// <summary>
 /// A small Blazor solution (web host + Razor component library) copied to a temp directory and restored once per run.
 /// Copying keeps MSBuild from picking up VSL's own Directory.Build.props.
 /// </summary>

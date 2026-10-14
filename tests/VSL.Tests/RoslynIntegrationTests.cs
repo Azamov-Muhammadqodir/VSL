@@ -4,6 +4,7 @@ using VSL.Workspace;
 namespace VSL.Tests;
 
 /// <summary>Talks to the real Roslyn language server about the Blazor sample solution.</summary>
+[Collection(SampleSolutionCollection.Name)]
 public class RoslynIntegrationTests
 {
     static LspPosition PositionOf(string text, string needle, int extra = 1)
@@ -69,6 +70,7 @@ public class RoslynIntegrationTests
     }
 }
 
+[Collection(SampleSolutionCollection.Name)]
 public class SolutionLoaderTests
 {
     [Fact]
@@ -106,6 +108,7 @@ public class SolutionLoaderTests
     }
 }
 
+[Collection(SampleSolutionCollection.Name)]
 public class CodeActionTests
 {
     [Fact]

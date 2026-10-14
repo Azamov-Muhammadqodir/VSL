@@ -23,6 +23,7 @@ public static class TestAppBuilder
 }
 
 /// <summary>Drives the real main window headlessly and saves screenshots for review.</summary>
+[Collection(SampleSolutionCollection.Name)]
 public class UiTests
 {
     static async Task WaitUntil(Func<bool> condition, TimeSpan timeout)
@@ -34,6 +35,16 @@ public class UiTests
             await Task.Delay(100);
         }
         Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>A view model with no remembered per-solution state, so tests do not depend on each other's order.</summary>
+    static MainViewModel NewViewModel()
+    {
+        var vm = new MainViewModel();
+        vm.Settings.Solutions.Clear();
+        vm.Settings.EditorZoom = 1.0;
+        VSL.Editor.EditorHost.DefaultZoom = 1.0;
+        return vm;
     }
 
     static string Snapshot(MainWindow window, string name)
@@ -50,7 +61,7 @@ public class UiTests
     public async Task Build_reports_errors_and_run_starts_web_app()
     {
         var sln = await SampleSolution.GetAsync();
-        var vm = new MainViewModel();
+        var vm = NewViewModel();
         var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
         window.Show();
         await vm.OpenSolutionAsync(sln);
@@ -95,7 +106,7 @@ public class UiTests
     public async Task Debugs_with_breakpoints_locals_watch_and_stepping()
     {
         var sln = await SampleSolution.GetAsync();
-        var vm = new MainViewModel();
+        var vm = NewViewModel();
         var window = new MainWindow { DataContext = vm, Width = 1600, Height = 1000 };
         window.Show();
         await vm.OpenSolutionAsync(sln);
@@ -159,7 +170,7 @@ public class UiTests
     public async Task Quick_action_adds_missing_using()
     {
         var sln = await SampleSolution.GetAsync();
-        var vm = new MainViewModel();
+        var vm = NewViewModel();
         var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
         window.Show();
         await vm.OpenSolutionAsync(sln);
@@ -200,7 +211,7 @@ public class UiTests
     public async Task Test_explorer_runs_tests_and_shows_results()
     {
         var sln = await SampleSolution.GetAsync();
-        var vm = new MainViewModel();
+        var vm = NewViewModel();
         var window = new MainWindow { DataContext = vm, Width = 1600, Height = 1000 };
         window.Show();
         await vm.OpenSolutionAsync(sln);
@@ -261,7 +272,7 @@ public class UiTests
         TempRepo.Git(dir, "add", "-A");
         TempRepo.Git(dir, "commit", "-q", "-m", "initial");
 
-        var vm = new MainViewModel();
+        var vm = NewViewModel();
         var window = new MainWindow { DataContext = vm, Width = 1600, Height = 1000 };
         window.Show();
         await vm.OpenSolutionAsync(Path.Combine(dir, "BlazorSample.sln"));
@@ -326,7 +337,7 @@ public class UiTests
     public async Task Editor_zooms_with_ctrl_wheel_and_shortcuts()
     {
         var sln = await SampleSolution.GetAsync();
-        var vm = new MainViewModel();
+        var vm = NewViewModel();
         var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
         window.Show();
         await vm.OpenSolutionAsync(sln);
@@ -372,7 +383,7 @@ public class UiTests
     [AvaloniaFact]
     public async Task Start_window_renders_without_solution()
     {
-        var vm = new MainViewModel();
+        var vm = NewViewModel();
         var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
         window.Show();
         await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
@@ -384,7 +395,7 @@ public class UiTests
     public async Task Opens_blazor_solution_with_intellisense()
     {
         var sln = await SampleSolution.GetAsync();
-        var vm = new MainViewModel();
+        var vm = NewViewModel();
         var window = new MainWindow { DataContext = vm, Width = 1600, Height = 1000 };
         window.Show();
 

@@ -647,9 +647,8 @@ public partial class MainViewModel : ObservableObject
                 x.Severity == DiagnosticSeverity.Hint ? DiagnosticSeverity.Information : x.Severity,
                 x.Code, x.Message, ProjectNameFor(d.FilePath), d.FilePath,
                 x.Range.Start.Line + 1, x.Range.Start.Character + 1, "IntelliSense")));
-        // VS shows "Build + IntelliSense"; open documents' live diagnostics supersede build rows for that file.
-        var openFiles = Documents.Select(d => d.FilePath).ToHashSet();
-        var all = _buildErrors.Where(e => e.FilePath is null || !openFiles.Contains(e.FilePath)).Concat(live)
+        // VS's "Build + IntelliSense": both sources are listed; an error both report appears once.
+        var all = _buildErrors.Concat(live)
             .DistinctBy(e => (e.FilePath, e.Line, e.Code, e.Description))
             .ToList();
 

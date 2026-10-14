@@ -5,6 +5,7 @@ using VSL.Debugging;
 namespace VSL.Tests;
 
 /// <summary>Debugs the sample web host with the real netcoredbg.</summary>
+[Collection(SampleSolutionCollection.Name)]
 public class DebuggerIntegrationTests
 {
     [Fact]
