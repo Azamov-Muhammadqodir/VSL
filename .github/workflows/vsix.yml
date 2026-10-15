@@ -1,0 +1,43 @@
+# Claude Code for Visual Studio (src/VSL.VisualStudio) → VSL.ClaudeCode.VisualStudio.vsix as a build artifact.
+# The VSIX targets (VSCT, pkgdef, the .vsix container) need Visual Studio's .NET Framework MSBuild, so this runs on Windows.
+# It also catches shared Claude code (src/VSL/Claude, the Claude view model) that no longer builds for .NET Framework.
+name: vsix
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'src/VSL.VisualStudio/**'
+      - 'src/VSL/Claude/**'
+      - 'src/VSL/ViewModels/Claude*'
+      - 'src/VSL/Views/MarkdownParser.cs'
+      - '.github/workflows/vsix.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/VSL.VisualStudio/**'
+      - 'src/VSL/Claude/**'
+      - 'src/VSL/ViewModels/Claude*'
+      - 'src/VSL/Views/MarkdownParser.cs'
+      - '.github/workflows/vsix.yml'
+  workflow_dispatch:
+
+jobs:
+  vsix:
+    name: Build VSIX
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build
+        run: msbuild src/VSL.VisualStudio/VSL.VisualStudio.csproj -restore -p:Configuration=Release -v:minimal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VSL.ClaudeCode.VisualStudio
+          path: src/VSL.VisualStudio/bin/Release/net48/*.vsix
+          if-no-files-found: error
