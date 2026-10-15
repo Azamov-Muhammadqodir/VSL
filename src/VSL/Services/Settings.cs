@@ -30,6 +30,9 @@ public sealed class Settings
 
     /// <summary>Claude Code reasoning effort chosen in the Modes menu (low ... max).</summary>
     public string? ClaudeEffort { get; set; }
+
+    /// <summary>The Claude Code account (its configuration folder) the panel runs with; null for the CLI's own choice.</summary>
+    public string? ClaudeAccount { get; set; }
     public Dictionary<string, SolutionState> Solutions { get; set; } = [];
 
     public sealed class SolutionState

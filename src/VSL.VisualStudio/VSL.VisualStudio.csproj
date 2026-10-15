@@ -1,0 +1,68 @@
+<Project>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <!--
+    Claude Code for Visual Studio (Windows): VSL's Claude Code tool window as a Visual Studio 2022 / 2026 extension.
+    The CLI session, protocol, transcripts, diffs and the view model are VSL's own files (linked below); this project
+    adds the WPF view, the Visual Studio integration and small shims for the Avalonia types those files use.
+    Build with Visual Studio's MSBuild (the VSIX targets need .NET Framework MSBuild), not `dotnet build`:
+      msbuild src/VSL.VisualStudio/VSL.VisualStudio.csproj -restore -p:Configuration=Release
+  -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>VSL.VisualStudio</RootNamespace>
+    <AssemblyName>VSL.ClaudeCode.VisualStudio</AssemblyName>
+    <!-- Shared files use C# 14 and the .NET 10 BCL; Polyfill supplies the newer APIs on .NET Framework. CommunityToolkit.Mvvm
+         stays on 8.4.0 (8.4.1+ needs Microsoft.Bcl.AsyncInterfaces 10, newer than VS 2022 has), whose partial properties need
+         LangVersion preview. -->
+    <LangVersion>preview</LangVersion>
+    <!-- The view and the shared view model post to the WPF dispatcher directly, as any WPF code does. -->
+    <NoWarn>$(NoWarn);VSTHRD001;VSTHRD003;VSTHRD100;VSTHRD101;VSTHRD110;VSTHRD200</NoWarn>
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
+    <IncludeDebugSymbolsInLocalVSIXDeployment>true</IncludeDebugSymbolsInLocalVSIXDeployment>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+    <CopyOutputSymbolsToOutputDirectory>true</CopyOutputSymbolsToOutputDirectory>
+    <DeployExtension Condition="'$(Configuration)' == 'Release'">false</DeployExtension>
+    <VSSDKTargetPlatformRegRootSuffix>Exp</VSSDKTargetPlatformRegRootSuffix>
+    <StartAction>Program</StartAction>
+    <StartProgram>$(DevEnvDir)devenv.exe</StartProgram>
+    <StartArguments>/rootsuffix Exp</StartArguments>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2142" PrivateAssets="all" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Polyfill" Version="11.4.5" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WPF projects leave System.IO out of the implicit usings; the shared files rely on it. -->
+    <Using Include="System.IO" />
+    <Reference Include="System.Design" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\VSL\Claude\*.cs" Link="Shared\Claude\%(Filename)%(Extension)" />
+    <Compile Include="..\VSL\ViewModels\ClaudeViewModel.cs" Link="Shared\ViewModels\ClaudeViewModel.cs" />
+    <Compile Include="..\VSL\ViewModels\ClaudeViewModel.Panels.cs" Link="Shared\ViewModels\ClaudeViewModel.Panels.cs" />
+    <Compile Include="..\VSL\ViewModels\ClaudeViewModel.Accounts.cs" Link="Shared\ViewModels\ClaudeViewModel.Accounts.cs" />
+    <Compile Include="..\VSL\ViewModels\ClaudeViewModel.Tokens.cs" Link="Shared\ViewModels\ClaudeViewModel.Tokens.cs" />
+    <Compile Include="..\VSL\ViewModels\ClaudeChatItems.cs" Link="Shared\ViewModels\ClaudeChatItems.cs" />
+    <Compile Include="..\VSL\ViewModels\ClaudePanelItems.cs" Link="Shared\ViewModels\ClaudePanelItems.cs" />
+    <Compile Include="..\VSL\Views\MarkdownParser.cs" Link="Shared\Views\MarkdownParser.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Resources\ClaudeCode.png" IncludeInVSIX="true" />
+    <Content Include="..\..\LICENSE" Link="LICENSE" IncludeInVSIX="true" />
+    <None Include="source.extension.vsixmanifest" SubType="Designer" />
+    <VSCTCompile Include="ClaudeCodePackage.vsct" ResourceName="Menus.ctmenu" />
+  </ItemGroup>
+
+  <!-- The VSIX targets (pkgdef, .vsct, the .vsix container) come after the SDK's own. -->
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" Condition="'$(VSToolsPath)' != ''" />
+</Project>

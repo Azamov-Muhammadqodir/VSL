@@ -15,9 +15,9 @@ public static partial class ClaudeHistory
     private static partial Regex ContextPattern();
 
     /// <summary>Newest first; each titled by its summary or first prompt.</summary>
-    public static IReadOnlyList<ClaudeConversation> List(string workingDirectory, int max = 50)
+    public static IReadOnlyList<ClaudeConversation> List(string workingDirectory, int max = 50, string? configDirectory = null)
     {
-        var dir = ClaudeCli.ProjectDirectory(workingDirectory);
+        var dir = ClaudeCli.ProjectDirectory(workingDirectory, configDirectory);
         if (!Directory.Exists(dir))
             return [];
         var list = new List<ClaudeConversation>();
@@ -78,7 +78,7 @@ public static partial class ClaudeHistory
 
     static string OneLine(string text)
     {
-        var line = string.Join(' ', text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        var line = string.Join(" ", text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0));
         return line.Length > 120 ? line[..117] + "..." : line;
     }
 

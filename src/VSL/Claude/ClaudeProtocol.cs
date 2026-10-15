@@ -50,8 +50,15 @@ public sealed record ClaudePermissionRequest(
     string? ToolUseId,
     string? AgentId = null) : ClaudeEvent;
 
-/// <summary>The end of a turn.</summary>
-public sealed record ClaudeResult(string Subtype, bool IsError, long DurationMs, double? CostUsd, string? Text, string? SessionId) : ClaudeEvent;
+/// <summary>The end of a turn; <paramref name="ContextTokens"/> is how much context the last model call used.</summary>
+public sealed record ClaudeResult(string Subtype, bool IsError, long DurationMs, double? CostUsd, string? Text, string? SessionId, int? ContextTokens = null)
+    : ClaudeEvent;
+
+/// <summary>rate_limit_event: the plan's limits after a model call (session and weekly windows).</summary>
+public sealed record ClaudeRateLimits(IReadOnlyList<ClaudeRateWindow> Windows) : ClaudeEvent;
+
+/// <summary>One limit window: "five_hour", "seven_day"...; <paramref name="Utilization"/> is 0..1.</summary>
+public sealed record ClaudeRateWindow(string Name, double Utilization, DateTimeOffset? ResetsAt);
 
 /// <summary>A system message worth showing (permission denied, compaction, API retry...).</summary>
 public sealed record ClaudeNotice(string Text, bool IsError) : ClaudeEvent;
@@ -169,6 +176,22 @@ public static class ClaudeProtocol
                     Str(request, "tool_use_id"), Str(request, "agent_id"));
                 break;
 
+            case "rate_limit_event" when root.TryGetProperty("rate_limit_info", out var info)
+                                          && info.TryGetProperty("unifiedWindows", out var windows) && windows.ValueKind == JsonValueKind.Object:
+                var rateWindows = new List<ClaudeRateWindow>();
+                foreach (var window in windows.EnumerateObject())
+                {
+                    if (window.Value.ValueKind != JsonValueKind.Object || !window.Value.TryGetProperty("utilization", out var u) || !u.TryGetDouble(out var used))
+                        continue;
+                    DateTimeOffset? resets = window.Value.TryGetProperty("resetsAt", out var r) && r.TryGetInt64(out var seconds)
+                        ? DateTimeOffset.FromUnixTimeSeconds(seconds)
+                        : null;
+                    rateWindows.Add(new ClaudeRateWindow(window.Name, used, resets));
+                }
+                if (rateWindows.Count > 0)
+                    yield return new ClaudeRateLimits(rateWindows);
+                break;
+
             case "result":
                 var resultText = Str(root, "result");
                 if (resultText is null && root.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Array)
@@ -176,9 +199,25 @@ public static class ClaudeProtocol
                 yield return new ClaudeResult(Str(root, "subtype") ?? "", Bool(root, "is_error"),
                     root.TryGetProperty("duration_ms", out var d) && d.TryGetInt64(out var ms) ? ms : 0,
                     root.TryGetProperty("total_cost_usd", out var c) && c.TryGetDouble(out var cost) ? cost : null,
-                    resultText, Str(root, "session_id"));
+                    resultText, Str(root, "session_id"), ContextTokens(root));
                 break;
         }
+    }
+
+    /// <summary>
+    /// The context the turn's last model call used (its input, cached input and output), from the result's usage;
+    /// null for local commands, which call no model.
+    /// </summary>
+    static int? ContextTokens(JsonElement result)
+    {
+        if (!result.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object)
+            return null;
+        // A turn of several calls lists each in iterations; the last one is the context as it stands.
+        if (usage.TryGetProperty("iterations", out var iterations) && iterations.ValueKind == JsonValueKind.Array && iterations.GetArrayLength() > 0)
+            usage = iterations[iterations.GetArrayLength() - 1];
+        int Count(string name) => usage.TryGetProperty(name, out var v) && v.TryGetInt32(out var n) ? n : 0;
+        var total = Count("input_tokens") + Count("cache_read_input_tokens") + Count("cache_creation_input_tokens") + Count("output_tokens");
+        return total > 0 ? total : null;
     }
 
     /// <summary>A tool result's text: a plain string, or the text parts of a content array.</summary>

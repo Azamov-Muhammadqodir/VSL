@@ -185,6 +185,7 @@ public sealed partial class ClaudeViewModel
         IsUsageOpen = false;
         IsMcpOpen = false;
         IsModesOpen = false;
+        IsAccountsOpen = false;
         McpDraft = null;
     }
 
@@ -221,7 +222,7 @@ public sealed partial class ClaudeViewModel
                     };
                     var percent = limit.TryGetProperty("percent", out var p) && p.TryGetDouble(out var value) ? value : 0;
                     limits.Add(new UsageLimit(label, percent, ResetText(ClaudeJson.Str(limit, "resets_at"), now),
-                        percent >= 80 || ClaudeJson.Str(limit, "severity") is { } severity && severity != "normal"));
+                        percent >= 80 || ClaudeJson.Str(limit, "severity") is { } severity && severity != "normal", ResetsAt(ClaudeJson.Str(limit, "resets_at"))));
                 }
             }
             else
@@ -229,7 +230,7 @@ public sealed partial class ClaudeViewModel
                 foreach (var (key, label) in new[] { ("five_hour", "Session (5hr)"), ("seven_day", "Weekly (7 day)") })
                     if (rateLimits.TryGetProperty(key, out var window) && window.ValueKind == JsonValueKind.Object
                         && window.TryGetProperty("utilization", out var u) && u.TryGetDouble(out var percent))
-                        limits.Add(new UsageLimit(label, percent, ResetText(ClaudeJson.Str(window, "resets_at"), now), percent >= 80));
+                        limits.Add(new UsageLimit(label, percent, ResetText(ClaudeJson.Str(window, "resets_at"), now), percent >= 80, ResetsAt(ClaudeJson.Str(window, "resets_at"))));
             }
         }
 
@@ -263,10 +264,13 @@ public sealed partial class ClaudeViewModel
         return new UsageInfo { Account = rows, Limits = limits, Day = Period("day", "Last 24h"), Week = Period("week", "Last 7d") };
     }
 
-    internal static string ResetText(string? iso, DateTimeOffset now)
+    static DateTimeOffset? ResetsAt(string? iso) => DateTimeOffset.TryParse(iso, out var at) ? at : null;
+
+    internal static string ResetText(string? iso, DateTimeOffset now) =>
+        DateTimeOffset.TryParse(iso, out var at) ? ResetText(at, now) : "";
+
+    internal static string ResetText(DateTimeOffset at, DateTimeOffset now)
     {
-        if (!DateTimeOffset.TryParse(iso, out var at))
-            return "";
         var left = at - now;
         return left.TotalMinutes < 1 ? "Resets soon"
             : left.TotalHours < 1 ? $"Resets in {(int)left.TotalMinutes}m"
@@ -464,15 +468,18 @@ public sealed partial class ClaudeViewModel
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+            CreateNoWindow = true,
             WorkingDirectory = _workingDirectory(),
         };
         foreach (var arg in args)
             psi.ArgumentList.Add(arg);
         psi.Environment.Remove("CLAUDECODE");
+        SelectedAccount?.Apply(psi.Environment);
         using var process = Process.Start(psi)!;
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        // Not WaitForExitAsync: on .NET Framework it can throw inside Process; both streams are read to the end above.
+        await Task.Run(() => process.WaitForExit());
         return (process.ExitCode, await stdout + await stderr);
     }
 

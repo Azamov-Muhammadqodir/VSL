@@ -60,6 +60,34 @@ Not yet: conditional breakpoints, exception settings, Immediate window, debuggin
 (it runs in the browser), Fix All for quick actions, floating tool windows, history/blame, merge conflict editor,
 WinForms/WPF designers (Windows-only).
 
+## Claude Code for Visual Studio (Windows)
+
+`src/VSL.VisualStudio` packages VSL's Claude Code panel as a Visual Studio 2022 (17.14+) / 2026 extension: the same
+CLI session, protocol, transcripts, diffs and view model (the files are shared with VSL, not copied), with a WPF view
+that follows the Visual Studio theme. Alt+K, the Claude button on the Standard toolbar or View > Other Windows > Claude Code opens it, Ask
+Claude in the editor's context menu sends the current file and selection, and Ask Claude on files, folders and
+projects in Solution Explorer puts them in the prompt as @mentions; Claude's file links open in the editor at the line and
+"Open side-by-side diff" uses Visual Studio's diff window. It needs the Claude Code CLI on Windows
+(`irm https://claude.ai/install.ps1 | iex`, or `VSL_CLAUDE_PATH` pointing at `claude.exe`).
+
+Several accounts (subscriptions) work as they do in a terminal with `CLAUDE_CONFIG_DIR`: the account picker in the
+panel's header lists `~/.claude` and every `~/.claude-NAME` folder with its email, switching starts a fresh conversation
+in that account, and Add account creates `~/.claude-NAME` and opens the CLI in a terminal to sign in.
+
+Above the prompt the panel shows the conversation's context size with Context (`/context`) and Compact (`/compact`)
+buttons, and the plan's session and weekly limits with when each resets (from the CLI's rate limit events and
+`get_usage`, which cost no tokens). The globe button switches the panel between English and Uzbek.
+
+Build it on Windows with Visual Studio's MSBuild (the VSIX targets need .NET Framework MSBuild, so not `dotnet build`):
+
+```powershell
+msbuild src/VSL.VisualStudio/VSL.VisualStudio.csproj -restore -p:Configuration=Release
+# then double-click src/VSL.VisualStudio/bin/Release/net48/VSL.ClaudeCode.VisualStudio.vsix to install
+```
+
+A Debug build deploys to the experimental instance (`devenv /rootsuffix Exp`). The project is not in `VSL.slnx`, so
+the Linux build and CI are unchanged.
+
 ## Keyboard shortcuts
 
 Help → Keyboard Shortcuts lists them; they follow Visual Studio's defaults (F12, Shift+F12,
@@ -82,6 +110,8 @@ src/VSL/
   Editor/      AvaloniaEdit host: sync, completion, hover, squiggles, TextMate theme, side-by-side diff view
   ViewModels/  main window state, documents, Error List, Output
   Views/       main window (XAML), tool window docking, NuGet manager, icons, dialogs
+src/VSL.VisualStudio/
+  Claude Code panel as a Visual Studio extension: package, commands, VS integration, WPF view, shims for shared files
 tests/VSL.Tests/
   unit tests, Roslyn integration tests and headless UI tests against TestAssets/BlazorSample
 ```

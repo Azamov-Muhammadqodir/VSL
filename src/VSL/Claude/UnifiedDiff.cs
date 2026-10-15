@@ -46,8 +46,8 @@ public static class UnifiedDiff
         if ((long)n * m > 4_000_000)
         {
             // Too big to align: show it as a replacement.
-            lines.AddRange(a[start..endA].Select(l => new DiffLine(DiffLineKind.Removed, l)));
-            lines.AddRange(b[start..endB].Select(l => new DiffLine(DiffLineKind.Added, l)));
+            lines.AddRange(a.Skip(start).Take(n).Select(l => new DiffLine(DiffLineKind.Removed, l)));
+            lines.AddRange(b.Skip(start).Take(m).Select(l => new DiffLine(DiffLineKind.Added, l)));
         }
         else
         {
