@@ -89,7 +89,8 @@ public sealed class VsIcon : Control
     static void Label(DrawingContext dc, string text, Color background, Rect rect)
     {
         dc.DrawRectangle(new SolidColorBrush(background), null, rect, 1.5, 1.5);
-        var size = text.Length > 2 ? 4.6 : text.Length == 2 ? 5.6 : 7;
+        // As large as the badge allows, so "C#" stays readable at 16 px (about 7.5 px on screen).
+        var size = text.Length > 2 ? 5.8 : text.Length == 2 ? 7.6 : 9.5;
         var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             new Typeface("Inter", FontStyle.Normal, FontWeight.Bold), size, Brushes.White);
         dc.DrawText(ft, new Point(rect.X + (rect.Width - ft.Width) / 2, rect.Y + (rect.Height - ft.Height) / 2));
@@ -101,7 +102,7 @@ public sealed class VsIcon : Control
         Fill(dc, "M3,0.5 L9.5,0.5 L13.5,4.5 L13.5,15.5 L3,15.5 Z M4,1.5 L4,14.5 L12.5,14.5 L12.5,5.5 L8.5,5.5 L8.5,1.5 Z", Page);
         Fill(dc, "M9.5,1.9 L12.1,4.5 L9.5,4.5 Z", Page);
         if (text is not null)
-            Label(dc, text, color, new Rect(0, 7.5, 11, 8));
+            Label(dc, text, color, new Rect(0, 6, 13, 10));
     }
 
     static void FolderIcon(DrawingContext dc, bool open)
@@ -384,16 +385,16 @@ public sealed class VsIcon : Control
                 break;
             case "Project":
             case "ProjectReference":
-                Fill(dc, "M1.5,1.5 L14.5,1.5 L14.5,14.5 L1.5,14.5 Z M2.5,2.5 L2.5,13.5 L13.5,13.5 L13.5,2.5 Z", Color.Parse("#388A34"));
-                Label(dc, "C#", Color.Parse("#388A34"), new Rect(3.5, 3.5, 9, 9));
+                Fill(dc, "M0.5,0.5 L15.5,0.5 L15.5,15.5 L0.5,15.5 Z M1.5,1.5 L1.5,14.5 L14.5,14.5 L14.5,1.5 Z", Color.Parse("#388A34"));
+                Label(dc, "C#", Color.Parse("#388A34"), new Rect(2.5, 2.5, 11, 11));
                 break;
             case "FsProject":
-                Fill(dc, "M1.5,1.5 L14.5,1.5 L14.5,14.5 L1.5,14.5 Z M2.5,2.5 L2.5,13.5 L13.5,13.5 L13.5,2.5 Z", Color.Parse("#378BBA"));
-                Label(dc, "F#", Color.Parse("#378BBA"), new Rect(3.5, 3.5, 9, 9));
+                Fill(dc, "M0.5,0.5 L15.5,0.5 L15.5,15.5 L0.5,15.5 Z M1.5,1.5 L1.5,14.5 L14.5,14.5 L14.5,1.5 Z", Color.Parse("#378BBA"));
+                Label(dc, "F#", Color.Parse("#378BBA"), new Rect(2.5, 2.5, 11, 11));
                 break;
             case "VbProject":
-                Fill(dc, "M1.5,1.5 L14.5,1.5 L14.5,14.5 L1.5,14.5 Z M2.5,2.5 L2.5,13.5 L13.5,13.5 L13.5,2.5 Z", Color.Parse("#00539C"));
-                Label(dc, "VB", Color.Parse("#00539C"), new Rect(3.5, 3.5, 9, 9));
+                Fill(dc, "M0.5,0.5 L15.5,0.5 L15.5,15.5 L0.5,15.5 Z M1.5,1.5 L1.5,14.5 L14.5,14.5 L14.5,1.5 Z", Color.Parse("#00539C"));
+                Label(dc, "VB", Color.Parse("#00539C"), new Rect(2.5, 2.5, 11, 11));
                 break;
 
             // ---- Start window --------------------------------------------------------------------------------

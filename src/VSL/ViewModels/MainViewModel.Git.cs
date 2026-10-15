@@ -35,7 +35,7 @@ public partial class MainViewModel
     GitWatcher? _gitWatcher;
     GitStatus? _gitStatus;
     Dictionary<string, string> _gitBadges = [];
-    bool _gitRefreshing;
+    Task? _gitRefresh;
     bool _gitRefreshQueued;
 
     public OutputChannel GitOutput { get; } = new("Source Control - Git");
@@ -116,17 +116,24 @@ public partial class MainViewModel
         CommitMessage = "";
     }
 
-    /// <summary>Re-reads status; coalesces bursts (saves, focus changes) into at most one extra run.</summary>
-    public async Task RefreshGitAsync()
+    /// <summary>
+    /// Re-reads status; coalesces bursts (saves, file events, focus changes) into at most one extra run. A caller
+    /// that arrives while a read is in flight waits for the next one, so after a git command the state is current.
+    /// </summary>
+    public Task RefreshGitAsync()
     {
         if (_git is not { } git)
-            return;
-        if (_gitRefreshing)
+            return Task.CompletedTask;
+        if (_gitRefresh is { IsCompleted: false } running)
         {
             _gitRefreshQueued = true;
-            return;
+            return running;
         }
-        _gitRefreshing = true;
+        return _gitRefresh = RefreshGitLoopAsync(git);
+    }
+
+    async Task RefreshGitLoopAsync(GitRepository git)
+    {
         try
         {
             do
@@ -146,10 +153,6 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             GitOutput.Append("git status failed: " + ex.Message);
-        }
-        finally
-        {
-            _gitRefreshing = false;
         }
     }
 
