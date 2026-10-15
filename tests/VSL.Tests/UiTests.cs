@@ -688,14 +688,14 @@ public class UiTests
 
         // Slash commands go to the CLI as the bare command (no editor context, attachments wait) and run there.
         Assert.Null(vm.AddImage("later.png", RedPng()));
-        vm.Prompt = "/effort high";
+        vm.Prompt = "/context";
         await vm.SendCommand.ExecuteAsync(null);
         await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
         var sentCommand = FakeClaude.Log(log).Last(e => e.Kind == "in" && e.Data.GetProperty("type").GetString() == "user").Data.GetProperty("message").GetProperty("content");
         Assert.Equal(JsonValueKind.String, sentCommand.ValueKind);
-        Assert.Equal("/effort high", sentCommand.GetString());
+        Assert.Equal("/context", sentCommand.GetString());
         Assert.Null(vm.Items.OfType<UserChatItem>().Last().Context);
-        Assert.Equal("Set effort level to high (this session only)", vm.Items.OfType<TextChatItem>().Last().Text);
+        Assert.StartsWith("## Context Usage", vm.Items.OfType<TextChatItem>().Last().Text);
         Assert.Single(vm.Attachments);
         vm.RemoveAttachmentCommand.Execute(vm.Attachments[0]);
         vm.Prompt = "/model haiku";
@@ -736,6 +736,100 @@ public class UiTests
         var argv = FakeClaude.Log(log).Last(e => e.Kind == "argv").Data.EnumerateArray().Select(a => a.GetString()).ToList();
         Assert.Equal("old-session", argv[argv.IndexOf("--resume") + 1]);
         Assert.Equal("acceptEdits", argv[argv.IndexOf("--permission-mode") + 1]);
+        window.Close();
+        await vm.DisposeAsync();
+    }
+
+    [AvaloniaFact]
+    public async Task Claude_modes_effort_usage_and_mcp_servers()
+    {
+        var (dir, log) = FakeClaude.Workspace();
+        var settings = new VSL.Services.Settings();
+        var vm = new ClaudeViewModel(settings, () => dir, () => null, () => [], () => FakeClaude.Executable);
+        var window = new Avalonia.Controls.Window { Width = 560, Height = 980, Content = new ClaudeView { DataContext = vm } };
+        window.Show();
+        await WaitUntil(() => vm.Commands.Count > 0 && vm.Effort is not null, TimeSpan.FromSeconds(10));
+        List<JsonElement> ControlRequests() => FakeClaude.Log(log).Where(e => e.Kind == "in" && e.Data.GetProperty("type").GetString() == "control_request")
+            .Select(e => e.Data.GetProperty("request")).ToList();
+
+        // Modes menu: the four modes (Auto when the model offers it) and the effort slider the CLI reports.
+        Assert.Equal(["Manual", "Edit automatically", "Plan", "Auto"], vm.Modes.Select(m => m.Label));
+        Assert.Equal("Effort (Extra high)", vm.EffortLabel);
+        Assert.Equal(["low", "medium", "high", "xhigh", "max"], vm.EffortSteps.Select(s => s.Value));
+        Assert.True(vm.EffortSteps[3].IsSelected);
+        vm.ToggleModesCommand.Execute(null);
+        Assert.True(vm.IsModesOpen);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(250));
+        Snapshot(window, "claude-modes");
+        vm.SelectModeCommand.Execute(vm.Modes.Single(m => m.Value == "auto"));
+        Assert.False(vm.IsModesOpen);
+        Assert.Equal(("auto", "Auto"), (vm.PermissionMode, vm.ModeLabel));
+        await vm.SetEffortCommand.ExecuteAsync(vm.EffortSteps[1]);
+        Assert.Equal(("Effort (Medium)", "medium"), (vm.EffortLabel, settings.ClaudeEffort));
+        Assert.Equal([true, true, false, false, false], vm.EffortSteps.Select(s => s.IsReached));
+        Assert.Contains(ControlRequests(), r => r.GetProperty("subtype").GetString() == "apply_flag_settings"
+            && r.GetProperty("settings").GetProperty("effortLevel").GetString() == "medium");
+        Assert.Contains(ControlRequests(), r => r.GetProperty("subtype").GetString() == "set_permission_mode" && r.GetProperty("mode").GetString() == "auto");
+        // A model with fewer levels gets a shorter slider; /effort sets it from the prompt.
+        vm.SelectedModel = vm.Models.Single(m => m.Value == "haiku");
+        Assert.Equal(["low", "medium", "high"], vm.EffortSteps.Select(s => s.Value));
+        vm.Prompt = "/effort low";
+        await vm.SendCommand.ExecuteAsync(null);
+        Assert.Equal(("low", "Effort set to Low."), (vm.Effort, vm.Items.OfType<NoticeChatItem>().Last().Text));
+        Assert.Empty(vm.Items.OfType<UserChatItem>());
+
+        // /usage opens Account & Usage instead of going to Claude.
+        vm.Prompt = "/usage";
+        await vm.SendCommand.ExecuteAsync(null);
+        Assert.True(vm.IsUsageOpen);
+        Assert.Null(vm.UsageError);
+        var usage = vm.Usage!;
+        Assert.Contains(usage.Account, r => r is { Label: "Email", Value: "tests@example.invalid" });
+        Assert.Equal(["Session (5hr)", "Weekly (7 day)", "Weekly Fable"], usage.Limits.Select(l => l.Label));
+        Assert.Equal([false, true, false], usage.Limits.Select(l => l.IsHigh));
+        Assert.StartsWith("97% of your usage", vm.UsagePeriodShown!.Insights[0].Text);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(250));
+        Snapshot(window, "claude-usage");
+        vm.ShowUsagePeriodCommand.Execute("week");
+        Assert.StartsWith("Last 7d · 10455 requests", vm.UsagePeriodShown!.Summary);
+        string? opened = null;
+        vm.OpenUrlRequested += url => opened = url;
+        vm.OpenUrlCommand.Execute(ClaudeViewModel.UsagePageUrl);
+        Assert.Equal("https://claude.ai/settings/usage", opened);
+        vm.CloseDialogsCommand.Execute(null);
+        Assert.False(vm.IsUsageOpen);
+
+        // /mcp lists the servers by scope with their state; sign in, retry, disable and add.
+        vm.Prompt = "/mcp";
+        await vm.SendCommand.ExecuteAsync(null);
+        Assert.True(vm.IsMcpOpen);
+        Assert.Equal(["Local (1)", "User (2)", "claude.ai (1)"], vm.McpGroups.Select(g => g.Title));
+        McpServerItem Server(string name) => vm.McpGroups.SelectMany(g => g.Servers).Single(s => s.Name == name);
+        Assert.Equal(("Needs Auth", "Failed"), (Server("hamyon").StatusLabel, Server("broken").StatusLabel));
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(250));
+        Snapshot(window, "claude-mcp");
+        await vm.AuthenticateMcpCommand.ExecuteAsync(Server("hamyon"));
+        Assert.Equal("https://auth.example.invalid/authorize?client=vsl", opened);
+        Assert.True(Server("hamyon").IsConnected);
+        await vm.ReconnectMcpCommand.ExecuteAsync(Server("broken"));
+        Assert.True(Server("broken").IsConnected);
+        await vm.ToggleMcpCommand.ExecuteAsync(Server("rea"));
+        Assert.True(Server("rea").IsDisabled);
+        vm.McpFilter = "re";
+        Assert.Equal(["rea"], vm.McpGroups.SelectMany(g => g.Servers).Select(s => s.Name));
+        vm.McpFilter = "";
+        vm.StartAddMcpServerCommand.Execute(null);
+        vm.McpDraft!.Name = "my docs";
+        await vm.AddMcpServerCommand.ExecuteAsync(null);
+        Assert.Contains("without spaces", vm.McpDraft!.Errors[0]);
+        vm.McpDraft.Name = "docs";
+        vm.McpDraft.Transport = "http";
+        vm.McpDraft.Target = "https://docs.example.invalid/mcp";
+        vm.McpDraft.Scope = McpScopeChoice.All.Single(s => s.Value == "user");
+        await vm.AddMcpServerCommand.ExecuteAsync(null);
+        Assert.Null(vm.McpDraft);
+        Assert.Equal("Added docs.", vm.McpMessage);
+        Assert.Equal("User (3)", vm.McpGroups.Single(g => g.Title.StartsWith("User", StringComparison.Ordinal)).Title);
         window.Close();
         await vm.DisposeAsync();
     }

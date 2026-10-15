@@ -58,7 +58,10 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         foreach (var model in DefaultModels)
             Models.Add(model);
         SelectedModel = Models.FirstOrDefault(m => m.Value == settings.ClaudeModel) ?? Models[0];
-        PermissionMode = settings.ClaudePermissionMode is "acceptEdits" or "plan" ? settings.ClaudePermissionMode : "default";
+        PermissionMode = settings.ClaudePermissionMode is "acceptEdits" or "plan" or "auto" ? settings.ClaudePermissionMode : "default";
+        Effort = settings.ClaudeEffort;
+        RefreshModes();
+        RefreshEffortSteps();
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsEmpty));
         Attachments.CollectionChanged += (_, _) =>
         {
@@ -128,14 +131,9 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
     [NotifyPropertyChangedFor(nameof(ModeLabel), nameof(ModeIcon))]
     public partial string PermissionMode { get; set; } = "default";
 
-    public string ModeLabel => PermissionMode switch
-    {
-        "acceptEdits" => "Edit automatically",
-        "plan" => "Plan mode",
-        _ => "Ask before edits",
-    };
+    public string ModeLabel => AllModes.FirstOrDefault(m => m.Value == PermissionMode).Label ?? "Manual";
 
-    public string ModeIcon => PermissionMode switch { "acceptEdits" => "Ok", "plan" => "Pending", _ => "Pencil" };
+    public string ModeIcon => AllModes.FirstOrDefault(m => m.Value == PermissionMode).Icon ?? "Hand";
 
     [ObservableProperty]
     public partial ClaudeModelChoice? SelectedModel { get; set; }
@@ -185,6 +183,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
             _session = session;
             _sessionCwd = cwd;
             ApplyInitialization(session.Initialization);
+            await ApplySessionSettingsAsync(session);
             return session;
         }
         finally
@@ -225,7 +224,11 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
             var selected = SelectedModel?.Value;
             var list = models.EnumerateArray()
                 .Select(m => new ClaudeModelChoice(ClaudeJson.Str(m, "value") ?? "", ClaudeJson.Str(m, "displayName") ?? ClaudeJson.Str(m, "value") ?? "",
-                    ClaudeJson.Str(m, "description")))
+                    ClaudeJson.Str(m, "description"), ClaudeJson.Bool(m, "supportsEffort"),
+                    m.TryGetProperty("supportedEffortLevels", out var levels) && levels.ValueKind == JsonValueKind.Array
+                        ? levels.EnumerateArray().Select(l => l.GetString() ?? "").Where(l => l.Length > 0).ToList()
+                        : null,
+                    ClaudeJson.Bool(m, "supportsAutoMode")))
                 .Where(m => m.Value.Length > 0)
                 .ToList();
             Models.Clear();
@@ -235,6 +238,8 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
             SelectedModel = Models.FirstOrDefault(m => m.Value == selected) ?? Models.FirstOrDefault();
             _changingModeFromCli = false;
         }
+        if (init.TryGetProperty("account", out var accountInfo))
+            _account = accountInfo.Clone();
         if (init.TryGetProperty("commands", out var commands) && commands.ValueKind == JsonValueKind.Array)
         {
             Commands.Clear();
@@ -293,6 +298,12 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         CheckCli();
         if (CliPath is null)
             return;
+        if (IsSlashCommand(text) && await HandleLocalCommandAsync(text))
+        {
+            Prompt = "";
+            Suggestions.Clear();
+            return;
+        }
         Prompt = "";
         Suggestions.Clear();
         IsHistoryOpen = false;
@@ -1031,18 +1042,25 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
 
     // ---- Mode, model, context ------------------------------------------------------------------------------
 
+    /// <summary>Shift+Tab: the next mode the model offers.</summary>
     [RelayCommand]
-    void CycleMode() => PermissionMode = PermissionMode switch { "default" => "acceptEdits", "acceptEdits" => "plan", _ => "default" };
+    void CycleMode()
+    {
+        var modes = Modes.Select(m => m.Value).ToList();
+        PermissionMode = modes[(modes.IndexOf(PermissionMode) + 1) % modes.Count];
+    }
 
     void SetModeFromCli(string mode)
     {
         _changingModeFromCli = true;
-        PermissionMode = mode is "acceptEdits" or "plan" ? mode : "default";
+        PermissionMode = mode is "acceptEdits" or "plan" or "auto" ? mode : "default";
         _changingModeFromCli = false;
     }
 
     partial void OnPermissionModeChanged(string value)
     {
+        foreach (var mode in Modes)
+            mode.IsSelected = mode.Value == value;
         _settings.ClaudePermissionMode = value;
         _settings.Save();
         if (!_changingModeFromCli && _session is { HasExited: false } session)
@@ -1051,6 +1069,8 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
 
     partial void OnSelectedModelChanged(ClaudeModelChoice? value)
     {
+        RefreshModes();
+        RefreshEffortSteps();
         if (value is null || _changingModeFromCli)
             return;
         _settings.ClaudeModel = value.Value;

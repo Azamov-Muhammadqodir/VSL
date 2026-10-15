@@ -37,7 +37,7 @@ public sealed class VsIcon : Control
         "Error", "Warning", "Info", "Ok", "Pending", "Running", "Solution", "Folder", "FolderOpen", "PropertiesFolder", "WebFolder", "Project",
         "Dependencies", "Package", "Framework", "cs", "razor", "css", "js", "json", "xml", "html", "sql", "md", "proto",
         "yaml", "image", "binary", "file", "CloneRepository", "OpenProject", "NewProject", "FsProject", "VbProject", "ArrowRight",
-        "Claude", "History", "Send", "Copy", "Eye", "EyeOff", "Attach",
+        "Claude", "History", "Send", "Copy", "Eye", "EyeOff", "Attach", "Hand", "CodeBrackets", "PlanDoc", "Bolt", "Gauge", "Plug", "Check",
     ];
 
     public string? Kind
@@ -436,6 +436,29 @@ public sealed class VsIcon : Control
                 break;
             case "EyeOff":
                 Stroke(dc, "M1,8 C3,4.3 13,4.3 15,8 C13,11.7 3,11.7 1,8 Z M2.5,13.5 L13.5,2.5", fg, 1.1);
+                break;
+            case "Check":
+                Stroke(dc, "M2.5,8.5 L6.2,12 L13.5,4", fg, 1.6);
+                break;
+            case "Hand":
+                // An open hand: stop and ask.
+                Stroke(dc, "M5,8.5 L5,3.2 C5,2.4 6.4,2.4 6.4,3.2 L6.4,7.5 M6.4,7.5 L6.4,2.2 C6.4,1.4 7.8,1.4 7.8,2.2 L7.8,7.5 M7.8,7.5 L7.8,2.8 C7.8,2 9.2,2 9.2,2.8 L9.2,7.8 M9.2,7.8 L9.2,4.2 C9.2,3.4 10.6,3.4 10.6,4.2 L10.6,9.5 C10.6,12.5 9,14.5 6.8,14.5 C5.2,14.5 4.4,13.6 3.6,12.2 L2.2,9.6 C1.8,8.8 2.9,8.1 3.5,8.8 L5,10.5", fg, 1.1);
+                break;
+            case "CodeBrackets":
+                Stroke(dc, "M5.5,4 L2,8 L5.5,12 M10.5,4 L14,8 L10.5,12 M9,3 L7,13", fg, 1.2);
+                break;
+            case "PlanDoc":
+                Stroke(dc, "M3.5,1.5 L12.5,1.5 L12.5,14.5 L3.5,14.5 Z M5.5,5 L10.5,5 M5.5,8 L10.5,8 M5.5,11 L8.5,11", fg, 1.1);
+                break;
+            case "Bolt":
+                Stroke(dc, "M9,1.5 L3.5,9 L8,9 L7,14.5 L12.5,7 L8,7 Z", fg, 1.1);
+                break;
+            case "Gauge":
+                Stroke(dc, "M2,11.5 A6,6 0 1 1 14,11.5 M8,11 L11,6.5", fg, 1.3);
+                Fill(dc, "M8,9.7 A1.3,1.3 0 1 0 8,12.3 A1.3,1.3 0 1 0 8,9.7 Z", fg);
+                break;
+            case "Plug":
+                Stroke(dc, "M5.5,1.5 L5.5,4.5 M10.5,1.5 L10.5,4.5 M3.5,4.5 L12.5,4.5 L12.5,7 C12.5,9.5 10.5,11 8,11 C5.5,11 3.5,9.5 3.5,7 Z M8,11 L8,14.5", fg, 1.2);
                 break;
             case "Attach":
                 // A paper clip.

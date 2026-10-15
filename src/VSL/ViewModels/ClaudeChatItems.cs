@@ -363,8 +363,16 @@ public sealed class NoticeChatItem(string text, bool isError) : ChatItem
     public bool IsError { get; } = isError;
 }
 
-public sealed record ClaudeModelChoice(string Value, string Label, string? Description)
+public sealed record ClaudeModelChoice(
+    string Value,
+    string Label,
+    string? Description,
+    bool SupportsEffort = false,
+    IReadOnlyList<string>? SupportedEffortLevels = null,
+    bool SupportsAutoMode = false)
 {
+    public IReadOnlyList<string> EffortLevels => SupportedEffortLevels ?? [];
+
     /// <summary>The label without its note ("Default (recommended)" → "Default"), for the compact picker.</summary>
     public string ShortLabel => Label.IndexOf(" (", StringComparison.Ordinal) is var i and > 0 ? Label[..i] : Label;
 

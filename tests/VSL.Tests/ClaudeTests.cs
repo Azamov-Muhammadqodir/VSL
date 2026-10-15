@@ -191,6 +191,40 @@ public class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Usage_reads_plan_limits_and_what_drives_them()
+    {
+        // The shape of Claude Code 2.1.300's get_usage response and initialize account.
+        using var usage = JsonDocument.Parse("""
+            {"subscription_type":"pro","rate_limits":{"five_hour":{"utilization":63,"resets_at":"2026-10-15T11:29:59+00:00"},
+             "limits":[{"kind":"session","percent":63,"resets_at":"2026-10-15T11:29:59+00:00","severity":"normal","scope":null},
+                       {"kind":"weekly_all","percent":74,"resets_at":"2026-10-17T20:59:59+00:00","severity":"normal","scope":null},
+                       {"kind":"weekly_scoped","percent":0,"resets_at":"2026-10-17T21:00:00+00:00","severity":"normal","scope":{"model":{"display_name":"Fable","id":null}}}]},
+             "behaviors":{"day":{"request_count":3044,"session_count":11,"behaviors":[{"key":"long_context","pct":97},{"key":"cron","pct":80}],"skills":[{"name":"claude-api","pct":2}]},
+                          "week":{"request_count":10455,"session_count":21,"behaviors":[],"skills":[]}}}
+            """);
+        using var account = JsonDocument.Parse("""{"email":"me@example.invalid","organization":"My Org","subscriptionType":"Claude Pro","apiProvider":"firstParty"}""");
+        var info = ClaudeViewModel.ParseUsage(usage.RootElement, account.RootElement, DateTimeOffset.Parse("2026-10-15T09:20:00+00:00"));
+        Assert.Equal(["Auth method: Claude.ai account", "Email: me@example.invalid", "Organization: My Org", "Plan: Claude Pro"],
+            info.Account.Select(r => $"{r.Label}: {r.Value}"));
+        Assert.Equal([("Session (5hr)", 63.0, "Resets in 2h"), ("Weekly (7 day)", 74.0, "Resets in 2d"), ("Weekly Fable", 0.0, "Resets in 2d")],
+            info.Limits.Select(l => (l.Label, l.Percent, l.ResetText)));
+        Assert.Equal("Last 24h · 3044 requests · 11 sessions", info.Day!.Summary);
+        Assert.Equal(["97% of your usage was at more than 150k tokens of context", "80% of your usage came from sessions active for 8+ hours"],
+            info.Day.Insights.Select(i => i.Text));
+        Assert.Equal([new UsageShare("/claude-api", "2%")], info.Day.Skills);
+        Assert.Equal("Last 7d · 10455 requests · 21 sessions", info.Week!.Summary);
+        Assert.Equal("Resets in 35m", ClaudeViewModel.ResetText("2026-10-15T10:00:00+00:00", DateTimeOffset.Parse("2026-10-15T09:25:00+00:00")));
+        Assert.StartsWith("Resets Nov ", ClaudeViewModel.ResetText("2026-11-05T12:00:00+00:00", DateTimeOffset.Parse("2026-10-15T09:25:00+00:00")));
+    }
+
+    [Fact]
+    public void Splits_server_command_lines()
+    {
+        Assert.Equal(["npx", "-y", "@scope/server", "--root", "/my dir"], ClaudeViewModel.SplitCommandLine("npx -y @scope/server --root \"/my dir\""));
+        Assert.Equal(["a", ""], ClaudeViewModel.SplitCommandLine("a ''"));
+    }
+
+    [Fact]
     public void Slash_commands_are_recognized()
     {
         Assert.True(ClaudeViewModel.IsSlashCommand("/effort high"));

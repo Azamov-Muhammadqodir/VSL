@@ -140,6 +140,13 @@ public partial class ClaudeView : UserControl
         vm.OpenUrlRequested += OpenUrl;
     }
 
+    /// <summary>A click outside a menu or dialog closes it.</summary>
+    void OnBackdropPressed(object? sender, PointerPressedEventArgs e)
+    {
+        _vm?.CloseDialogsCommand.Execute(null);
+        e.Handled = true;
+    }
+
     void OpenUrl(string url)
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri))

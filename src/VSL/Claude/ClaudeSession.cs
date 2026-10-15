@@ -157,6 +157,24 @@ public sealed class ClaudeSession : IAsyncDisposable
 
     public Task SetModelAsync(string? model) => RequestAsync(new { subtype = "set_model", model = model is null or "default" ? null : model });
 
+    /// <summary>Plan limits (session / weekly windows), subscription and what drives usage.</summary>
+    public Task<JsonElement> GetUsageAsync() => RequestAsync(new { subtype = "get_usage" });
+
+    /// <summary>Effective settings and what is applied (model, effort...).</summary>
+    public Task<JsonElement> GetSettingsAsync() => RequestAsync(new { subtype = "get_settings" });
+
+    /// <summary>Applies settings for this session only, as command-line flags would (e.g. effortLevel).</summary>
+    public Task ApplyFlagSettingsAsync(object settings) => RequestAsync(new { subtype = "apply_flag_settings", settings });
+
+    public Task<JsonElement> McpStatusAsync() => RequestAsync(new { subtype = "mcp_status" });
+
+    public Task McpReconnectAsync(string serverName) => RequestAsync(new { subtype = "mcp_reconnect", serverName });
+
+    public Task McpToggleAsync(string serverName, bool enabled) => RequestAsync(new { subtype = "mcp_toggle", serverName, enabled });
+
+    /// <summary>Starts a server's OAuth sign-in; the result carries the URL to open in the browser.</summary>
+    public Task<JsonElement> McpAuthenticateAsync(string serverName) => RequestAsync(new { subtype = "mcp_authenticate", serverName });
+
     async Task<JsonElement> RequestAsync(object request, CancellationToken ct = default)
     {
         var id = $"req_{Interlocked.Increment(ref _requestCounter)}_{Random.Shared.Next():x8}";

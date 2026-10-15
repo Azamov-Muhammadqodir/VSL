@@ -27,6 +27,9 @@ public sealed class Settings
     public string? ClaudeModel { get; set; }
 
     public string? ClaudePermissionMode { get; set; }
+
+    /// <summary>Claude Code reasoning effort chosen in the Modes menu (low ... max).</summary>
+    public string? ClaudeEffort { get; set; }
     public Dictionary<string, SolutionState> Solutions { get; set; } = [];
 
     public sealed class SolutionState

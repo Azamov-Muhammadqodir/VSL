@@ -137,6 +137,138 @@
       <Setter Property="MinHeight" Value="28" />
       <Setter Property="FontSize" Value="12" />
     </Style>
+    <Style Selector="Border.menuCard">
+      <Setter Property="Background" Value="#252830" />
+      <Setter Property="BorderBrush" Value="#3A3D47" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="BoxShadow" Value="0 6 18 0 #80000000" />
+    </Style>
+    <Style Selector="Border.key">
+      <Setter Property="Background" Value="#3A3D47" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Padding" Value="4,0" />
+    </Style>
+    <Style Selector="Border.key > TextBlock">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="#C8C8C8" />
+    </Style>
+    <Style Selector="Button.menuRow">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="12,7" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.menuRow.selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#30333D" />
+    </Style>
+    <Style Selector="Button.menuRow:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#353945" />
+    </Style>
+    <Style Selector="Button.effortStep">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector="Ellipse.effortDot">
+      <Setter Property="Fill" Value="#6B6F7D" />
+    </Style>
+    <Style Selector="Ellipse.effortDot.reached">
+      <Setter Property="Fill" Value="#A592E8" />
+    </Style>
+    <Style Selector="Border.backdrop">
+      <Setter Property="Background" Value="#99000000" />
+    </Style>
+    <Style Selector="Border.dialog">
+      <Setter Property="Background" Value="#1E2029" />
+      <Setter Property="BorderBrush" Value="#3A3D47" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Margin" Value="16,18" />
+      <Setter Property="MaxWidth" Value="460" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="BoxShadow" Value="0 10 30 0 #A0000000" />
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#A9ABBA" />
+      <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+    <Style Selector="ProgressBar.usage">
+      <Setter Property="Foreground" Value="#F2C94C" />
+      <Setter Property="Background" Value="#2E3140" />
+      <Setter Property="CornerRadius" Value="3" />
+    </Style>
+    <Style Selector="ProgressBar.usage.high">
+      <Setter Property="Foreground" Value="#F28C4C" />
+    </Style>
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0,4" />
+      <Setter Property="Foreground" Value="#C7B3FF" />
+    </Style>
+    <Style Selector="Button.segment">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="14,3" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#A9ABBA" />
+    </Style>
+    <Style Selector="Button.segment.on /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#3A3D47" />
+      <Setter Property="Foreground" Value="#F0F0F0" />
+    </Style>
+    <Style Selector="Border.serverRow">
+      <Setter Property="Background" Value="#252830" />
+      <Setter Property="BorderBrush" Value="#343743" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="12,9" />
+    </Style>
+    <Style Selector="Border.badge">
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="8,3" />
+    </Style>
+    <Style Selector="Button.badge">
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector="Border.badge > TextBlock, Button.badge TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#1A1A1A" />
+    </Style>
+    <Style Selector="Border.badge.ok">
+      <Setter Property="Background" Value="#6FCF97" />
+    </Style>
+    <Style Selector="Border.badge.pending">
+      <Setter Property="Background" Value="#8E92A3" />
+    </Style>
+    <Style Selector="Border.badge.off">
+      <Setter Property="Background" Value="#5A5D6B" />
+    </Style>
+    <Style Selector="Button.badge.warn">
+      <Setter Property="Background" Value="#F2C94C" />
+    </Style>
+    <Style Selector="Button.badge.fail">
+      <Setter Property="Background" Value="#EB6F6F" />
+    </Style>
+    <Style Selector="Button.addServer">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="#3A3D47" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
     <Style Selector="TextBlock.done">
       <Setter Property="TextDecorations" Value="Strikethrough" />
       <Setter Property="Foreground" Value="#8B8B8B" />
@@ -146,6 +278,7 @@
     </Style>
   </UserControl.Styles>
 
+  <Panel>
   <DockPanel Background="#1F1F1F" v:MarkdownView.LinkCommand="{Binding OpenLinkCommand}">
     <!-- ===== Header ===== -->
     <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" BorderBrush="#333336" BorderThickness="0,0,0,1">
@@ -155,6 +288,12 @@
           <TextBlock Text="Claude Code" FontWeight="SemiBold" VerticalAlignment="Center" />
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+          <Button Name="UsageButton" Classes="tbi" Command="{Binding OpenUsageCommand}" ToolTip.Tip="Account &amp; usage (/usage)">
+            <v:VsIcon Kind="Gauge" />
+          </Button>
+          <Button Name="McpButton" Classes="tbi" Command="{Binding OpenMcpCommand}" ToolTip.Tip="MCP servers (/mcp)">
+            <v:VsIcon Kind="Plug" />
+          </Button>
           <Button Name="HistoryButton" Classes="tbi" Command="{Binding ToggleHistoryCommand}" ToolTip.Tip="Past conversations">
             <v:VsIcon Kind="History" />
           </Button>
@@ -220,7 +359,7 @@
               <TextBlock Text="{Binding ContextLabel}" VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Button>
-          <Button Name="ModeButton" Grid.Column="2" Classes="pill" Command="{Binding CycleModeCommand}" ToolTip.Tip="Permission mode (Shift+Tab)">
+          <Button Name="ModeButton" Grid.Column="2" Classes="pill" Command="{Binding ToggleModesCommand}" ToolTip.Tip="Modes and effort (Shift+Tab switches mode)">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <v:VsIcon Kind="{Binding ModeIcon}" Width="13" Height="13" />
               <TextBlock Text="{Binding ModeLabel}" VerticalAlignment="Center" />
@@ -557,4 +696,230 @@
       </Border>
     </Panel>
   </DockPanel>
+
+    <!-- ===== Modes menu (above the prompt) ===== -->
+    <Panel IsVisible="{Binding IsModesOpen}">
+      <Border Background="Transparent" PointerPressed="OnBackdropPressed" />
+      <Border Name="ModesMenu" Classes="menuCard" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="10,0,10,96" Width="330">
+        <StackPanel>
+          <Grid ColumnDefinitions="*,Auto" Margin="12,8,10,6">
+            <TextBlock Text="Modes" Classes="muted" FontSize="12" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+              <Border Classes="key"><TextBlock Text="Shift" /></Border>
+              <TextBlock Text="+" Classes="muted" FontSize="11" VerticalAlignment="Center" />
+              <Border Classes="key"><TextBlock Text="Tab" /></Border>
+              <TextBlock Text="to switch" Classes="muted" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+          <ItemsControl ItemsSource="{Binding Modes}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ModeOption">
+                <Button Classes="menuRow" Classes.selected="{Binding IsSelected}"
+                        Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).SelectModeCommand}" CommandParameter="{Binding}">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <v:VsIcon Kind="{Binding Icon}" Width="18" Height="18" Margin="0,1,12,0" VerticalAlignment="Top" Foreground="#C8C8C8" />
+                    <StackPanel Grid.Column="1" Spacing="1">
+                      <TextBlock Text="{Binding Label}" FontSize="13" />
+                      <TextBlock Text="{Binding Description}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <v:VsIcon Grid.Column="2" Kind="Check" Width="14" Height="14" IsVisible="{Binding IsSelected}" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#E0E0E0" />
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Border Height="1" Background="#3A3A3D" Margin="0,4" IsVisible="{Binding HasEffort}" />
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,6,12,10" IsVisible="{Binding HasEffort}">
+            <v:VsIcon Kind="Gauge" Width="18" Height="18" Margin="0,0,12,0" Foreground="#C8C8C8" />
+            <TextBlock Grid.Column="1" Text="{Binding EffortLabel}" VerticalAlignment="Center" Foreground="#C8C8C8" />
+            <ItemsControl Name="EffortSlider" Grid.Column="2" ItemsSource="{Binding EffortSteps}" VerticalAlignment="Center">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="2" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:EffortStep">
+                  <Button Classes="effortStep" ToolTip.Tip="{Binding Label}"
+                          Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).SetEffortCommand}" CommandParameter="{Binding}">
+                    <Panel Width="16" Height="16">
+                      <Ellipse Width="5" Height="5" Classes="effortDot" Classes.reached="{Binding IsReached}" IsVisible="{Binding !IsSelected}" />
+                      <Ellipse Width="13" Height="13" Fill="#C7B3FF" IsVisible="{Binding IsSelected}" />
+                    </Panel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Panel>
+
+    <!-- ===== Account & Usage ===== -->
+    <Panel IsVisible="{Binding IsUsageOpen}">
+      <Border Classes="backdrop" PointerPressed="OnBackdropPressed" />
+      <Border Name="UsageDialog" Classes="dialog">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="18,14,12,6">
+            <TextBlock Text="Account &amp; Usage" FontSize="16" FontWeight="SemiBold" />
+            <Button Grid.Column="1" Classes="tbi" Command="{Binding CloseDialogsCommand}" ToolTip.Tip="Close"><v:VsIcon Kind="Close" /></Button>
+          </Grid>
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="18,0,18,16" Spacing="6">
+              <TextBlock Text="Loading..." Classes="muted" IsVisible="{Binding IsUsageLoading}" />
+              <TextBlock Text="{Binding UsageError}" Classes="error" TextWrapping="Wrap" IsVisible="{Binding UsageError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <StackPanel Spacing="6" IsVisible="{Binding Usage, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <TextBlock Text="ACCOUNT" Classes="section" />
+                <ItemsControl ItemsSource="{Binding Usage.Account}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:UsageRow">
+                      <Grid ColumnDefinitions="Auto,*" Margin="0,6">
+                        <TextBlock Text="{Binding Label}" Classes="muted" />
+                        <TextBlock Grid.Column="1" Text="{Binding Value}" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="16,0,0,0" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="USAGE" Classes="section" Margin="0,10,0,0" IsVisible="{Binding Usage.HasLimits}" />
+                <ItemsControl ItemsSource="{Binding Usage.Limits}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:UsageLimit">
+                      <StackPanel Margin="0,6" Spacing="4">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <TextBlock Text="{Binding Label}" />
+                          <TextBlock Grid.Column="1" Text="{Binding PercentText}" />
+                        </Grid>
+                        <ProgressBar Classes="usage" Classes.high="{Binding IsHigh}" Value="{Binding Percent}" Maximum="100" MinHeight="6" Height="6" />
+                        <TextBlock Text="{Binding ResetText}" Classes="muted" FontSize="11" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Classes="link" Content="Manage usage on claude.ai" Command="{Binding OpenUrlCommand}" CommandParameter="https://claude.ai/settings/usage" />
+                <StackPanel Spacing="8" IsVisible="{Binding Usage.HasBehaviors}" Margin="0,8,0,0">
+                  <TextBlock Text="WHAT'S CONTRIBUTING TO YOUR LIMITS USAGE?" Classes="section" />
+                  <Border Background="#262628" CornerRadius="5" Padding="2" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal">
+                      <Button Classes="segment" Classes.on="{Binding !ShowUsageWeek}" Content="Day" Command="{Binding ShowUsagePeriodCommand}" CommandParameter="day" />
+                      <Button Classes="segment" Classes.on="{Binding ShowUsageWeek}" Content="Week" Command="{Binding ShowUsagePeriodCommand}" CommandParameter="week" />
+                    </StackPanel>
+                  </Border>
+                  <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                             Text="Approximate, from local sessions on this machine; other devices and claude.ai are not included." />
+                  <TextBlock Text="{Binding UsagePeriodShown.Summary}" Classes="muted" FontSize="11" />
+                  <ItemsControl ItemsSource="{Binding UsagePeriodShown.Insights}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:UsageInsight">
+                        <StackPanel Margin="0,4" Spacing="2">
+                          <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding Hint}" IsVisible="{Binding HasHint}" Classes="muted" FontSize="12" TextWrapping="Wrap" Margin="12,0,0,0" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <StackPanel IsVisible="{Binding UsagePeriodShown.HasSkills}" Spacing="3">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="Skills" FontWeight="SemiBold" FontSize="12" />
+                      <TextBlock Grid.Column="1" Text="% of usage" Classes="muted" FontSize="12" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding UsagePeriodShown.Skills}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:UsageShare">
+                          <Grid ColumnDefinitions="*,Auto" Margin="12,2,0,2">
+                            <TextBlock Text="{Binding Name}" FontSize="12" />
+                            <TextBlock Grid.Column="1" Text="{Binding Percent}" Classes="muted" FontSize="12" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Panel>
+
+    <!-- ===== MCP servers ===== -->
+    <Panel IsVisible="{Binding IsMcpOpen}">
+      <Border Classes="backdrop" PointerPressed="OnBackdropPressed" />
+      <Border Name="McpDialog" Classes="dialog">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="18,14,12,8">
+            <TextBlock Text="MCP servers" FontSize="16" FontWeight="SemiBold" />
+            <Button Grid.Column="1" Classes="tbi" Command="{Binding CloseDialogsCommand}" ToolTip.Tip="Close"><v:VsIcon Kind="Close" /></Button>
+          </Grid>
+          <Button DockPanel.Dock="Bottom" Classes="link" Content="Learn more about MCP" Margin="18,8,18,14"
+                  Command="{Binding OpenUrlCommand}" CommandParameter="https://code.claude.com/docs/en/mcp" />
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="18,0,18,8" Spacing="8">
+              <TextBox Classes="feedback" Text="{Binding McpFilter}" PlaceholderText="Filter servers..." />
+              <TextBlock Text="{Binding McpMessage}" Classes="muted" FontSize="12" TextWrapping="Wrap"
+                         IsVisible="{Binding McpMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <ItemsControl ItemsSource="{Binding McpGroups}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:McpGroup">
+                    <StackPanel Spacing="6" Margin="0,6,0,4">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                      <ItemsControl ItemsSource="{Binding Servers}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:McpServerItem">
+                            <Border Classes="serverRow" Margin="0,0,0,6">
+                              <Grid ColumnDefinitions="*,Auto,Auto">
+                                <StackPanel VerticalAlignment="Center">
+                                  <TextBlock Text="{Binding Name}" Classes="mono" FontSize="13" />
+                                  <TextBlock Text="{Binding Transport}" Classes="muted" FontSize="10" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Classes="pill" Content="{Binding ToggleLabel}" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center"
+                                        Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).ToggleMcpCommand}" CommandParameter="{Binding}" />
+                                <Panel Grid.Column="2" VerticalAlignment="Center">
+                                  <Border Classes="badge ok" IsVisible="{Binding IsConnected}"><TextBlock Text="Connected" /></Border>
+                                  <Border Classes="badge pending" IsVisible="{Binding IsPending}"><TextBlock Text="Connecting" /></Border>
+                                  <Border Classes="badge off" IsVisible="{Binding IsDisabled}"><TextBlock Text="Disabled" /></Border>
+                                  <Button Classes="badge warn" IsVisible="{Binding NeedsAuth}" ToolTip.Tip="Sign in to this server in your browser"
+                                          Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).AuthenticateMcpCommand}" CommandParameter="{Binding}">
+                                    <TextBlock Text="Needs Auth" />
+                                  </Button>
+                                  <Button Classes="badge fail" IsVisible="{Binding IsFailed}" ToolTip.Tip="Reconnect"
+                                          Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).ReconnectMcpCommand}" CommandParameter="{Binding}">
+                                    <TextBlock Text="Failed - retry" />
+                                  </Button>
+                                </Panel>
+                              </Grid>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Classes="addServer" Content="Add server" Command="{Binding StartAddMcpServerCommand}" IsVisible="{Binding !IsAddingMcpServer}" />
+              <Border Classes="serverRow" IsVisible="{Binding IsAddingMcpServer}" Padding="12">
+                <StackPanel Spacing="8" DataContext="{Binding McpDraft}" x:DataType="vm:McpServerDraft">
+                  <TextBlock Text="Add an MCP server" FontWeight="SemiBold" />
+                  <TextBox Classes="feedback" Text="{Binding Name}" PlaceholderText="Name (e.g. github)" />
+                  <ComboBox ItemsSource="{Binding Transports}" SelectedItem="{Binding Transport}" HorizontalAlignment="Stretch" />
+                  <TextBox Classes="feedback" Text="{Binding Target}" PlaceholderText="{Binding TargetHint}" />
+                  <ComboBox ItemsSource="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).McpScopes}" SelectedItem="{Binding Scope}" HorizontalAlignment="Stretch" />
+                  <ItemsControl ItemsSource="{Binding Errors}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <TextBlock Text="{Binding}" Classes="error" FontSize="12" TextWrapping="Wrap" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <Button Classes="choice" Content="Cancel" Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).CancelAddMcpServerCommand}" />
+                    <Button Classes="choice first" Content="Add" Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).AddMcpServerCommand}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Panel>
+  </Panel>
 </UserControl>
