@@ -632,7 +632,7 @@
                   <TreeView.ItemTemplate>
                     <TreeDataTemplate x:DataType="ws:ExplorerNode" ItemsSource="{Binding Children}">
                       <StackPanel Orientation="Horizontal" Spacing="6" Height="20" Background="Transparent" ContextRequested="OnExplorerContextRequested">
-                        <ContentControl Content="{Binding IconKey, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
+                        <ContentControl Content="{Binding ThemeIcon, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
                         <TextBlock Text="{Binding GitBadge}" VerticalAlignment="Center" FontWeight="SemiBold"
@@ -645,7 +645,7 @@
                   <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="ws:ExplorerNode">
                       <StackPanel Orientation="Horizontal" Spacing="6">
-                        <ContentControl Content="{Binding IconKey, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
+                        <ContentControl Content="{Binding ThemeIcon, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
                       </StackPanel>

@@ -1,0 +1,1 @@
+Material Icon Theme 5.39.0 (MIT, Material Extensions): https://github.com/material-extensions/vscode-material-icon-theme

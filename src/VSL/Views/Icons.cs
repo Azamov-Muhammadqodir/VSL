@@ -13,8 +13,13 @@ public sealed class IconConverter : IValueConverter
 {
     public static readonly IconConverter Instance = new();
 
-    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is string key ? new VsIcon { Kind = key } : null;
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
+    {
+        string key when key.StartsWith("material:", StringComparison.Ordinal) && MaterialIcons.Image(key[9..]) is { } image =>
+            new Image { Source = image, Width = 16, Height = 16 },
+        string key => new VsIcon { Kind = key.StartsWith("material:", StringComparison.Ordinal) ? "file" : key },
+        _ => null,
+    };
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }

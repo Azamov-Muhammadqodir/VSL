@@ -43,7 +43,7 @@ without releasing. `deploy/linux/package.sh` builds the same packages locally.
 |---|---|
 | Start window | Shown at launch like VS: Open recent (search, Today / This week groups, pin, remove), Clone a repository, Open a project or solution, Open a local folder, Create a new project, Continue without code; also File > Start Window, File > New > Project (Ctrl+Shift+N), File > Clone Repository |
 | New project | Every project template installed in the .NET SDK (`dotnet new`), with its own icon, search and language / platform / project type filters, recent templates; Configure (name, location, solution, same directory) and Additional information (framework, authentication, HTTPS and the options VS shows for that template); creates the solution and opens it |
-| Solutions | `.sln` / `.slnx`, or a project file on its own (as VS opens a .csproj), solution folders, Solution Explorer with VS file nesting (`X.razor.cs`, `X.razor.css`, `appsettings.*.json`, `*.Designer.cs`), Dependencies (frameworks, packages, projects), search (Ctrl+;) |
+| Solutions | `.sln` / `.slnx`, or a project file on its own (as VS opens a .csproj), solution folders, Solution Explorer with Material Icon Theme file and folder icons (by file name, extension and folder name, as in VS Code), with VS file nesting (`X.razor.cs`, `X.razor.css`, `appsettings.*.json`, `*.Designer.cs`), Dependencies (frameworks, packages, projects), search (Ctrl+;) |
 | Editor | Syntax highlighting (VS Dark), C# and Razor IntelliSense, parameter info, Quick Info hover, squiggles, Quick Actions and Refactorings (Ctrl+. lightbulb: add using, generate type/method, refactorings), Go To Definition / Implementation, Find All References, Rename, Format Document, comment/uncomment, find (Ctrl+F) and Find in Files, outlining (collapse / expand methods, types, #regions, doc comments and blocks from Roslyn's folding ranges, with a scan for JSON, XML/csproj and other files; +/- margin, Ctrl+M Ctrl+M / Ctrl+M Ctrl+L / Ctrl+M Ctrl+O / Ctrl+M Ctrl+X, Edit > Outlining), VS-style editor context menu, zoom (Ctrl+wheel, Ctrl+Shift+. / Ctrl+Shift+, , Ctrl+0, 20–400 % picker) with the document health indicator |
 | Build | Build / Rebuild / Clean via `dotnet`, Output window, Error List (Build + IntelliSense) |
 | Run | Startup project and `launchSettings.json` profiles, Start Without Debugging (Ctrl+F5), Stop; opens the browser for `launchBrowser` profiles |
@@ -106,3 +106,5 @@ VSL is released under the [MIT License](LICENSE).
 
 Cascadia Mono font (SIL OFL 1.1, `src/VSL/Assets/Fonts`), roslyn-language-server and netcoredbg (MIT, downloaded at runtime),
 Avalonia, AvaloniaEdit, TextMateSharp, Exclr8.Terminal and Porta.Pty (MIT).
+Solution Explorer's file and folder icons are the [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme)
+(MIT, Copyright (c) 2025 Material Extensions; `src/VSL/Assets/MaterialIcons`, refreshed with `scripts/update-material-icons.sh`).

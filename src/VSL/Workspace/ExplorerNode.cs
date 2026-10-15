@@ -90,11 +90,30 @@ public partial class ExplorerNode : ObservableObject
         NodeKind.Folder when Name == "Properties" => "PropertiesFolder",
         NodeKind.Folder when Name == "wwwroot" => "WebFolder",
         NodeKind.Folder or NodeKind.SolutionFolder or NodeKind.DependencyGroup => IsExpanded ? "FolderOpen" : "Folder",
+        NodeKind.Project => System.IO.Path.GetExtension(Path ?? "").ToLowerInvariant() switch
+        {
+            ".fsproj" => "FsProject",
+            ".vbproj" => "VbProject",
+            _ => "Project",
+        },
         _ => Kind.ToString(),
     };
 
+    /// <summary>
+    /// The icon Solution Explorer shows: Material Icon Theme icons for files, folders and the solution
+    /// ("material:name"); projects keep VS's language project icons so they stand apart from the solution and from
+    /// source files; dependencies, packages and frameworks keep the VS icons too.
+    /// </summary>
+    public string ThemeIcon => Kind switch
+    {
+        NodeKind.File => "material:" + Views.MaterialIcons.ForFile(Name),
+        NodeKind.Folder or NodeKind.SolutionFolder => "material:" + Views.MaterialIcons.ForFolder(Name, IsExpanded),
+        NodeKind.Solution when Path is not null => "material:" + Views.MaterialIcons.ForFile(Path),
+        _ => IconKey,
+    };
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IconKey))]
+    [NotifyPropertyChangedFor(nameof(IconKey), nameof(ThemeIcon))]
     public partial bool IsExpanded { get; set; }
 
     partial void OnIsExpandedChanged(bool value)

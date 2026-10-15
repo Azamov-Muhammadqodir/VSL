@@ -953,6 +953,37 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Solution_explorer_uses_material_file_and_folder_icons()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var vm = NewViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+        var root = vm.ExplorerRoots[0];
+        Assert.Equal("material:visualstudio", root.ThemeIcon);
+        var web = root.Children.Single(n => n.Name == "Web");
+        // A project is not the solution: it keeps the C# project icon.
+        Assert.Equal("Project", web.ThemeIcon);
+        web.IsExpanded = true;
+        var properties = web.Children.Single(n => n.Name == "Properties");
+        Assert.Equal("material:folder-config", properties.ThemeIcon);
+        properties.IsExpanded = true;
+        Assert.Equal("material:folder-config-open", properties.ThemeIcon);
+        Assert.Equal("material:csharp", web.Children.Single(n => n.Name == "Program.cs").ThemeIcon);
+        var components = root.Children.Single(n => n.Name == "Components");
+        components.IsExpanded = true;
+        Assert.Equal("material:razor", components.Children.First(n => n.Name.EndsWith(".razor", StringComparison.Ordinal)).ThemeIcon);
+        // Dependencies keep the VS icons.
+        Assert.Equal("Dependencies", web.Children.Single(n => n.Kind == VSL.Workspace.NodeKind.Dependencies).ThemeIcon);
+        vm.ShowToolWindow(ToolWindows.SolutionExplorer);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        Assert.Contains(window.GetVisualDescendants().OfType<Avalonia.Controls.Image>(), i => i.Source is Avalonia.Media.DrawingImage && i.IsEffectivelyVisible);
+        Snapshot(window, "explorer-material-icons");
+        Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
     public async Task Diff_sides_scroll_together()
     {
         // A long file where a block is re-indented, like a real change.
