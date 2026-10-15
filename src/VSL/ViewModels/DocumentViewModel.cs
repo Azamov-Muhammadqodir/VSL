@@ -3,7 +3,29 @@ using VSL.Editor;
 
 namespace VSL.ViewModels;
 
-public partial class DocumentViewModel : ObservableObject, IDisposable
+/// <summary>A tab in the document well: an editor, a diff view, the NuGet manager...</summary>
+public abstract partial class DocumentTab : ObservableObject, IDisposable
+{
+    /// <summary>Identity of the tab (a file path, or a virtual key like "nuget:Server").</summary>
+    public abstract string Key { get; }
+
+    public abstract string Title { get; }
+
+    public virtual string ToolTip => Key;
+
+    public virtual bool IsDirty => false;
+
+    /// <summary>Pinned tabs stay at the left and survive "Close All But Pinned".</summary>
+    [ObservableProperty]
+    public partial bool IsPinned { get; set; }
+
+    public virtual void Dispose()
+    {
+    }
+}
+
+/// <summary>A source file open in the editor.</summary>
+public partial class DocumentViewModel : DocumentTab
 {
     public DocumentViewModel(EditorHost host)
     {
@@ -44,20 +66,22 @@ public partial class DocumentViewModel : ObservableObject, IDisposable
         : Host.Diagnostics.Any(d => d.Severity == Lsp.DiagnosticSeverity.Warning) ? "Warning"
         : "Ok";
 
-    /// <summary>Pinned tabs stay at the left and survive "Close All But Pinned".</summary>
-    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
-    public partial bool IsPinned { get; set; }
+
 
     public EditorHost Host { get; }
 
     public string FilePath => Host.FilePath;
 
+    public override string Key => FilePath;
+
     public string FileName => Path.GetFileName(FilePath);
 
     /// <summary>VS marks unsaved documents with a trailing asterisk.</summary>
-    public string Title => IsDirty ? FileName + "*" : FileName;
+    public override string Title => IsDirty ? FileName + "*" : FileName;
 
-    public bool IsDirty => Host.IsDirty;
+    public override string ToolTip => FilePath;
 
-    public void Dispose() => Host.Dispose();
+    public override bool IsDirty => Host.IsDirty;
+
+    public override void Dispose() => Host.Dispose();
 }

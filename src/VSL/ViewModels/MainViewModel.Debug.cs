@@ -261,7 +261,7 @@ public partial class MainViewModel
     {
         foreach (var file in Breakpoints.All.Keys.ToList())
             Breakpoints.Replace(file, []);
-        foreach (var doc in Documents)
+        foreach (var doc in Editors)
             doc.Host.AttachBreakpoints(Breakpoints);
     }
 
@@ -276,7 +276,7 @@ public partial class MainViewModel
         SelectedFrame = null;
         CallStack.Clear();
         Locals.Clear();
-        foreach (var doc in Documents)
+        foreach (var doc in Editors)
         {
             doc.Host.SetExecutionLine(null);
             doc.Host.DataTipProvider = null;
@@ -306,7 +306,7 @@ public partial class MainViewModel
         CallStack.Clear();
         foreach (var f in frames)
             CallStack.Add(new StackFrameItem(f.Id, f.Name, f.SourcePath, f.Line, f.Column));
-        foreach (var doc in Documents)
+        foreach (var doc in Editors)
             doc.Host.DataTipProvider = EvaluateDataTipAsync;
         SelectedFrame = CallStack.FirstOrDefault(f => f.HasSource) ?? CallStack.FirstOrDefault();
         if (BottomTabIndex < LocalsTab)
@@ -318,7 +318,7 @@ public partial class MainViewModel
     {
         if (value is null || Mode != DebugMode.Break)
             return;
-        foreach (var doc in Documents)
+        foreach (var doc in Editors)
             doc.Host.SetExecutionLine(null);
         if (value.HasSource && OpenDocument(value.SourcePath!) is { } doc2)
             Dispatcher.UIThread.Post(() => doc2.Host.SetExecutionLine(value.Line), DispatcherPriority.Loaded);
@@ -425,7 +425,7 @@ public partial class MainViewModel
         if (_session != session)
             return;
         _session = null;
-        foreach (var doc in Documents)
+        foreach (var doc in Editors)
         {
             doc.Host.SetExecutionLine(null);
             doc.Host.DataTipProvider = null;

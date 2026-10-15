@@ -161,6 +161,7 @@
       </MenuItem>
       <MenuItem Header="_Git" IsEnabled="{Binding HasGit}">
         <MenuItem Header="_Commit or Stash..." Command="{Binding ShowGitChangesCommand}" />
+        <MenuItem Header="Compare with _Unmodified" Command="{Binding CompareActiveWithUnmodifiedCommand}" />
         <Separator />
         <MenuItem Header="_Fetch" Command="{Binding FetchCommand}" />
         <MenuItem Header="_Pull" Command="{Binding PullCommand}" />
@@ -254,8 +255,8 @@
                       Padding="0"
                       IsVisible="{Binding !!Documents.Count}">
             <TabControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:DocumentViewModel">
-                <StackPanel Orientation="Horizontal" Spacing="2" Background="Transparent" ToolTip.Tip="{Binding FilePath}"
+              <DataTemplate x:DataType="vm:DocumentTab">
+                <StackPanel Orientation="Horizontal" Spacing="2" Background="Transparent" ToolTip.Tip="{Binding ToolTip}"
                             ContextRequested="OnDocumentTabContextRequested" PointerReleased="OnDocumentTabPointerReleased">
                   <TextBlock Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,4,0" />
                   <Button Classes="tabbtn" IsVisible="{Binding IsPinned}" ToolTip.Tip="Unpin Tab"
@@ -275,8 +276,8 @@
                 </StackPanel>
               </DataTemplate>
             </TabControl.ItemTemplate>
-            <TabControl.ContentTemplate>
-              <DataTemplate x:DataType="vm:DocumentViewModel">
+            <TabControl.DataTemplates>
+              <DataTemplate DataType="vm:DocumentViewModel" x:DataType="vm:DocumentViewModel">
                 <Border BorderBrush="#007ACC" BorderThickness="0,2,0,0">
                   <DockPanel>
                     <!-- VS's editor footer: zoom drop-down and the document health indicator -->
@@ -296,7 +297,12 @@
                   </DockPanel>
                 </Border>
               </DataTemplate>
-            </TabControl.ContentTemplate>
+              <DataTemplate DataType="vm:DiffViewModel" x:DataType="vm:DiffViewModel">
+                <Border BorderBrush="#007ACC" BorderThickness="0,2,0,0">
+                  <ContentControl Content="{Binding View}" />
+                </Border>
+              </DataTemplate>
+            </TabControl.DataTemplates>
           </TabControl>
 
           <!-- Start window (no solution open) -->

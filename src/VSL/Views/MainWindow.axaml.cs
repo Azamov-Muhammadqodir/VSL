@@ -52,7 +52,7 @@ public partial class MainWindow : Window, IDialogService
 
     MainViewModel? Vm => DataContext as MainViewModel;
 
-    Editor.EditorHost? ActiveHost => Vm?.ActiveDocument?.Host;
+    Editor.EditorHost? ActiveHost => Vm?.ActiveEditor?.Host;
 
     protected override async void OnClosing(WindowClosingEventArgs e)
     {
@@ -229,7 +229,7 @@ public partial class MainWindow : Window, IDialogService
     /// <summary>Right-click on a document tab: VS's tab context menu.</summary>
     void OnDocumentTabContextRequested(object? sender, ContextRequestedEventArgs e)
     {
-        if (sender is not Control { DataContext: DocumentViewModel doc } anchor || Vm is not { } vm)
+        if (sender is not Control { DataContext: DocumentTab doc } anchor || Vm is not { } vm)
             return;
         e.Handled = true;
         MenuItem Item(string header, Action action, string? gesture = null, bool enabled = true)
@@ -245,7 +245,7 @@ public partial class MainWindow : Window, IDialogService
         {
             ItemsSource = new object[]
             {
-                Item($"Save {doc.FileName}", () => vm.SaveDocument(doc), "Ctrl+S", doc.IsDirty),
+                Item($"Save {doc.Title.TrimEnd('*')}", () => vm.SaveDocument((DocumentViewModel)doc), "Ctrl+S", doc is DocumentViewModel { IsDirty: true }),
                 new Separator(),
                 Item("Close", () => vm.CloseDocumentCommand.Execute(doc), "Ctrl+F4"),
                 Item("Close All But This", () => vm.CloseAllButThisCommand.Execute(doc), enabled: vm.Documents.Count > 1),
@@ -256,14 +256,14 @@ public partial class MainWindow : Window, IDialogService
                 new Separator(),
                 Item(doc.IsPinned ? "Unpin Tab" : "Pin Tab", () => vm.TogglePinCommand.Execute(doc)),
                 new Separator(),
-                Item("Copy Full Path", () => _ = Clipboard?.SetTextAsync(doc.FilePath)),
-                Item("Open Containing Folder", () => OpenFolder(Path.GetDirectoryName(doc.FilePath)!)),
+                Item("Copy Full Path", () => _ = Clipboard?.SetTextAsync((doc as DocumentViewModel)?.FilePath ?? doc.Key), enabled: doc is DocumentViewModel),
+                Item("Open Containing Folder", () => OpenFolder(Path.GetDirectoryName(((DocumentViewModel)doc).FilePath)!), enabled: doc is DocumentViewModel),
                 Item("Select in Solution Explorer", () =>
                 {
                     vm.ActiveDocument = doc;
                     vm.RightTabIndex = 0;
                     OnSyncWithActiveDocument(this, new RoutedEventArgs());
-                }, enabled: vm.Solution is not null),
+                }, enabled: vm.Solution is not null && doc is DocumentViewModel),
             },
         };
         menu.Open(anchor);
@@ -272,7 +272,7 @@ public partial class MainWindow : Window, IDialogService
     /// <summary>Middle-click closes a tab, like VS.</summary>
     void OnDocumentTabPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (e.InitialPressMouseButton == MouseButton.Middle && sender is Control { DataContext: DocumentViewModel doc })
+        if (e.InitialPressMouseButton == MouseButton.Middle && sender is Control { DataContext: DocumentTab doc })
         {
             Vm?.CloseDocumentCommand.Execute(doc);
             e.Handled = true;

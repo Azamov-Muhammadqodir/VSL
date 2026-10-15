@@ -128,6 +128,11 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
 
     public event Action? DirtyChanged;
     public event Action? Saved;
+
+    /// <summary>Git > Compare with Unmodified for this document.</summary>
+    public event Action? CompareRequested;
+
+    public bool HasGitBaseline => _gitBaseline is not null;
     public event Action? CaretMoved;
     public event Action? DiagnosticsChanged;
     public event Action<IReadOnlyList<LspLocation>>? DefinitionsFound;
@@ -816,7 +821,8 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
             item.Click += (_, _) => action();
             return item;
         }
-        return new ContextMenu
+        var compare = Item("Compare with Unmodified", "", () => CompareRequested?.Invoke());
+        var menu = new ContextMenu
         {
             ItemsSource = new object[]
             {
@@ -830,11 +836,15 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
                 Item("Format Document", "Ctrl+K, Ctrl+D", () => _ = FormatDocumentAsync()),
                 Item("Toggle Breakpoint", "F9", () => ToggleBreakpoint(Editor.TextArea.Caret.Line)),
                 new Separator(),
+                compare,
+                new Separator(),
                 Item("Cut", "Ctrl+X", Editor.Cut),
                 Item("Copy", "Ctrl+C", Editor.Copy),
                 Item("Paste", "Ctrl+V", Editor.Paste),
             },
         };
+        menu.Opening += (_, _) => compare.IsEnabled = HasGitBaseline;
+        return menu;
     }
 
     public async Task GoToAsync(int offset, bool implementation)

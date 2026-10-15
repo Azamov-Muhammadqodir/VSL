@@ -159,7 +159,7 @@ public partial class MainViewModel
 
     async Task RefreshAllGitBaselinesAsync()
     {
-        foreach (var doc in Documents.ToList())
+        foreach (var doc in Editors.ToList())
             await RefreshGitBaselineAsync(doc);
     }
 
@@ -279,20 +279,48 @@ public partial class MainViewModel
     {
         if (_git is not { } git || item is null)
             return;
-        var diff = await git.DiffAsync(item.Change);
-        var dir = Path.Combine(Path.GetTempPath(), "VSL", "diffs");
-        Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, item.FileName + (item.Change.Staged ? ".staged" : "") + ".diff");
-        await File.WriteAllTextAsync(path, diff.Length > 0 ? diff : $"No textual changes in {item.Change.RelativePath}.\n");
-        if (Documents.FirstOrDefault(d => d.FilePath == path) is { } stale)
+        var change = item.Change;
+        string left, right, leftLabel, rightLabel, key;
+        if (change.Staged)
         {
-            // Reopen so the view shows the fresh diff instead of the previous buffer.
+            // Staged change: what the commit would record (index) against HEAD.
+            left = await git.ShowHeadAsync(change.Path) ?? "";
+            right = await git.ShowIndexAsync(change.Path) ?? "";
+            (leftLabel, rightLabel, key) = ($"{item.FileName};HEAD", $"{item.FileName};Staged", "staged");
+        }
+        else
+        {
+            // Working-tree change: the file on disk against the index (HEAD when nothing is staged).
+            left = change.Kind == GitChangeKind.Untracked ? "" : await git.ShowIndexAsync(change.Path) ?? await git.ShowHeadAsync(change.Path) ?? "";
+            right = change.Kind == GitChangeKind.Deleted || !File.Exists(change.Path) ? "" : await File.ReadAllTextAsync(change.Path);
+            (leftLabel, rightLabel, key) = ($"{item.FileName};Index", $"{item.FileName};Working Tree", "working");
+        }
+        ShowDiff(new DiffViewModel(change.Path, left, right, leftLabel, rightLabel, key));
+    }
+
+    /// <summary>Compare with Unmodified: the editor's current text against HEAD.</summary>
+    public async Task CompareWithUnmodifiedAsync(DocumentViewModel doc)
+    {
+        if (_git is not { } git)
+            return;
+        var head = await git.ShowHeadAsync(doc.FilePath) ?? "";
+        ShowDiff(new DiffViewModel(doc.FilePath, head, doc.Host.Document.Text, $"{doc.FileName};HEAD", $"{doc.FileName};Current", "head"));
+    }
+
+    void ShowDiff(DiffViewModel diff)
+    {
+        // Reopen so the tab shows the latest content instead of a stale comparison.
+        if (Documents.FirstOrDefault(d => d.Key == diff.Key) is { } stale)
+        {
             Documents.Remove(stale);
             stale.Dispose();
         }
-        if (OpenDocument(path) is { } doc)
-            doc.Host.Editor.IsReadOnly = true;
+        Documents.Add(diff);
+        ActiveDocument = diff;
     }
+
+    [RelayCommand]
+    Task CompareActiveWithUnmodified() => ActiveEditor is { } doc ? CompareWithUnmodifiedAsync(doc) : Task.CompletedTask;
 
     [RelayCommand]
     void ShowGitChanges() => RightTabIndex = GitChangesTab;

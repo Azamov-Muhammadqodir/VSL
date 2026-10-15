@@ -15,7 +15,15 @@ public static class LineDiff
 {
     const int MaxMatrix = 4_000_000;
 
-    public static IReadOnlyList<LineChange> Compute(IReadOnlyList<string> baseline, IReadOnlyList<string> current)
+    /// <summary>A changed run: <paramref name="BaseCount"/> lines of the baseline starting at <paramref name="BaseStart"/>
+    /// were replaced by <paramref name="CurrentCount"/> lines of the current text starting at <paramref name="CurrentStart"/> (0-based).</summary>
+    public readonly record struct Hunk(int BaseStart, int BaseCount, int CurrentStart, int CurrentCount);
+
+    public static IReadOnlyList<LineChange> Compute(IReadOnlyList<string> baseline, IReadOnlyList<string> current) =>
+        Hunks(baseline, current).Select(h => Region(h.CurrentStart, h.BaseCount, h.CurrentCount)).ToList();
+
+    /// <summary>LCS line diff, as runs of replaced lines between unchanged ones.</summary>
+    public static IReadOnlyList<Hunk> Hunks(IReadOnlyList<string> baseline, IReadOnlyList<string> current)
     {
         // Trim the common prefix and suffix; typical edits leave only a small middle to compare.
         var prefix = 0;
@@ -31,20 +39,19 @@ public static class LineDiff
         if (a.Length == 0 && b.Length == 0)
             return [];
         if ((long)a.Length * b.Length > MaxMatrix)
-            return [Region(prefix, a.Length, b.Length)];
+            return [new Hunk(prefix, a.Length, prefix, b.Length)];
 
-        // LCS table, then walk it to produce runs of deletions/insertions between matches.
         var lcs = new int[a.Length + 1, b.Length + 1];
         for (var i = a.Length - 1; i >= 0; i--)
             for (var j = b.Length - 1; j >= 0; j--)
                 lcs[i, j] = a[i] == b[j] ? lcs[i + 1, j + 1] + 1 : Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
 
-        var changes = new List<LineChange>();
-        int x = 0, y = 0, removed = 0, added = 0, runStart = 0;
+        var hunks = new List<Hunk>();
+        int x = 0, y = 0, removed = 0, added = 0, startX = 0, startY = 0;
         void Flush()
         {
             if (removed > 0 || added > 0)
-                changes.Add(Region(prefix + runStart, removed, added));
+                hunks.Add(new Hunk(prefix + startX, removed, prefix + startY, added));
             removed = added = 0;
         }
         while (x < a.Length || y < b.Length)
@@ -54,25 +61,26 @@ public static class LineDiff
                 Flush();
                 x++;
                 y++;
-                runStart = y;
+                continue;
             }
-            else if (y < b.Length && (x == a.Length || lcs[x, y + 1] >= lcs[x + 1, y]))
+            if (removed == 0 && added == 0)
             {
-                if (removed == 0 && added == 0)
-                    runStart = y;
+                startX = x;
+                startY = y;
+            }
+            if (y < b.Length && (x == a.Length || lcs[x, y + 1] >= lcs[x + 1, y]))
+            {
                 added++;
                 y++;
             }
             else
             {
-                if (removed == 0 && added == 0)
-                    runStart = y;
                 removed++;
                 x++;
             }
         }
         Flush();
-        return changes;
+        return hunks;
     }
 
     /// <summary>removed/added line counts at 0-based current line → margin region.</summary>

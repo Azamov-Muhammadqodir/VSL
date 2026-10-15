@@ -180,6 +180,14 @@ public sealed class GitRepository
         return result.Success ? result.Output : null;
     }
 
+    /// <summary>The file's staged content (the index), or null when it is not in the index.</summary>
+    public async Task<string?> ShowIndexAsync(string path)
+    {
+        var rel = Relative(path).Replace('\\', '/');
+        var result = await RunAsync(Root, ["show", $":{rel}"], optionalLocks: false);
+        return result.Success ? result.Output : null;
+    }
+
     /// <summary>Unified diff of the working file (or the staged version) against HEAD, for the diff view.</summary>
     public async Task<string> DiffAsync(GitFileChange change)
     {

@@ -244,9 +244,9 @@ public class UiTests
         await vm.RunFailedTestsCommand.ExecuteAsync(null);
         Assert.StartsWith("Test run finished: 1 test(s)", vm.TestSummary);
         vm.NavigateToTest(failing);
-        await WaitUntil(() => vm.ActiveDocument?.FileName == "GreetingTests.cs", TimeSpan.FromSeconds(5));
-        await WaitUntil(() => vm.ActiveDocument!.Host.CaretPosition.Line == 17, TimeSpan.FromSeconds(5));
-        Assert.Equal(17, vm.ActiveDocument!.Host.CaretPosition.Line);
+        await WaitUntil(() => vm.ActiveEditor?.FileName == "GreetingTests.cs", TimeSpan.FromSeconds(5));
+        await WaitUntil(() => vm.ActiveEditor!.Host.CaretPosition.Line == 17, TimeSpan.FromSeconds(5));
+        Assert.Equal(17, vm.ActiveEditor!.Host.CaretPosition.Line);
 
         Assert.True(await vm.CloseSolutionCoreAsync());
         Assert.Empty(vm.TestRoots);
@@ -320,13 +320,26 @@ public class UiTests
         vm.ActiveDocument = doc;
         vm.SaveCommand.Execute(null);
         await WaitUntil(() => vm.UnstagedChanges.Count == 1, TimeSpan.FromSeconds(10));
+        host.Document.Replace(host.Document.GetLineByNumber(3).Offset, 3, "VAR");
+        vm.SaveCommand.Execute(null);
         await vm.OpenDiffCommand.ExecuteAsync(vm.UnstagedChanges[0]);
-        Assert.Equal("Program.cs.diff", vm.ActiveDocument!.FileName);
-        Assert.Contains("+// top", vm.ActiveDocument.Host.Document.Text);
-        Assert.True(vm.ActiveDocument.Host.Editor.IsReadOnly);
+        var diff = Assert.IsType<DiffViewModel>(vm.ActiveDocument);
+        Assert.Equal("Program.cs (diff)", diff.Title);
+        // Line 1 was inserted (filler on the left) and line 3 changed; unchanged lines stay side by side.
+        Assert.Equal(new VSL.Editor.DiffRow(-1, 0, VSL.Editor.DiffRowKind.Added), diff.View.Rows[0]);
+        Assert.Equal(new VSL.Editor.DiffRow(0, 1, VSL.Editor.DiffRowKind.Equal), diff.View.Rows[1]);
+        Assert.Equal(new VSL.Editor.DiffRow(1, 2, VSL.Editor.DiffRowKind.Modified), diff.View.Rows[2]);
+        Assert.Equal(2, diff.View.ChangeCount);
+        Assert.Equal(diff.View.LeftText.Split('\n').Length, diff.View.RightText.Split('\n').Length);
+        diff.View.Go(1);
+        diff.View.Go(1);
+        Assert.Equal(1, diff.View.CurrentChange);
         vm.RightTabIndex = MainViewModel.GitChangesTab;
         await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
         Snapshot(window, "git-changes");
+        vm.ActiveDocument = doc;
+        await vm.CompareActiveWithUnmodifiedCommand.ExecuteAsync(null);
+        Assert.IsType<DiffViewModel>(vm.ActiveDocument);
 
         await vm.SwitchBranchCommand.ExecuteAsync("main");
         Assert.Equal("main", vm.GitBranch);
@@ -475,7 +488,7 @@ public class UiTests
         await vm.OpenSolutionAsync(sln);
         string[] files = ["Web/Program.cs", "Components/Home.razor", "Components/Greeting.razor", "Components/Greeting.razor.cs"];
         var docs = files.Select(f => vm.OpenDocument(SampleSolution.PathOf(sln, f))!).ToList();
-        string Names() => string.Join(",", vm.Documents.Select(d => d.FileName));
+        string Names() => string.Join(",", vm.Documents.Select(d => d.Title));
 
         // Pinning moves the tab to the left edge.
         vm.TogglePinCommand.Execute(docs[2]);
@@ -497,7 +510,7 @@ public class UiTests
         await vm.CloseAllButPinnedCommand.ExecuteAsync(null);
         Assert.Equal("Greeting.razor", Names());
         vm.OpenDocument(SampleSolution.PathOf(sln, "Web/Program.cs"));
-        await vm.CloseAllButThisCommand.ExecuteAsync(vm.Documents.Single(d => d.FileName == "Program.cs"));
+        await vm.CloseAllButThisCommand.ExecuteAsync(vm.Editors.Single(d => d.FileName == "Program.cs"));
         Assert.Equal("Program.cs", Names());
         await vm.CloseAllDocumentsCommand.ExecuteAsync(null);
         Assert.Empty(vm.Documents);

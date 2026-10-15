@@ -53,7 +53,12 @@ public partial class MainViewModel : ObservableObject
     public Settings Settings { get; } = Settings.Load();
 
     public ObservableCollection<ExplorerNode> ExplorerRoots { get; } = [];
-    public ObservableCollection<DocumentViewModel> Documents { get; } = [];
+    public ObservableCollection<DocumentTab> Documents { get; } = [];
+
+    /// <summary>The open editor tabs (the document well also holds diff and NuGet tabs).</summary>
+    public IEnumerable<DocumentViewModel> Editors => Documents.OfType<DocumentViewModel>();
+
+    public DocumentViewModel? ActiveEditor => ActiveDocument as DocumentViewModel;
     public ObservableCollection<ErrorItem> Errors { get; } = [];
     public ObservableCollection<FindResultItem> FindResults { get; } = [];
     public ObservableCollection<ProjectInfo> StartupProjects { get; } = [];
@@ -74,7 +79,8 @@ public partial class MainViewModel : ObservableObject
     public partial SolutionInfo? Solution { get; set; }
 
     [ObservableProperty]
-    public partial DocumentViewModel? ActiveDocument { get; set; }
+    [NotifyPropertyChangedFor(nameof(ActiveEditor))]
+    public partial DocumentTab? ActiveDocument { get; set; }
 
     [ObservableProperty]
     public partial OutputChannel SelectedOutput { get; set; }
@@ -156,13 +162,15 @@ public partial class MainViewModel : ObservableObject
     partial void OnShowWarningsChanged(bool value) => RefreshErrorList();
     partial void OnShowMessagesChanged(bool value) => RefreshErrorList();
 
-    partial void OnActiveDocumentChanged(DocumentViewModel? value)
+    partial void OnActiveDocumentChanged(DocumentTab? value)
     {
         UpdateCaretText();
+        if (value is not DocumentViewModel editor)
+            return;
         // Like VS, refresh squiggles for the document the user switches to.
-        value?.Host.ScheduleDiagnostics(150);
-        if (Solution is not null && value is not null)
-            Settings.For(Solution.FilePath).ActiveDocument = value.FilePath;
+        editor.Host.ScheduleDiagnostics(150);
+        if (Solution is not null)
+            Settings.For(Solution.FilePath).ActiveDocument = editor.FilePath;
     }
 
     partial void OnStartupProjectChanged(ProjectInfo? value)
@@ -240,7 +248,7 @@ public partial class MainViewModel : ObservableObject
 
         foreach (var file in state.OpenDocuments.Where(File.Exists).ToList())
             OpenDocument(file, activate: false);
-        ActiveDocument = Documents.FirstOrDefault(d => d.FilePath == state.ActiveDocument) ?? Documents.FirstOrDefault();
+        ActiveDocument = Editors.FirstOrDefault(d => d.FilePath == state.ActiveDocument) ?? Documents.FirstOrDefault();
         Settings.Save();
 
         SetStatus("Ready", StatusKind.Ready);
@@ -257,7 +265,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Closes everything; returns false if the user cancelled saving.</summary>
     public async Task<bool> CloseSolutionCoreAsync()
     {
-        foreach (var doc in Documents.Where(d => d.IsDirty).ToList())
+        foreach (var doc in Editors.Where(d => d.IsDirty).ToList())
         {
             if (Dialogs is null)
                 break;
@@ -270,8 +278,8 @@ public partial class MainViewModel : ObservableObject
         if (Solution is not null)
         {
             var state = Settings.For(Solution.FilePath);
-            state.OpenDocuments = Documents.Select(d => d.FilePath).ToList();
-            state.ActiveDocument = ActiveDocument?.FilePath;
+            state.OpenDocuments = Editors.Select(d => d.FilePath).ToList();
+            state.ActiveDocument = ActiveEditor?.FilePath;
             SaveDebugState(state);
             Settings.Save();
         }
@@ -280,7 +288,7 @@ public partial class MainViewModel : ObservableObject
         if (_session is { } debugSession)
             await debugSession.TerminateAsync();
         _buildCts?.Cancel();
-        foreach (var doc in Documents)
+        foreach (var doc in Editors)
             doc.Dispose();
         Documents.Clear();
         ActiveDocument = null;
@@ -305,8 +313,8 @@ public partial class MainViewModel : ObservableObject
         if (Solution is null)
             return;
         var state = Settings.For(Solution.FilePath);
-        state.OpenDocuments = Documents.Select(d => d.FilePath).ToList();
-        state.ActiveDocument = ActiveDocument?.FilePath;
+        state.OpenDocuments = Editors.Select(d => d.FilePath).ToList();
+        state.ActiveDocument = ActiveEditor?.FilePath;
         SaveDebugState(state);
         Settings.Save();
     }
@@ -346,13 +354,13 @@ public partial class MainViewModel : ObservableObject
                     await Task.Delay(i == 0 ? 100 : 5000);
                     if (_lsp != lsp)
                         return;
-                    foreach (var d in Documents)
+                    foreach (var d in Editors)
                         d.Host.ScheduleDiagnostics(0);
                 }
             });
             lsp.DiagnosticsRefreshRequested += () => Dispatcher.UIThread.Post(() =>
             {
-                foreach (var d in Documents)
+                foreach (var d in Editors)
                     d.Host.ScheduleDiagnostics(300);
             });
             lsp.RestoreRequested += projects => Dispatcher.UIThread.Post(() => _ = RestoreAsync(projects));
@@ -361,12 +369,12 @@ public partial class MainViewModel : ObservableObject
                 if (_lsp != lsp)
                     return;
                 _lsp = null;
-                foreach (var d in Documents)
+                foreach (var d in Editors)
                     d.Host.Detach();
                 ServerStatus = "IntelliSense: stopped (Tools > Restart Language Server)";
             });
             ServerStatus = "IntelliSense: loading projects...";
-            foreach (var d in Documents)
+            foreach (var d in Editors)
                 d.Host.Attach(lsp);
         }
         catch (Exception ex)
@@ -381,7 +389,7 @@ public partial class MainViewModel : ObservableObject
         if (_lsp is not { } lsp)
             return;
         _lsp = null;
-        foreach (var d in Documents)
+        foreach (var d in Editors)
             d.Host.Detach();
         await lsp.DisposeAsync();
         ServerStatus = "";
@@ -419,7 +427,7 @@ public partial class MainViewModel : ObservableObject
 
     public DocumentViewModel? OpenDocument(string path, bool activate = true)
     {
-        var existing = Documents.FirstOrDefault(d => d.FilePath == path);
+        var existing = Editors.FirstOrDefault(d => d.FilePath == path);
         if (existing is null)
         {
             if (!File.Exists(path) || IsBinary(path))
@@ -474,34 +482,35 @@ public partial class MainViewModel : ObservableObject
         host.WorkspaceEditRequested += ApplyWorkspaceEditAsync;
         host.WorkspaceOperationsRequested += ApplyWorkspaceOperationsAsync;
         host.Saved += () => _ = RefreshGitAsync();
+        host.CompareRequested += () => _ = CompareWithUnmodifiedAsync(doc);
         host.ZoomChanged += () => Settings.EditorZoom = host.Zoom;
         host.PromptRequested += initial => Dialogs?.PromptAsync("Rename", "New name:", initial) ?? Task.FromResult<string?>(null);
     }
 
     void UpdateCaretText()
     {
-        if (ActiveDocument is null)
+        if (ActiveEditor is null)
         {
             CaretText = "";
             return;
         }
-        var (line, col) = ActiveDocument.Host.CaretPosition;
+        var (line, col) = ActiveEditor.Host.CaretPosition;
         CaretText = $"Ln: {line}   Ch: {col}";
     }
 
     [RelayCommand]
-    async Task CloseDocument(DocumentViewModel? doc)
+    async Task CloseDocument(DocumentTab? doc)
     {
         doc ??= ActiveDocument;
         if (doc is null)
             return;
-        if (doc.IsDirty && Dialogs is not null)
+        if (doc is DocumentViewModel { IsDirty: true } editor && Dialogs is not null)
         {
-            var answer = await Dialogs.ConfirmSaveAsync(doc.FileName);
+            var answer = await Dialogs.ConfirmSaveAsync(editor.FileName);
             if (answer is null)
                 return;
             if (answer == true)
-                doc.Host.Save();
+                editor.Host.Save();
         }
         var index = Documents.IndexOf(doc);
         Documents.Remove(doc);
@@ -514,7 +523,7 @@ public partial class MainViewModel : ObservableObject
 
     // ---- Document tab commands (tab context menu) -----------------------------------------------------------
 
-    async Task CloseDocumentsAsync(IEnumerable<DocumentViewModel> docs)
+    async Task CloseDocumentsAsync(IEnumerable<DocumentTab> docs)
     {
         foreach (var doc in docs.ToList())
         {
@@ -526,7 +535,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    Task CloseAllButThis(DocumentViewModel? doc) => CloseDocumentsAsync(Documents.Where(d => d != doc));
+    Task CloseAllButThis(DocumentTab? doc) => CloseDocumentsAsync(Documents.Where(d => d != doc));
 
     [RelayCommand]
     Task CloseAllButPinned() => CloseDocumentsAsync(Documents.Where(d => !d.IsPinned));
@@ -535,16 +544,16 @@ public partial class MainViewModel : ObservableObject
     Task CloseAllDocuments() => CloseDocumentsAsync(Documents);
 
     [RelayCommand]
-    Task CloseTabsToLeft(DocumentViewModel? doc) =>
+    Task CloseTabsToLeft(DocumentTab? doc) =>
         doc is null ? Task.CompletedTask : CloseDocumentsAsync(Documents.Take(Documents.IndexOf(doc)).Where(d => !d.IsPinned));
 
     [RelayCommand]
-    Task CloseTabsToRight(DocumentViewModel? doc) =>
+    Task CloseTabsToRight(DocumentTab? doc) =>
         doc is null ? Task.CompletedTask : CloseDocumentsAsync(Documents.Skip(Documents.IndexOf(doc) + 1).Where(d => !d.IsPinned));
 
     /// <summary>Pinned tabs move to the left edge, in pin order, like VS.</summary>
     [RelayCommand]
-    void TogglePin(DocumentViewModel? doc)
+    void TogglePin(DocumentTab? doc)
     {
         if (doc is null)
             return;
@@ -571,7 +580,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     void Save()
     {
-        if (ActiveDocument is not { } doc)
+        if (ActiveEditor is not { } doc)
             return;
         try
         {
@@ -587,7 +596,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     void SaveAll()
     {
-        foreach (var doc in Documents.Where(d => d.IsDirty))
+        foreach (var doc in Editors.Where(d => d.IsDirty))
             doc.Host.Save();
         SetStatus("Item(s) Saved");
     }
@@ -626,7 +635,7 @@ public partial class MainViewModel : ObservableObject
             _ = RefreshGitAsync();
             _ = RefreshAllGitBaselinesAsync();
         }
-        foreach (var doc in Documents)
+        foreach (var doc in Editors)
             if (doc.Host.ReloadIfChangedOnDisk())
                 SetStatus($"{doc.FileName} was reloaded because it changed on disk.");
     }
@@ -660,7 +669,7 @@ public partial class MainViewModel : ObservableObject
                     }
                     break;
                 case "rename" when op.NewPath is not null:
-                    if (Documents.FirstOrDefault(d => d.FilePath == op.Path) is { } open)
+                    if (Editors.FirstOrDefault(d => d.FilePath == op.Path) is { } open)
                     {
                         if (open.IsDirty)
                             open.Host.Save();
@@ -671,7 +680,7 @@ public partial class MainViewModel : ObservableObject
                     filesChanged = true;
                     break;
                 case "delete":
-                    if (Documents.FirstOrDefault(d => d.FilePath == op.Path) is { } deleted)
+                    if (Editors.FirstOrDefault(d => d.FilePath == op.Path) is { } deleted)
                     {
                         Documents.Remove(deleted);
                         deleted.Dispose();
@@ -710,7 +719,7 @@ public partial class MainViewModel : ObservableObject
 
     void RefreshErrorList()
     {
-        var live = Documents
+        var live = Editors
             .SelectMany(d => d.Host.Diagnostics.Select(x => new ErrorItem(
                 x.Severity == DiagnosticSeverity.Hint ? DiagnosticSeverity.Information : x.Severity,
                 x.Code, x.Message, ProjectNameFor(d.FilePath), d.FilePath,
@@ -924,9 +933,9 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Selects the active document in Solution Explorer (VS: "Sync with Active Document").</summary>
     public ExplorerNode? SyncWithActiveDocument()
     {
-        if (ActiveDocument is null || ExplorerRoots.FirstOrDefault() is not { } root)
+        if (ActiveEditor is null || ExplorerRoots.FirstOrDefault() is not { } root)
             return null;
-        var node = root.FindByPath(ActiveDocument.FilePath);
+        var node = root.FindByPath(ActiveEditor.FilePath);
         if (node is null)
             return null;
         ExpandAncestors(root, node);
