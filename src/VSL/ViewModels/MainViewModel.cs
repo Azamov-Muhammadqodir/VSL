@@ -877,6 +877,7 @@ public partial class MainViewModel : ObservableObject
             return false;
         SaveAll();
         IsBuilding = true;
+        _usedBuildServers = true;
         SelectedOutput = BuildOutput;
         ShowToolWindow(ToolWindows.Output);
         BuildOutput.Clear();

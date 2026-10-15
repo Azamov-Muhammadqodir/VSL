@@ -1,140 +1,113 @@
 # VSL — Visual Studio for Linux
 
-A native Linux IDE for C#, ASP.NET Core and Blazor with a Visual Studio look and workflow.
-Built with Avalonia; IntelliSense comes from Microsoft's Roslyn language server (the same engine
-Visual Studio uses), including cohosted Razor support.
+A native Linux IDE for C#, ASP.NET Core and Blazor with Visual Studio's look and workflow. Built with Avalonia;
+IntelliSense comes from Microsoft's Roslyn language server (the engine Visual Studio uses), Razor included.
+
+![Editing C# with IntelliSense, Solution Explorer and the build output](docs/screenshots/editor.png)
 
 ## Install
 
-From a [release](https://github.com/nbkabdulakhadov/VSL/releases) (Linux x64, no .NET runtime needed to run VSL):
+Download the [latest release](https://github.com/nbkabdulakhadov/VSL/releases/latest) (Linux x64; VSL itself needs no .NET runtime):
 
 ```bash
-sudo apt install ./vsl_0.1.0_amd64.deb                 # Debian/Ubuntu: `vsl` command and menu entry
-chmod +x VSL-0.1.0-x86_64.AppImage && ./VSL-0.1.0-x86_64.AppImage   # any distribution
-tar xzf vsl-0.1.0-linux-x64.tar.gz && vsl-0.1.0/VSL     # unpack anywhere
+sudo apt install ./vsl_*_amd64.deb                          # Debian/Ubuntu: `vsl` command and menu entry
+chmod +x VSL-*-x86_64.AppImage && ./VSL-*-x86_64.AppImage   # any distribution (or unpack the .tar.gz)
 ```
 
-From source:
+From source, `./scripts/install.sh` publishes to `~/.local/share/VSL/app` and adds `vsl`. Then `vsl path/to/App.sln`
+(a `.slnx` or `.csproj` works too), or just `vsl` for the start window.
 
-```bash
-./scripts/install.sh          # publishes to ~/.local/share/VSL/app, adds `vsl` and an app-menu entry
-vsl path/to/App.sln           # opens it directly (a .slnx or .csproj works too)
-vsl                           # start window: recent, clone, open, create a new project
-```
+Working on solutions needs the .NET 10 SDK. VSL downloads `roslyn-language-server` and `netcoredbg` (both MIT) on first use.
 
-Building and running solutions needs the .NET 10 SDK (`~/.dotnet`, `DOTNET_ROOT` or on `PATH`). On first
-solution open VSL installs `roslyn-language-server` (nuget.org, MIT) into `~/.local/share/VSL/roslyn/`.
+## Features
 
-### Releasing
-
-CI (`.github/workflows/ci.yml`) builds and runs the tests on every push and pull request. A version tag
-publishes a release with the `.deb`, `.AppImage` and `.tar.gz` (`.github/workflows/release.yml`):
-
-```bash
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-Running the release workflow by hand (Actions > release > Run workflow) builds the packages as artifacts
-without releasing. `deploy/linux/package.sh` builds the same packages locally.
-
-## What works
-
-| Area | Details |
+| | |
 |---|---|
-| Start window | Shown at launch like VS: Open recent (search, Today / This week groups, pin, remove), Clone a repository, Open a project or solution, Open a local folder, Create a new project, Continue without code; also File > Start Window, File > New > Project (Ctrl+Shift+N), File > Clone Repository |
-| New project | Every project template installed in the .NET SDK (`dotnet new`), with its own icon, search and language / platform / project type filters, recent templates; Configure (name, location, solution, same directory) and Additional information (framework, authentication, HTTPS and the options VS shows for that template); creates the solution and opens it |
-| Solutions | `.sln` / `.slnx`, or a project file on its own (as VS opens a .csproj), solution folders, Solution Explorer with Material Icon Theme file and folder icons (by file name, extension and folder name, as in VS Code), with VS file nesting (`X.razor.cs`, `X.razor.css`, `appsettings.*.json`, `*.Designer.cs`), Dependencies (frameworks, packages, projects), search (Ctrl+;) |
-| Editor | Syntax highlighting (VS Dark), C# and Razor IntelliSense, parameter info, Quick Info hover, squiggles, Quick Actions and Refactorings (Ctrl+. lightbulb: add using, generate type/method, refactorings), Go To Definition / Implementation, Find All References, Rename, Format Document, comment/uncomment, find (Ctrl+F) and Find in Files, outlining (collapse / expand methods, types, #regions, doc comments and blocks from Roslyn's folding ranges, with a scan for JSON, XML/csproj and other files; +/- margin, Ctrl+M Ctrl+M / Ctrl+M Ctrl+L / Ctrl+M Ctrl+O / Ctrl+M Ctrl+X, Edit > Outlining), VS-style editor context menu, zoom (Ctrl+wheel, Ctrl+Shift+. / Ctrl+Shift+, , Ctrl+0, 20–400 % picker) with the document health indicator |
-| Build | Build / Rebuild / Clean via `dotnet`, Output window, Error List (Build + IntelliSense) |
-| Run | Startup project and `launchSettings.json` profiles, Start Without Debugging (Ctrl+F5), Stop; opens the browser for `launchBrowser` profiles; on the first HTTPS run offers to trust the ASP.NET Core development certificate (`dotnet dev-certs https --trust`, also Tools > Trust ASP.NET Core Development Certificate) and points `SSL_CERT_DIR` at it for everything VSL starts |
-| Debug | F5 with netcoredbg (MIT, installed on first use): breakpoints (F9 / margin click, kept per solution and moved with edits), current-statement arrow, Continue, Break All, Restart, Step Over/Into/Out (F10/F11/Shift+F11), Locals, Watch, Call Stack, hover data tips |
-| Test | Test Explorer on the SDK's vstest (xUnit, NUnit, MSTest): build + discover, Run All / Run / Run Failed / Repeat Last / Cancel, Project › Namespace › Class › Method tree with theory rows, live outcomes and durations, error message and stack trace, double-click to source; Debug All / Debug Selected stop at breakpoints in tests (vstest attaches netcoredbg to the test host); Ctrl+R A, Ctrl+R L, Ctrl+R Ctrl+A, Ctrl+E T |
-| Git | Git Changes window (staged / unstaged lists, stage, unstage, undo, Commit All / Commit Staged, Fetch, Pull, Push, Sync; follows commits, checkouts and edits made outside VSL, e.g. in the terminal), side-by-side diff (double-click a change or Compare with Unmodified: aligned rows, word-level highlights, both sides scroll together, next/previous change), branch and pending-change count in the status bar with branch switch / new branch, M/A/D/U badges in Solution Explorer, live change bars in the editor margin against HEAD, Git menu |
-| Terminal | Integrated terminal (View > Terminal, Ctrl+`): your `$SHELL` in a real pty, started in the solution folder with VSL's dotnet on PATH; truecolor, scrollback, selection, search; New / Kill; keys go to the shell (Ctrl+R, Ctrl+E...) |
-| NuGet | Package Manager for a project or the whole solution: Browse (search across your configured feeds, prerelease, version picker, Install), Installed (Uninstall, change version), Updates (Update / Update All); runs `dotnet add/remove/list package`, so NuGet.Config feeds and credentials apply |
-| Claude Code | A Claude Code tool window like the VS Code extension (View > Claude Code, Ctrl+Esc, editor > Ask Claude): it drives your installed `claude` CLI in its documented headless stream-json mode in the solution folder, so your login, settings, tools, MCP servers and slash commands apply. Streams answers (Markdown), shows tool calls with inline diffs, todo lists and results, asks before edits and commands (Yes / don't ask again / No with feedback, side-by-side diff of the proposed change), answers Claude's clarifying questions and plans, a Modes menu (Manual, Edit automatically, Plan, Auto; Shift+Tab) with an effort slider (low ... max, as the model allows), Account & Usage (plan, session / weekly limits with resets, what drives usage; /usage), MCP servers by scope with their state, sign-in, retry, enable / disable and Add server (/mcp), model picker, current file and selection as context, `/` command and `@` file completion, images attached by button, paste (Ctrl+V) or drag and drop (other files become @ mentions), subagent steps nested under their Agent call, clickable links (web links open the browser, file references like `src/App.cs:42` open the editor at that line), stop (Esc), past conversations of the folder (resume) |
-| Layout | Drag a tool window tab onto the Dock Left / Right / Bottom guides (or use its context menu) to move it; empty groups collapse, the layout is remembered; Tools > Reset Window Layout |
-| Session | Restores open documents, startup project, profile and configuration per solution |
+| ![Start window](docs/screenshots/start-window.png) | ![New project](docs/screenshots/new-project.png) |
+| **Start window**: recent solutions, clone, open a folder or a project | **New project** from every installed `dotnet new` template, with VS's options |
+| ![Debugging](docs/screenshots/debugging.png) | ![Git](docs/screenshots/git.png) |
+| **Debugging**: breakpoints, stepping, Locals, Watch, Call Stack | **Git**: Changes window, side-by-side diff, branches |
+| ![Test Explorer](docs/screenshots/test-explorer.png) | ![Claude Code](docs/screenshots/claude-code.png) |
+| **Test Explorer**: run and debug xUnit, NUnit and MSTest tests | **Claude Code** in a tool window, with diffs and approvals |
 
-Not yet: conditional breakpoints, exception settings, Immediate window, debugging Blazor WebAssembly code
-(it runs in the browser), Fix All for quick actions, floating tool windows, history/blame, merge conflict editor,
-WinForms/WPF designers (Windows-only).
+- **Editor**: C# and Razor IntelliSense, Quick Info, parameter info, squiggles, Ctrl+. quick actions and refactorings,
+  Go To Definition / Implementation, Find All References, Rename, Format Document, outlining (Ctrl+M), Find in Files, zoom.
+- **Solutions**: `.sln`, `.slnx` or a lone project file; Solution Explorer with VS file nesting, Dependencies and
+  [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme) icons.
+- **Build and run**: Build / Rebuild / Clean, Error List, launch profiles, Ctrl+F5; offers to trust the ASP.NET Core
+  HTTPS development certificate.
+- **Debug** (F5, netcoredbg): breakpoints that follow edits, Step Over / Into / Out, Locals, Watch, Call Stack, data tips,
+  debugging tests.
+- **Test Explorer**: discover, Run All / Failed / Selected, theory rows, durations, failures with stack traces.
+- **Git**: stage, commit, fetch, pull, push, branches, diff with word highlights, change bars in the editor margin,
+  badges in Solution Explorer; follows commits and checkouts made in the terminal.
+- **Terminal**: your `$SHELL` in a real pty, in the solution folder.
+- **NuGet**: browse, install, update and uninstall across your configured feeds.
+- **Claude Code** (Ctrl+Esc): drives your installed `claude` CLI, so your login, settings and MCP servers apply.
+  Streamed answers, tool calls with inline diffs, approvals, questions and plans, modes and effort, usage, MCP servers,
+  images, `/` commands and `@` files, past conversations.
+- **Layout**: drag tool windows to dock them; documents, layout and startup project are restored per solution.
+  Keyboard shortcuts follow Visual Studio (Help > Keyboard Shortcuts).
+
+Not yet: conditional breakpoints, exception settings, Immediate window, debugging Blazor WebAssembly in the browser,
+Fix All, floating tool windows, history / blame, merge conflict editor, WinForms / WPF designers.
 
 ## Claude Code for Visual Studio (Windows)
 
-`src/VSL.VisualStudio` packages VSL's Claude Code panel as a Visual Studio 2022 (17.14+) / 2026 extension: the same
-CLI session, protocol, transcripts, diffs and view model (the files are shared with VSL, not copied), with a WPF view
-that follows the Visual Studio theme. Alt+K, the Claude button on the Standard toolbar or View > Other Windows > Claude Code opens it, Ask
-Claude in the editor's context menu sends the current file and selection, and Ask Claude on files, folders and
-projects in Solution Explorer puts them in the prompt as @mentions; Claude's file links open in the editor at the line and
-"Open side-by-side diff" uses Visual Studio's diff window. It needs the Claude Code CLI on Windows
-(`irm https://claude.ai/install.ps1 | iex`, or `VSL_CLAUDE_PATH` pointing at `claude.exe`).
+`src/VSL.VisualStudio` is VSL's Claude Code panel as a Visual Studio 2022 (17.14+) / 2026 extension: the same CLI
+session, protocol, transcripts, diffs and view model (shared with VSL, not copied), with a WPF view that follows the
+Visual Studio theme.
 
-Several accounts (subscriptions) work as they do in a terminal with `CLAUDE_CONFIG_DIR`: the account picker in the
-panel's header lists `~/.claude` and every `~/.claude-NAME` folder with its email, switching starts a fresh conversation
-in that account, and Add account creates `~/.claude-NAME` and opens the CLI in a terminal to sign in.
+- **Open it** with Alt+K, the Claude button on the Standard toolbar or View > Other Windows > Claude Code. Ask Claude in the
+  editor's context menu sends the current file and selection; on files, folders and projects in Solution Explorer it puts
+  them in the prompt as @mentions. File links open in the editor at the line; proposed edits open in VS's diff window.
+- **Accounts**: like `CLAUDE_CONFIG_DIR` in a terminal, the picker lists `~/.claude` and every `~/.claude-NAME` folder with
+  its email; Add account creates one and opens the CLI in a terminal to sign in.
+- **Tokens**: the context size with Context (`/context`) and Compact (`/compact`), and the session and weekly limits with
+  when each resets (from the CLI's rate limit events and `get_usage`, which cost no tokens).
+- **English / Uzbek** with the globe button.
 
-Above the prompt the panel shows the conversation's context size with Context (`/context`) and Compact (`/compact`)
-buttons, and the plan's session and weekly limits with when each resets (from the CLI's rate limit events and
-`get_usage`, which cost no tokens). The globe button switches the panel between English and Uzbek.
-
-Build it on Windows with Visual Studio's MSBuild (the VSIX targets need .NET Framework MSBuild, so not `dotnet build`):
+It needs the Claude Code CLI (`irm https://claude.ai/install.ps1 | iex`, or `VSL_CLAUDE_PATH` pointing at `claude.exe`).
+Build it with Visual Studio's MSBuild (the VSIX targets need .NET Framework MSBuild, not `dotnet build`), then open the
+`.vsix` to install; a Debug build deploys to the experimental instance (`devenv /rootsuffix Exp`). The project is not in
+`VSL.slnx`, so the Linux build and CI are unchanged.
 
 ```powershell
 msbuild src/VSL.VisualStudio/VSL.VisualStudio.csproj -restore -p:Configuration=Release
-# then double-click src/VSL.VisualStudio/bin/Release/net48/VSL.ClaudeCode.VisualStudio.vsix to install
+# src/VSL.VisualStudio/bin/Release/net48/VSL.ClaudeCode.VisualStudio.vsix
 ```
 
-A Debug build deploys to the experimental instance (`devenv /rootsuffix Exp`). The project is not in `VSL.slnx`, so
-the Linux build and CI are unchanged.
+## Development
 
-## Keyboard shortcuts
+```bash
+dotnet build VSL.slnx
+dotnet tests/VSL.Tests/bin/Debug/net10.0/VSL.Tests.dll      # unit, Roslyn integration and headless UI tests
+VSL_SCREENSHOTS=$PWD/docs/screenshots dotnet tests/VSL.Tests/bin/Debug/net10.0/VSL.Tests.dll -class VSL.Tests.Screenshots
+```
 
-Help → Keyboard Shortcuts lists them; they follow Visual Studio's defaults (F12, Shift+F12,
-Ctrl+Shift+B, F5/F9/F10/F11, Ctrl+F5, Ctrl+., Ctrl+K Ctrl+D, Ctrl+K Ctrl+C/U, F2, Ctrl+Space, Ctrl+Shift+Space).
-
-## Layout
+The last command renders the screenshots above. CI runs the tests on every push. A `vX.Y.Z` tag publishes a release with
+the `.deb`, `.AppImage` and `.tar.gz`, which `deploy/linux/package.sh` also builds locally.
 
 ```
 src/VSL/
-  Lsp/         JSON-RPC, Roslyn client, client-side file watching, HTML service for Razor cohosting
-  Workspace/   solution/project loading and the Solution Explorer tree
-  Build/       dotnet process runner and MSBuild output parser
-  Debugging/   DAP client, netcoredbg installer, debug session, breakpoint store
-  Testing/     vstest.console host (Microsoft.TestPlatform.TranslationLayer)
-  Terminal/    integrated terminal session (Exclr8.Terminal control + Porta.Pty)
-  Git/         git CLI wrapper (porcelain v2 status, stage/commit/sync/branches) and line diff for the margin
-  Packages/    NuGet search/list/install/uninstall through the dotnet CLI
-  Claude/      Claude Code CLI session (stream-json, permission prompts), transcripts, inline diff
-  Templates/   SDK project templates (template engine cache + ide.host.json) and dotnet new project creation
-  Editor/      AvaloniaEdit host: sync, completion, hover, squiggles, TextMate theme, side-by-side diff view
-  ViewModels/  main window state, documents, Error List, Output
-  Views/       main window (XAML), tool window docking, NuGet manager, icons, dialogs
-src/VSL.VisualStudio/
-  Claude Code panel as a Visual Studio extension: package, commands, VS integration, WPF view, shims for shared files
-tests/VSL.Tests/
-  unit tests, Roslyn integration tests and headless UI tests against TestAssets/BlazorSample
+  Lsp/         JSON-RPC, Roslyn client, file watching, HTML service for Razor cohosting
+  Workspace/   solution and project loading, Solution Explorer tree
+  Build/       dotnet runner, MSBuild output parser, dev certificates
+  Debugging/   DAP client and netcoredbg
+  Testing/     vstest host
+  Git/         git CLI wrapper and line diff
+  Packages/    NuGet through the dotnet CLI
+  Terminal/    integrated terminal
+  Claude/      Claude Code CLI session (stream-json) and transcripts
+  Templates/   SDK project templates and project creation
+  Editor/      AvaloniaEdit host, completion, outlining, diff view
+  ViewModels/  Views/   main window, tool windows, dialogs
+src/VSL.VisualStudio/   the Claude Code panel as a Visual Studio extension (Windows), sharing src/VSL/Claude and its view model
 ```
-
-Run the tests with `dotnet build VSL.slnx && dotnet tests/VSL.Tests/bin/Debug/net10.0/VSL.Tests.dll`.
-Headless UI tests write screenshots to `$TMPDIR/vsl-test-artifacts`.
-
-### Notes on the language server
-
-- Roslyn is started with `--csharpDesignTimePath` pointing at the design-time targets it ships with;
-  Razor support is built in, so the Razor extension must not be passed again with `--extension`.
-- VSL implements `workspace/didChangeWatchedFiles` itself (one recursive watcher). Otherwise Roslyn
-  creates hundreds of watchers and runs into the default inotify limit of 128 instances per user.
-- Razor cohosting sends `razor/updateHtml` plus HTML `textDocument/*` requests to the client;
-  `HtmlLanguageService` answers them (HTML tags/attributes) so Razor can merge in component completions.
 
 ## License
 
-VSL is released under the [MIT License](LICENSE).
-
-## Third-party
-
-Cascadia Mono font (SIL OFL 1.1, `src/VSL/Assets/Fonts`), roslyn-language-server and netcoredbg (MIT, downloaded at runtime),
-Avalonia, AvaloniaEdit, TextMateSharp, Exclr8.Terminal and Porta.Pty (MIT).
-Solution Explorer's file and folder icons are the [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme)
-(MIT, Copyright (c) 2025 Material Extensions; `src/VSL/Assets/MaterialIcons`, refreshed with `scripts/update-material-icons.sh`).
+MIT, see [LICENSE](LICENSE). Third-party: Cascadia Mono font (SIL OFL 1.1); Avalonia, AvaloniaEdit, TextMateSharp,
+Exclr8.Terminal and Porta.Pty (MIT); roslyn-language-server and netcoredbg (MIT, downloaded at runtime);
+Material Icon Theme icons (MIT, Copyright (c) 2025 Material Extensions; `src/VSL/Assets/MaterialIcons`, refreshed with
+`scripts/update-material-icons.sh`).

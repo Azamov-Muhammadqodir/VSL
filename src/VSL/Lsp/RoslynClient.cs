@@ -70,6 +70,10 @@ public sealed class RoslynClient : IAsyncDisposable
                  })
             psi.ArgumentList.Add(a);
         DotnetCli.ApplyEnvironment(psi);
+        // The server is configured for server GC, which on a many-core desktop keeps gigabytes of per-core heap
+        // reserve on top of the solution's live data. Workstation (background) GC stays close to what is live;
+        // DOTNET_gcServer=1 in VSL's environment brings server GC back.
+        psi.Environment.TryAdd("DOTNET_gcServer", "0");
 
         var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start roslyn-language-server.");
         var rpc = new JsonRpcConnection(process.StandardOutput.BaseStream, process.StandardInput.BaseStream);

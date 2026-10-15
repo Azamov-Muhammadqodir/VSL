@@ -17,6 +17,7 @@ namespace VSL.Views;
 public partial class MainWindow : Window, IDialogService
 {
     bool _closingConfirmed;
+    bool _outputScrollPending;
     Key? _chord;
 
     public MainWindow()
@@ -52,6 +53,15 @@ public partial class MainWindow : Window, IDialogService
             OutputEditor.FontSize = Math.Clamp(OutputEditor.FontSize + (e.Delta.Y > 0 ? 1 : -1), 6, 48);
             e.Handled = true;
         }, RoutingStrategies.Tunnel);
+        // Following the output keeps its last line at the bottom; scrolling below the document would push it out of view.
+        OutputEditor.Options.AllowScrollBelowDocument = false;
+        OutputEditor.AttachedToVisualTree += (_, _) =>
+        {
+            if (!_outputScrollPending)
+                return;
+            _outputScrollPending = false;
+            Dispatcher.UIThread.Post(ScrollOutputToEnd, DispatcherPriority.Background);
+        };
         BuildRecentMenu();
     }
 
@@ -70,6 +80,7 @@ public partial class MainWindow : Window, IDialogService
         {
             await vm.ShutdownTerminalAsync();
             await vm.ShutdownClaudeAsync();
+            await vm.ShutdownBuildServersAsync();
             _closingConfirmed = true;
             Close();
         }
@@ -533,7 +544,13 @@ public partial class MainWindow : Window, IDialogService
 
     void ScrollOutputToEnd()
     {
-        if (OutputEditor.Document is { } doc && Vm?.SelectedOutput.Document == doc)
+        if (OutputEditor.Document is not { } doc || Vm?.SelectedOutput.Document != doc)
+            return;
+        // Behind another tab the Output window has no viewport: scrolling then would leave it past the last line,
+        // showing nothing once the tab is opened, so it scrolls when it is shown again.
+        if (TopLevel.GetTopLevel(OutputEditor) is null)
+            _outputScrollPending = true;
+        else
             OutputEditor.ScrollToEnd();
     }
 

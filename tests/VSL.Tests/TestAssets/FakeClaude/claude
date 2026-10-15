@@ -4,7 +4,8 @@
 It speaks the same JSON lines as `claude --input-format stream-json --output-format stream-json`: it answers
 control requests, streams text, asks for permission with can_use_tool, and ends turns with a result. Every line
 it receives (and its arguments) is appended to <workspace>.fake-claude.log so tests can check what VSL sent. What it does
-for a prompt depends on a keyword in it: write, edit, bash, ask, plan, slow; anything else gets a Markdown answer.
+for a prompt depends on a keyword in it: endpoint (the README screenshot), agent, write, edit, bash, ask, plan, slow;
+anything else gets a Markdown answer.
 """
 import json
 import os
@@ -238,6 +239,31 @@ def command(text):
     result(reply)
 
 
+def demo():
+    """The README screenshot (Screenshots.cs): a read, a todo list and an edit waiting for approval."""
+    path = os.path.join(CWD, "Web", "Program.cs")
+    with open(path) as f:
+        text = f.read()
+    think("The endpoints are mapped in Web/Program.cs and TodoStore already has Remove, so only the mapping is missing.")
+    tool_use("toolu_read", "Read", {"file_path": path})
+    tool_result("toolu_read", "\n".join(f"{i:6}\t{line}" for i, line in enumerate(text.splitlines(), 1)))
+    tool_use("toolu_todo", "TodoWrite", {"todos": [
+        {"content": "Find where the endpoints are mapped", "status": "completed", "activeForm": "Finding the endpoints"},
+        {"content": "Map DELETE /todos/{id}", "status": "in_progress", "activeForm": "Mapping DELETE /todos/{id}"},
+        {"content": "Build the solution", "status": "pending", "activeForm": "Building the solution"}]})
+    tool_result("toolu_todo", "Todos have been modified successfully")
+    stream_text("I'll map `DELETE /todos/{id}` next to the other endpoints. It answers **204** when the todo is removed "
+                "and **404** when the id is unknown.")
+    old = next(line for line in text.splitlines() if "MapPost" in line)
+    new = old + "\napp.MapDelete(\"/todos/{id:int}\", (TodoStore todos, int id) =>\n    todos.Remove(id) ? Results.NoContent() : Results.NotFound());"
+    tool_input = {"file_path": path, "old_string": old, "new_string": new}
+    tool_use("toolu_edit", "Edit", tool_input)
+    decision = permission("Edit", tool_input, [{"type": "setMode", "mode": "acceptEdits", "destination": "session"}], "toolu_edit")
+    tool_result("toolu_edit", "The file has been updated." if allowed(decision) else "The user doesn't want to proceed with this tool use.", not allowed(decision))
+    stream_text("Done." if allowed(decision) else "OK, I won't.")
+    result("ok")
+
+
 def turn(prompt, content):
     out({"type": "system", "subtype": "init", "session_id": SESSION, "cwd": CWD, "model": "fake", "permissionMode": "default"})
     if isinstance(content, str) and content.startswith("/"):
@@ -248,6 +274,8 @@ def turn(prompt, content):
     if images:
         stream_text(f"I see {len(images)} image{'s' if len(images) != 1 else ''} ({images[0]['source']['media_type']}).")
         result("ok")
+    elif "endpoint" in p:
+        demo()
     elif "agent" in p:
         agent = {"description": "Find the secret word", "prompt": "Read notes.txt and report the secret word.", "subagent_type": "general-purpose"}
         tool_use("toolu_agent", "Agent", agent)
