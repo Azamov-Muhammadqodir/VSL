@@ -28,8 +28,6 @@ public sealed record GitFileItem(GitFileChange Change)
 /// <summary>Git integration: Git Changes window, branch status bar, Solution Explorer badges, editor change margin.</summary>
 public partial class MainViewModel
 {
-    public const int GitChangesTab = 2;
-
     GitRepository? _git;
     GitStatus? _gitStatus;
     Dictionary<string, string> _gitBadges = [];
@@ -323,7 +321,7 @@ public partial class MainViewModel
     Task CompareActiveWithUnmodified() => ActiveEditor is { } doc ? CompareWithUnmodifiedAsync(doc) : Task.CompletedTask;
 
     [RelayCommand]
-    void ShowGitChanges() => RightTabIndex = GitChangesTab;
+    void ShowGitChanges() => ShowToolWindow(ToolWindows.GitChanges);
 
     /// <summary>Runs a git command, logs it to the Git output pane and refreshes status. Returns success.</summary>
     async Task<bool> GitOperationAsync(string? title, Func<Task<GitResult>> operation, Action? success = null)
@@ -348,7 +346,7 @@ public partial class MainViewModel
             else
             {
                 SelectedOutput = GitOutput;
-                BottomTabIndex = 1;
+                ShowToolWindow(ToolWindows.Output);
                 SetStatus($"Git: {title ?? "operation"} failed (see Output)", StatusKind.Ready);
             }
             return result.Success;

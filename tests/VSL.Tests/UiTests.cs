@@ -83,7 +83,7 @@ public class UiTests
             var error = Assert.Single(vm.Errors, e => e.Code == "CS0029");
             Assert.Equal("Web", error.Project);
             Assert.Equal(program, error.FilePath);
-            Assert.Equal(0, vm.BottomTabIndex);
+            Assert.True(window.IsToolWindowShowing(ToolWindows.ErrorList));
         }
         finally
         {
@@ -218,7 +218,7 @@ public class UiTests
         await vm.OpenSolutionAsync(sln);
 
         await vm.RunAllTestsCommand.ExecuteAsync(null);
-        Assert.Equal(1, vm.RightTabIndex);
+        Assert.True(window.IsToolWindowShowing(ToolWindows.TestExplorer));
         Assert.False(vm.IsTesting);
         Assert.Equal((3, 1, 1), (vm.PassedCount, vm.FailedCount, vm.SkippedCount));
         Assert.StartsWith("Test run finished: 5 test(s) (3 Passed, 1 Failed, 1 Skipped)", vm.TestSummary);
@@ -334,7 +334,7 @@ public class UiTests
         diff.View.Go(1);
         diff.View.Go(1);
         Assert.Equal(1, diff.View.CurrentChange);
-        vm.RightTabIndex = MainViewModel.GitChangesTab;
+        vm.ShowToolWindow(ToolWindows.GitChanges);
         await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
         Snapshot(window, "git-changes");
         vm.ActiveDocument = doc;
@@ -406,7 +406,7 @@ public class UiTests
 
         // Ctrl+` opens the Terminal tool window; the shell starts once it has a size.
         window.KeyPress(Avalonia.Input.Key.OemTilde, Avalonia.Input.RawInputModifiers.Control, Avalonia.Input.PhysicalKey.Backquote, "`");
-        Assert.Equal(MainViewModel.TerminalTab, vm.BottomTabIndex);
+        Assert.True(window.IsToolWindowShowing(ToolWindows.Terminal));
         await WaitUntil(() => vm.Terminal.IsAlive, TimeSpan.FromSeconds(15));
         Assert.True(vm.Terminal.IsAlive);
         await WaitUntil(() => vm.Terminal.Control.IsFocused, TimeSpan.FromSeconds(5));
@@ -618,6 +618,55 @@ public class UiTests
 
         doc.Host.ToggleBreakpoint(9);
         Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
+    public async Task Tool_windows_dock_by_dragging_and_context_menu()
+    {
+        var vm = NewViewModel();
+        vm.Settings.ToolLayout.Clear();
+        var window = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+        window.Show();
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Assert.Equal(DockSide.Bottom, window.SideOf(ToolWindows.ErrorList));
+        var leftDock = window.GetVisualDescendants().OfType<Avalonia.Controls.Border>().Single(b => b.Name == "LeftDock");
+        Assert.False(leftDock.IsVisible);
+
+        // Drag the Error List tab onto the "Dock Left" guide.
+        var tab = window.GetVisualDescendants().OfType<Avalonia.Controls.TabItem>().Single(t => (string?)t.Tag == ToolWindows.ErrorList);
+        var start = tab.TranslatePoint(new Avalonia.Point(tab.Bounds.Width / 2, tab.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(start, Avalonia.Input.MouseButton.Left);
+        window.MouseMove(start + new Avalonia.Point(20, -20), Avalonia.Input.RawInputModifiers.LeftMouseButton);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(100));
+        var zone = window.GetVisualDescendants().OfType<Avalonia.Controls.Border>().Single(b => b.Name == "DockZoneLeft");
+        Assert.True(zone.IsEffectivelyVisible);
+        var target = zone.TranslatePoint(new Avalonia.Point(zone.Bounds.Width / 2, zone.Bounds.Height / 2), window)!.Value;
+        window.MouseMove(target, Avalonia.Input.RawInputModifiers.LeftMouseButton);
+        Assert.Contains("hot", zone.Classes);
+        Snapshot(window, "dock-guides");
+        window.MouseUp(target, Avalonia.Input.MouseButton.Left);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+
+        Assert.Equal(DockSide.Left, window.SideOf(ToolWindows.ErrorList));
+        Assert.True(leftDock.IsVisible);
+        Assert.Equal("Left", vm.Settings.ToolLayout[ToolWindows.ErrorList]);
+        Snapshot(window, "docked-left");
+
+        // ShowToolWindow finds it in its new group; the context menu's Dock Right moves it again.
+        vm.ShowToolWindow(ToolWindows.ErrorList);
+        window.MoveToolWindow(ToolWindows.ErrorList, DockSide.Right);
+        Assert.Equal(DockSide.Right, window.SideOf(ToolWindows.ErrorList));
+        Assert.False(leftDock.IsVisible);
+
+        // A new window restores the saved layout; Reset Window Layout puts everything back.
+        var second = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+        second.Show();
+        Assert.Equal(DockSide.Right, second.SideOf(ToolWindows.ErrorList));
+        second.ResetWindowLayout();
+        Assert.Equal(DockSide.Bottom, second.SideOf(ToolWindows.ErrorList));
+        Assert.Empty(vm.Settings.ToolLayout);
+        second.Close();
+        window.Close();
     }
 
     [AvaloniaFact]

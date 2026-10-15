@@ -70,6 +70,8 @@
         <MenuItem Header="Solution _Explorer" Click="OnShowSolutionExplorer" />
         <MenuItem Header="E_rror List" Click="OnShowErrorList" />
         <MenuItem Header="_Output" Click="OnShowOutput" />
+        <MenuItem Header="_Test Explorer" Click="OnShowTestExplorer" />
+        <MenuItem Header="_Git Changes" Command="{Binding ShowGitChangesCommand}" />
         <MenuItem Command="{Binding ShowTerminalCommand}">
           <MenuItem.Header>
             <Grid ColumnDefinitions="*,Auto">
@@ -184,6 +186,8 @@
         </MenuItem>
         <Separator />
         <MenuItem Header="_Restart Language Server" Command="{Binding RestartLanguageServerCommand}" />
+        <Separator />
+        <MenuItem Header="Reset _Window Layout" Click="OnResetWindowLayout" />
       </MenuItem>
       <MenuItem Header="_Help">
         <MenuItem Header="_Keyboard Shortcuts" Click="OnShortcuts" />
@@ -255,8 +259,14 @@
     </Border>
 
     <!-- ===== Main area: [documents / bottom tool windows] | Solution Explorer ===== -->
-    <Grid Name="MainGrid" ColumnDefinitions="*,4,340">
-      <Grid Name="LeftGrid" RowDefinitions="*,4,250">
+    <Grid Name="MainGrid" ColumnDefinitions="0,0,*,4,340">
+      <!-- Left dock group: empty until a tool window is docked there -->
+      <Border Name="LeftDock" Grid.Column="0" Background="{StaticResource VsToolWindowBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="0,0,1,0">
+        <TabControl Name="LeftTabs" TabStripPlacement="Bottom" Padding="0" ItemContainerTheme="{StaticResource VsToolTab}" />
+      </Border>
+      <GridSplitter Name="LeftSplitter" Grid.Column="1" ResizeDirection="Columns" />
+
+      <Grid Name="LeftGrid" Grid.Column="2" RowDefinitions="*,4,250">
 
         <!-- Document well -->
         <Panel Background="{StaticResource VsEnvironmentBrush}">
@@ -347,15 +357,14 @@
           </StackPanel>
         </Panel>
 
-        <GridSplitter Grid.Row="1" ResizeDirection="Rows" />
+        <GridSplitter Name="BottomSplitter" Grid.Row="1" ResizeDirection="Rows" />
 
         <!-- Bottom tool windows -->
-        <Border Grid.Row="2" Background="{StaticResource VsToolWindowBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="1,1,1,0">
+        <Border Name="BottomDock" Grid.Row="2" Background="{StaticResource VsToolWindowBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="1,1,1,0">
           <TabControl Name="BottomTabs" TabStripPlacement="Bottom" Padding="0"
-                      SelectedIndex="{Binding BottomTabIndex}"
                       ItemContainerTheme="{StaticResource VsToolTab}">
             <!-- Error List -->
-            <TabItem Header="Error List">
+            <TabItem Header="Error List" Tag="ErrorList">
               <DockPanel>
                 <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" Padding="4,2">
                   <StackPanel Orientation="Horizontal" Spacing="4">
@@ -405,7 +414,7 @@
             </TabItem>
 
             <!-- Output -->
-            <TabItem Header="Output">
+            <TabItem Header="Output" Tag="Output">
               <DockPanel>
                 <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" Padding="4,2">
                   <StackPanel Orientation="Horizontal" Spacing="6">
@@ -427,7 +436,7 @@
             </TabItem>
 
             <!-- Find Symbol Results -->
-            <TabItem Header="{Binding FindResultsTitle}">
+            <TabItem Header="{Binding FindResultsTitle}" Tag="FindResults">
               <ListBox Name="FindResultsBox" Classes="dense" ItemsSource="{Binding FindResults}" DoubleTapped="OnFindResultDoubleTapped">
                 <ListBox.ItemTemplate>
                   <DataTemplate x:DataType="vm:FindResultItem">
@@ -438,7 +447,7 @@
             </TabItem>
 
             <!-- Locals -->
-            <TabItem Header="Locals">
+            <TabItem Header="Locals" Tag="Locals">
               <DockPanel>
                 <Grid DockPanel.Dock="Top" ColumnDefinitions="260,*,220" Background="#2D2D30" Height="22">
                   <TextBlock Text="Name" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
@@ -465,7 +474,7 @@
             </TabItem>
 
             <!-- Watch -->
-            <TabItem Header="Watch 1">
+            <TabItem Header="Watch 1" Tag="Watch">
               <DockPanel>
                 <TextBox Name="WatchInput" DockPanel.Dock="Top" Classes="search" Margin="4"
                          PlaceholderText="Add item to watch (Enter)" KeyDown="OnWatchInputKeyDown" />
@@ -492,7 +501,7 @@
             </TabItem>
 
             <!-- Call Stack -->
-            <TabItem Header="Call Stack">
+            <TabItem Header="Call Stack" Tag="CallStack">
               <DockPanel>
                 <Grid DockPanel.Dock="Top" ColumnDefinitions="24,*,200" Background="#2D2D30" Height="22">
                   <TextBlock Grid.Column="1" Text="Name" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
@@ -513,7 +522,7 @@
             </TabItem>
 
             <!-- Terminal -->
-            <TabItem Header="Terminal">
+            <TabItem Header="Terminal" Tag="Terminal">
               <DockPanel>
                 <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" Padding="6,2">
                   <StackPanel Orientation="Horizontal" Spacing="6">
@@ -529,14 +538,13 @@
         </Border>
       </Grid>
 
-      <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
+      <GridSplitter Name="RightSplitter" Grid.Column="3" ResizeDirection="Columns" />
 
-      <!-- Solution Explorer -->
-      <Border Grid.Column="2" Background="{StaticResource VsToolWindowBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="1,0,0,0">
+      <!-- Right dock group (Solution Explorer, Test Explorer, Git Changes by default) -->
+      <Border Name="RightDock" Grid.Column="4" Background="{StaticResource VsToolWindowBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="1,0,0,0">
         <TabControl Name="RightTabs" TabStripPlacement="Bottom" Padding="0"
-                    SelectedIndex="{Binding RightTabIndex}"
                     ItemContainerTheme="{StaticResource VsToolTab}">
-          <TabItem Header="Solution Explorer">
+          <TabItem Header="Solution Explorer" Tag="SolutionExplorer">
             <DockPanel>
               <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}">
                 <TextBlock Classes="toolTitle" Text="Solution Explorer" />
@@ -585,7 +593,7 @@
             </DockPanel>
           </TabItem>
           <!-- Test Explorer -->
-          <TabItem Header="Test Explorer">
+          <TabItem Header="Test Explorer" Tag="TestExplorer">
             <Grid RowDefinitions="Auto,Auto,Auto,*,4,170">
               <Border Background="{StaticResource VsEnvironmentBrush}">
                 <TextBlock Classes="toolTitle" Text="Test Explorer" />
@@ -651,7 +659,7 @@
           </TabItem>
 
           <!-- Git Changes -->
-          <TabItem Header="Git Changes">
+          <TabItem Header="Git Changes" Tag="GitChanges">
             <DockPanel>
               <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}">
                 <TextBlock Classes="toolTitle" Text="Git Changes" />
@@ -725,6 +733,19 @@
           </TabItem>
         </TabControl>
       </Border>
+
+      <!-- Dock guides, shown while a tool window tab is dragged -->
+      <Panel Name="DockOverlay" Grid.ColumnSpan="5" IsVisible="False" IsHitTestVisible="False" ZIndex="100">
+        <Border Name="DockZoneLeft" Classes="dockzone" HorizontalAlignment="Left" Width="260">
+          <TextBlock Text="Dock Left" />
+        </Border>
+        <Border Name="DockZoneRight" Classes="dockzone" HorizontalAlignment="Right" Width="260">
+          <TextBlock Text="Dock Right" />
+        </Border>
+        <Border Name="DockZoneBottom" Classes="dockzone" VerticalAlignment="Bottom" Height="200" Margin="270,0">
+          <TextBlock Text="Dock Bottom" />
+        </Border>
+      </Panel>
     </Grid>
   </DockPanel>
 </Window>

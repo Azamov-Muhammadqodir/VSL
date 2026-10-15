@@ -7,6 +7,9 @@ public sealed class Settings
 {
     public string? LastSolution { get; set; }
     public double EditorZoom { get; set; } = 1.0;
+
+    /// <summary>Tool window id → dock side ("Left", "Right", "Bottom") for windows the user moved.</summary>
+    public Dictionary<string, string> ToolLayout { get; set; } = [];
     public List<string> RecentSolutions { get; set; } = [];
     public Dictionary<string, SolutionState> Solutions { get; set; } = [];
 

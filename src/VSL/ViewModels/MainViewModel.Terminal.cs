@@ -8,8 +8,6 @@ namespace VSL.ViewModels;
 /// <summary>The integrated terminal tool window (View > Terminal, Ctrl+`).</summary>
 public partial class MainViewModel
 {
-    public const int TerminalTab = 6;
-
     TerminalSession? _terminal;
 
     /// <summary>Created on first use; the shell itself starts when the terminal is first laid out.</summary>
@@ -30,7 +28,7 @@ public partial class MainViewModel
     [RelayCommand]
     void ShowTerminal()
     {
-        BottomTabIndex = TerminalTab;
+        ShowToolWindow(ToolWindows.Terminal);
         Dispatcher.UIThread.Post(() => Terminal.Control.Focus(), DispatcherPriority.Loaded);
     }
 

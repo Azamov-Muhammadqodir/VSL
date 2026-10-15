@@ -21,11 +21,14 @@ public partial class MainWindow : Window, IDialogService
     public MainWindow()
     {
         InitializeComponent();
+        InitializeDocking();
         DataContextChanged += (_, _) =>
         {
             if (DataContext is MainViewModel vm)
             {
                 vm.Dialogs = this;
+                vm.ToolWindowRequested += OnToolWindowRequested;
+                ApplySavedDockLayout(vm);
                 vm.BreakModeEntered += () =>
                 {
                     if (WindowState == WindowState.Minimized)
@@ -105,7 +108,7 @@ public partial class MainWindow : Window, IDialogService
                     OnRename(this, new RoutedEventArgs());
                     break;
                 case (Key.E, Key.T):
-                    chordVm.RightTabIndex = 1;
+                    chordVm.ShowToolWindow(ToolWindows.TestExplorer);
                     break;
             }
             return;
@@ -264,7 +267,7 @@ public partial class MainWindow : Window, IDialogService
                 Item("Select in Solution Explorer", () =>
                 {
                     vm.ActiveDocument = doc;
-                    vm.RightTabIndex = 0;
+                    vm.ShowToolWindow(ToolWindows.SolutionExplorer);
                     OnSyncWithActiveDocument(this, new RoutedEventArgs());
                 }, enabled: vm.Solution is not null && doc is DocumentViewModel),
             },
@@ -475,21 +478,18 @@ public partial class MainWindow : Window, IDialogService
 
     void OnShowSolutionExplorer(object? sender, RoutedEventArgs e)
     {
-        if (Vm is { } vm)
-            vm.RightTabIndex = 0;
+        Vm?.ShowToolWindow(ToolWindows.SolutionExplorer);
         ExplorerTree.Focus();
     }
 
     void OnShowErrorList(object? sender, RoutedEventArgs e)
     {
-        if (Vm is { } vm)
-            vm.BottomTabIndex = 0;
+        Vm?.ShowToolWindow(ToolWindows.ErrorList);
     }
 
     void OnShowOutput(object? sender, RoutedEventArgs e)
     {
-        if (Vm is { } vm)
-            vm.BottomTabIndex = 1;
+        Vm?.ShowToolWindow(ToolWindows.Output);
     }
 
     // ---- Edit menu -> active editor ------------------------------------------------------------------------
@@ -540,6 +540,8 @@ public partial class MainWindow : Window, IDialogService
 
     void OnExit(object? sender, RoutedEventArgs e) => Close();
 
+    void OnResetWindowLayout(object? sender, RoutedEventArgs e) => ResetWindowLayout();
+
     // ---- Zoom -------------------------------------------------------------------------------------------------
 
     void OnZoomIn(object? sender, RoutedEventArgs e) => ActiveHost?.ZoomIn();
@@ -570,12 +572,11 @@ public partial class MainWindow : Window, IDialogService
             h.ToggleBreakpoint(h.Editor.TextArea.Caret.Line);
     }
 
-    void OnShowLocals(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.LocalsTab);
+    void OnShowLocals(object? sender, RoutedEventArgs e) => Vm?.ShowToolWindow(ToolWindows.Locals);
 
     void OnShowTestExplorer(object? sender, RoutedEventArgs e)
     {
-        if (Vm is { } vm)
-            vm.RightTabIndex = 1;
+        Vm?.ShowToolWindow(ToolWindows.TestExplorer);
     }
 
     void OnTestDoubleTapped(object? sender, TappedEventArgs e) => Vm?.NavigateToTest(TestTree.SelectedItem as TestNode);
@@ -605,15 +606,10 @@ public partial class MainWindow : Window, IDialogService
         }.Open(anchor);
     }
 
-    void OnShowWatch(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.WatchTab);
+    void OnShowWatch(object? sender, RoutedEventArgs e) => Vm?.ShowToolWindow(ToolWindows.Watch);
 
-    void OnShowCallStack(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.CallStackTab);
+    void OnShowCallStack(object? sender, RoutedEventArgs e) => Vm?.ShowToolWindow(ToolWindows.CallStack);
 
-    void ShowBottomTab(int index)
-    {
-        if (Vm is { } vm)
-            vm.BottomTabIndex = index;
-    }
 
     void OnWatchInputKeyDown(object? sender, KeyEventArgs e)
     {

@@ -12,10 +12,6 @@ namespace VSL.ViewModels;
 /// <summary>Debugger integration: F5 / F10 / F11, breakpoints, Locals, Watch and Call Stack.</summary>
 public partial class MainViewModel
 {
-    public const int LocalsTab = 3;
-    public const int WatchTab = 4;
-    public const int CallStackTab = 5;
-
     readonly Dictionary<(string Project, string Configuration), string> _targetPaths = [];
     DebugSession? _session;
     int _stoppedThread;
@@ -109,7 +105,7 @@ public partial class MainViewModel
 
         DebugOutput.Clear();
         SelectedOutput = DebugOutput;
-        BottomTabIndex = 1;
+        ShowToolWindow(ToolWindows.Output);
         var program = await GetTargetPathAsync(project);
         if (program is null || !File.Exists(program))
         {
@@ -350,8 +346,7 @@ public partial class MainViewModel
         foreach (var doc in Editors)
             doc.Host.DataTipProvider = EvaluateDataTipAsync;
         SelectedFrame = CallStack.FirstOrDefault(f => f.HasSource) ?? CallStack.FirstOrDefault();
-        if (BottomTabIndex < LocalsTab)
-            BottomTabIndex = LocalsTab;
+        ShowToolWindow(ToolWindows.Locals, ToolWindows.Watch, ToolWindows.CallStack);
         BreakModeEntered?.Invoke();
     }
 

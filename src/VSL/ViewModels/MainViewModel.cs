@@ -12,6 +12,21 @@ using VSL.Workspace;
 
 namespace VSL.ViewModels;
 
+/// <summary>Ids of the dockable tool windows.</summary>
+public static class ToolWindows
+{
+    public const string SolutionExplorer = "SolutionExplorer";
+    public const string TestExplorer = "TestExplorer";
+    public const string GitChanges = "GitChanges";
+    public const string ErrorList = "ErrorList";
+    public const string Output = "Output";
+    public const string FindResults = "FindResults";
+    public const string Locals = "Locals";
+    public const string Watch = "Watch";
+    public const string CallStack = "CallStack";
+    public const string Terminal = "Terminal";
+}
+
 public enum StatusKind
 {
     NoSolution,
@@ -117,9 +132,18 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial string Configuration { get; set; } = "Debug";
 
-    /// <summary>0 = Error List, 1 = Output, 2 = Find Symbol Results.</summary>
-    [ObservableProperty]
-    public partial int BottomTabIndex { get; set; }
+    /// <summary>Raised to bring a tool window forward, whichever dock group it currently lives in.</summary>
+    public event Action<string, string[]>? ToolWindowRequested;
+
+    /// <summary>The last tool window the IDE brought forward (for tests and diagnostics).</summary>
+    public string? LastRequestedToolWindow { get; private set; }
+
+    /// <summary>Shows a tool window (see <see cref="ToolWindows"/>) unless one of <paramref name="unlessShowing"/> is already in front.</summary>
+    public void ShowToolWindow(string id, params string[] unlessShowing)
+    {
+        LastRequestedToolWindow = id;
+        ToolWindowRequested?.Invoke(id, unlessShowing);
+    }
 
     [ObservableProperty]
     public partial string FindResultsTitle { get; set; } = "Find Symbol Results";
@@ -780,7 +804,7 @@ public partial class MainViewModel : ObservableObject
             FindResults.Add(new FindResultItem(path, loc.Range.Start.Line + 1, loc.Range.Start.Character + 1, line, loc.Range));
         }
         FindResultsTitle = $"{title} ({locations.Count})";
-        BottomTabIndex = 2;
+        ShowToolWindow(ToolWindows.FindResults);
         SetStatus($"{locations.Count} result(s) found.");
     }
 
@@ -849,7 +873,7 @@ public partial class MainViewModel : ObservableObject
         SaveAll();
         IsBuilding = true;
         SelectedOutput = BuildOutput;
-        BottomTabIndex = 1;
+        ShowToolWindow(ToolWindows.Output);
         BuildOutput.Clear();
         _buildErrors.Clear();
         RefreshErrorList();
@@ -895,7 +919,7 @@ public partial class MainViewModel : ObservableObject
         BuildOutput.Append($"========== {verbLabel} completed at {DateTime.Now:HH:mm} and took {sw.Elapsed.TotalSeconds:0.000} seconds ==========");
         SetStatus(ok ? $"{verbLabel} succeeded" : $"{verbLabel} failed", IsRunning || IsDebugging ? StatusKind.Running : StatusKind.Ready);
         if (!ok && errors > 0)
-            BottomTabIndex = 0;
+            ShowToolWindow(ToolWindows.ErrorList);
         return ok;
     }
 
@@ -931,7 +955,7 @@ public partial class MainViewModel : ObservableObject
 
         DebugOutput.Clear();
         SelectedOutput = DebugOutput;
-        BottomTabIndex = 1;
+        ShowToolWindow(ToolWindows.Output);
         DebugOutput.Append($"> dotnet {string.Join(' ', args)}");
         IsRunning = true;
         SetStatus($"Running {project.Name}", StatusKind.Running);
@@ -1057,7 +1081,7 @@ public partial class MainViewModel : ObservableObject
         foreach (var hit in hits)
             FindResults.Add(hit);
         FindResultsTitle = $"Find All \"{text}\" ({hits.Count})";
-        BottomTabIndex = 2;
+        ShowToolWindow(ToolWindows.FindResults);
         SetStatus($"Matching lines: {hits.Count}", StatusKind.Ready);
     }
 

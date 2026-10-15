@@ -41,9 +41,6 @@ public partial class MainViewModel
     [ObservableProperty]
     public partial int SkippedCount { get; set; }
 
-    /// <summary>Selected tab of the right tool window group: 0 = Solution Explorer, 1 = Test Explorer.</summary>
-    [ObservableProperty]
-    public partial int RightTabIndex { get; set; }
 
     bool CanRunTests => Solution is { } s && s.Projects.Any(p => p.IsTestProject) && !IsTesting && !IsBuilding && Mode == DebugMode.Design;
 
@@ -68,7 +65,7 @@ public partial class MainViewModel
     [RelayCommand(CanExecute = nameof(CanRunTests))]
     async Task RefreshTests()
     {
-        RightTabIndex = 1;
+        ShowToolWindow(ToolWindows.TestExplorer);
         IsTesting = true;
         try
         {
@@ -86,7 +83,7 @@ public partial class MainViewModel
     /// <summary>Builds, (re)discovers and runs the given tests (null = all), streaming results into the tree.</summary>
     async Task RunTestsAsync(IReadOnlyList<Guid>? ids, bool debug = false)
     {
-        RightTabIndex = 1;
+        ShowToolWindow(ToolWindows.TestExplorer);
         IsTesting = true;
         try
         {

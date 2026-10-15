@@ -85,6 +85,25 @@
     <Setter Property="Background" Value="#52B0EF" />
   </Style>
 
+  <!-- Dock guide zones -->
+  <Style Selector="Border.dockzone">
+    <Setter Property="Background" Value="#18007ACC" />
+    <Setter Property="BorderBrush" Value="#007ACC" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Margin" Value="6" />
+  </Style>
+  <Style Selector="Border.dockzone > TextBlock">
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="#9CDCFE" />
+    <Setter Property="Background" Value="#2D2D30" />
+    <Setter Property="Padding" Value="10,4" />
+  </Style>
+  <Style Selector="Border.dockzone.hot">
+    <Setter Property="Background" Value="#55007ACC" />
+  </Style>
+
   <Style Selector="ToggleButton.tb">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="1" />
