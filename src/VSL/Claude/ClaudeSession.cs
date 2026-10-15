@@ -10,7 +10,8 @@ public sealed record ClaudeStartOptions(
     string WorkingDirectory,
     string? Model = null,
     string? PermissionMode = null,
-    string? Resume = null);
+    string? Resume = null,
+    ClaudeAccount? Account = null);
 
 /// <summary>
 /// One running Claude Code CLI in headless streaming mode (the interface the Agent SDK uses): JSON lines on
@@ -22,20 +23,34 @@ public sealed class ClaudeSession : IAsyncDisposable
     static readonly JsonSerializerOptions Json = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
 
     readonly Process _process;
+    readonly StreamWriter _stdin;
     readonly ConcurrentDictionary<string, TaskCompletionSource<JsonElement>> _pending = new();
     readonly SemaphoreSlim _writeLock = new(1, 1);
     readonly StringBuilder _stderr = new();
     readonly Task _reader;
+    readonly TaskCompletionSource<bool> _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    readonly TaskCompletionSource<bool> _stderrDone = new(TaskCreationOptions.RunContinuationsAsynchronously);
     int _requestCounter;
     bool _disposed;
 
     ClaudeSession(Process process)
     {
         _process = process;
+        // UTF-8 whatever the console code page is (Windows), as JSON lines.
+        _stdin = new StreamWriter(process.StandardInput.BaseStream, new UTF8Encoding(false)) { NewLine = "\n" };
+        // The exit is awaited through Exited, not Process.WaitForExit: on .NET Framework that throws (NullReference in
+        // AsyncStreamReader) while stderr is read asynchronously, which brought Visual Studio down.
+        _process.EnableRaisingEvents = true;
+        _process.Exited += (_, _) => _exited.TrySetResult(true);
+        if (_process.HasExited)
+            _exited.TrySetResult(true);
         _process.ErrorDataReceived += (_, e) =>
         {
             if (e.Data is null)
+            {
+                _stderrDone.TrySetResult(true);
                 return;
+            }
             lock (_stderr)
             {
                 _stderr.AppendLine(e.Data);
@@ -83,15 +98,17 @@ public sealed class ClaudeSession : IAsyncDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+            // No console window on Windows (Visual Studio is a GUI process).
+            CreateNoWindow = true,
             WorkingDirectory = options.WorkingDirectory,
             StandardOutputEncoding = new UTF8Encoding(false),
-            StandardInputEncoding = new UTF8Encoding(false),
         };
         foreach (var arg in Arguments(options))
             psi.ArgumentList.Add(arg);
         // A CLI started from inside another Claude Code session must not think it is nested.
         psi.Environment.Remove("CLAUDECODE");
         psi.Environment["PWD"] = options.WorkingDirectory;
+        options.Account?.Apply(psi.Environment);
         var process = Process.Start(psi) ?? throw new InvalidOperationException("Claude Code could not be started.");
         var session = new ClaudeSession(process) { SessionId = options.Resume };
         try
@@ -100,9 +117,12 @@ public sealed class ClaudeSession : IAsyncDisposable
             timeout.CancelAfter(TimeSpan.FromSeconds(60));
             session.Initialization = await session.RequestAsync(new { subtype = "initialize", hooks = (object?)null }, timeout.Token);
         }
-        catch
+        catch (Exception ex)
         {
             await session.DisposeAsync();
+            // A CLI that quits at once (not signed in, no access...) says why on stderr; "the pipe has been ended" does not.
+            if (session._exited.Task.IsCompleted && session.StderrTail(6) is { Length: > 0 } reason)
+                throw new InvalidOperationException(reason, ex);
             throw;
         }
         return session;
@@ -180,7 +200,7 @@ public sealed class ClaudeSession : IAsyncDisposable
         var id = $"req_{Interlocked.Increment(ref _requestCounter)}_{Random.Shared.Next():x8}";
         var tcs = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[id] = tcs;
-        await using var registration = ct.Register(() => tcs.TrySetCanceled());
+        using var registration = ct.Register(() => tcs.TrySetCanceled());
         await WriteAsync(new { type = "control_request", request_id = id, request });
         return await tcs.Task;
     }
@@ -193,8 +213,8 @@ public sealed class ClaudeSession : IAsyncDisposable
         {
             if (_process.HasExited)
                 throw new InvalidOperationException("Claude Code is not running.");
-            await _process.StandardInput.WriteLineAsync(line);
-            await _process.StandardInput.FlushAsync();
+            await _stdin.WriteLineAsync(line);
+            await _stdin.FlushAsync();
         }
         finally
         {
@@ -226,7 +246,7 @@ public sealed class ClaudeSession : IAsyncDisposable
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
         {
         }
-        await _process.WaitForExitAsync();
+        await WaitForExitAsync(CancellationToken.None);
         foreach (var pending in _pending.Values)
             pending.TrySetException(new InvalidOperationException("Claude Code exited."));
         string stderr;
@@ -257,6 +277,23 @@ public sealed class ClaudeSession : IAsyncDisposable
         }
     }
 
+    /// <summary>The last lines the CLI wrote to stderr.</summary>
+    internal string StderrTail(int lines)
+    {
+        lock (_stderr)
+            return string.Join("\n", _stderr.ToString().Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Trim().Length > 0).Reverse().Take(lines).Reverse());
+    }
+
+    /// <summary>Until the CLI exits (and its stderr is read to the end, briefly), or <paramref name="ct"/> is cancelled.</summary>
+    async Task WaitForExitAsync(CancellationToken ct)
+    {
+        var cancelled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using (ct.Register(() => cancelled.TrySetCanceled()))
+            await await Task.WhenAny(_exited.Task, cancelled.Task);
+        await Task.WhenAny(_stderrDone.Task, Task.Delay(1000));
+    }
+
+    /// <summary>Ends the CLI: closes its input, gives it a moment, then kills it. Never throws.</summary>
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -265,22 +302,30 @@ public sealed class ClaudeSession : IAsyncDisposable
         try
         {
             if (!_process.HasExited)
-                _process.StandardInput.Close();
+                _stdin.Close();
             using var wait = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await _process.WaitForExitAsync(wait.Token);
+            await WaitForExitAsync(wait.Token);
         }
-        catch (Exception ex) when (ex is OperationCanceledException or IOException or InvalidOperationException)
+        catch (Exception)
         {
             try
             {
-                _process.Kill(entireProcessTree: true);
+                if (!_process.HasExited)
+                    _process.Kill(entireProcessTree: true);
             }
-            catch (InvalidOperationException)
+            catch (Exception)
             {
+                // Already gone, or not ours to stop.
             }
         }
-        await Task.WhenAny(_reader, Task.Delay(2000));
-        _process.Dispose();
+        try
+        {
+            await Task.WhenAny(_reader, Task.Delay(2000));
+            _process.Dispose();
+        }
+        catch (Exception)
+        {
+        }
     }
 }
 

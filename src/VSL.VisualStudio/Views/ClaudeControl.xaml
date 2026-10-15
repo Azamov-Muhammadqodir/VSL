@@ -1,0 +1,1494 @@
+<UserControl x:Class="VSL.VisualStudio.Views.ClaudeControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:VSL.ViewModels"
+             xmlns:c="clr-namespace:VSL.Claude"
+             xmlns:v="clr-namespace:VSL.VisualStudio.Views"
+             xmlns:vsui="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
+             Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowTextBrushKey}}"
+             FontSize="13"
+             TextOptions.TextFormattingMode="Display"
+             UseLayoutRounding="True"
+             AllowDrop="True">
+  <UserControl.Resources>
+    <v:VisibleWhen x:Key="Visible" />
+    <v:VisibleWhen x:Key="Hidden" Invert="True" />
+    <v:Not x:Key="Not" />
+    <v:ThumbnailSource x:Key="Thumbnail" />
+    <v:SameAccount x:Key="SameAccount" />
+    <v:LimitLevel x:Key="Level" />
+
+    <!-- Colors: the VS theme for text and surfaces, translucent overlays that work on dark and light themes, Claude's accent. -->
+    <SolidColorBrush x:Key="ClaudeAccent" Color="#D97757" />
+    <SolidColorBrush x:Key="ClaudeAccentHover" Color="#E48A6C" />
+    <SolidColorBrush x:Key="ClaudeAccentSoft" Color="#33D97757" />
+    <SolidColorBrush x:Key="ClaudeOverlay" Color="#14808080" />
+    <SolidColorBrush x:Key="ClaudeOverlayStrong" Color="#2E808080" />
+    <SolidColorBrush x:Key="ClaudeLine" Color="#50808080" />
+    <SolidColorBrush x:Key="ClaudeCodeBackground" Color="#14000000" />
+    <SolidColorBrush x:Key="ClaudeError" Color="#E5534B" />
+    <SolidColorBrush x:Key="ClaudeAdded" Color="#3328A745" />
+    <SolidColorBrush x:Key="ClaudeRemoved" Color="#33E5534B" />
+    <SolidColorBrush x:Key="ClaudeEffort" Color="#A592E8" />
+    <FontFamily x:Key="ClaudeMono">Cascadia Mono, Consolas, Courier New</FontFamily>
+
+    <!-- Secondary text: a color between the theme's text and background (set from the theme in code). Opacity would
+         render the text without ClearType, blurred. -->
+    <SolidColorBrush x:Key="ClaudeMutedBrush" Color="#A8A8A8" />
+    <SolidColorBrush x:Key="ClaudeFaintBrush" Color="#8A8A8A" />
+    <Style x:Key="Muted" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource ClaudeMutedBrush}" />
+    </Style>
+    <Style x:Key="Mono" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{StaticResource ClaudeMono}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style x:Key="ErrorText" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource ClaudeError}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="Section" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource ClaudeMutedBrush}" />
+      <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+
+    <!-- Read-only text that can be selected and copied (VSL's SelectableTextBlock). -->
+    <Style x:Key="ClaudeSelectableText" TargetType="TextBox">
+      <Setter Property="IsReadOnly" Value="True" />
+      <Setter Property="IsReadOnlyCaretVisible" Value="False" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="IsTabStop" Value="False" />
+      <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" />
+      <Setter Property="SelectionBrush" Value="{DynamicResource {x:Static vsui:EnvironmentColors.SystemHighlightBrushKey}}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <ScrollViewer x:Name="PART_ContentHost" Focusable="False" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="ClaudeMonoText" TargetType="TextBox" BasedOn="{StaticResource ClaudeSelectableText}">
+      <Setter Property="FontFamily" Value="{StaticResource ClaudeMono}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <!-- A theme-coloured text field with a placeholder (Tag). -->
+    <Style x:Key="ClaudeField" TargetType="TextBox">
+      <Setter Property="Background" Value="{StaticResource ClaudeOverlay}" />
+      <Setter Property="BorderBrush" Value="{StaticResource ClaudeLine}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="6,4" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" />
+      <Setter Property="CaretBrush" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" />
+      <Setter Property="SelectionBrush" Value="{DynamicResource {x:Static vsui:EnvironmentColors.SystemHighlightBrushKey}}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4">
+              <Grid>
+                <TextBlock x:Name="Placeholder" Text="{TemplateBinding Tag}" Margin="{TemplateBinding Padding}" Padding="2,0,0,0" Foreground="{DynamicResource ClaudeFaintBrush}"
+                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}" IsHitTestVisible="False" Visibility="Collapsed"
+                           TextTrimming="CharacterEllipsis" />
+                <!-- The TextBox applies Padding to the text itself, so only the placeholder takes it here. -->
+                <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+              </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="Text" Value="">
+                <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter TargetName="Frame" Property="BorderBrush" Value="{StaticResource ClaudeAccent}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- The prompt: no frame of its own (the rounded input box around it is the frame). -->
+    <Style x:Key="ClaudePrompt" TargetType="TextBox" BasedOn="{StaticResource ClaudeField}">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="VerticalContentAlignment" Value="Top" />
+    </Style>
+
+    <!-- Buttons -->
+    <Style x:Key="ClaudeButtonBase" TargetType="ButtonBase">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <!-- A hover layer that fades in, and a small press-in, on every button of the panel. -->
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ButtonBase">
+            <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5" SnapsToDevicePixels="True">
+              <Grid.RenderTransform>
+                <ScaleTransform x:Name="Press" />
+              </Grid.RenderTransform>
+              <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                      BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{Binding (v:ClaudeControl.CornerRadius), RelativeSource={RelativeSource TemplatedParent}}" />
+              <Border x:Name="Hover" Opacity="0" Background="{Binding (v:ClaudeControl.HoverBrush), RelativeSource={RelativeSource TemplatedParent}}"
+                      CornerRadius="{Binding (v:ClaudeControl.CornerRadius), RelativeSource={RelativeSource TemplatedParent}}" />
+              <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}" RecognizesAccessKey="False" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.14" />
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.28" />
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Trigger.EnterActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="Press" Storyboard.TargetProperty="ScaleX" To="0.96" Duration="0:0:0.07" />
+                      <DoubleAnimation Storyboard.TargetName="Press" Storyboard.TargetProperty="ScaleY" To="0.96" Duration="0:0:0.07" />
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="Press" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.18">
+                        <DoubleAnimation.EasingFunction>
+                          <BackEase EasingMode="EaseOut" Amplitude="0.6" />
+                        </DoubleAnimation.EasingFunction>
+                      </DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetName="Press" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.18">
+                        <DoubleAnimation.EasingFunction>
+                          <BackEase EasingMode="EaseOut" Amplitude="0.6" />
+                        </DoubleAnimation.EasingFunction>
+                      </DoubleAnimation>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="ClaudeIconButton" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="v:ClaudeControl.CornerRadius" Value="4" />
+    </Style>
+    <Style x:Key="Pill" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+      <Setter Property="Padding" Value="6,3" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="v:ClaudeControl.CornerRadius" Value="4" />
+    </Style>
+    <Style x:Key="LinkPill" TargetType="Button" BasedOn="{StaticResource Pill}">
+      <Setter Property="Padding" Value="0,2" />
+      <Setter Property="Foreground" Value="{DynamicResource {x:Static vsui:EnvironmentColors.ControlLinkTextBrushKey}}" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style x:Key="Row" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="v:ClaudeControl.HoverBrush" Value="Transparent" />
+    </Style>
+    <Style x:Key="Choice" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+      <Setter Property="Background" Value="{StaticResource ClaudeOverlayStrong}" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="v:ClaudeControl.CornerRadius" Value="6" />
+    </Style>
+    <Style x:Key="ChoiceFirst" TargetType="Button" BasedOn="{StaticResource Choice}">
+      <Setter Property="Background" Value="{StaticResource ClaudeAccentSoft}" />
+      <Setter Property="BorderBrush" Value="{StaticResource ClaudeAccent}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="v:ClaudeControl.HoverBrush" Value="#33D97757" />
+    </Style>
+    <Style x:Key="SendButton" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+      <Setter Property="Background" Value="{StaticResource ClaudeAccent}" />
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="v:ClaudeControl.CornerRadius" Value="14" />
+      <Setter Property="v:ClaudeControl.HoverBrush" Value="#38FFFFFF" />
+    </Style>
+    <Style x:Key="MenuRow" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+      <Setter Property="Padding" Value="12,7" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+          <Setter Property="Background" Value="{StaticResource ClaudeAccentSoft}" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+      <Setter Property="Padding" Value="0,4" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Foreground" Value="{DynamicResource {x:Static vsui:EnvironmentColors.ControlLinkTextBrushKey}}" />
+      <Setter Property="v:ClaudeControl.HoverBrush" Value="Transparent" />
+    </Style>
+    <!-- Day / Week: Tag="True" marks the shown one. -->
+    <Style x:Key="Segment" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+      <Setter Property="Padding" Value="14,3" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="v:ClaudeControl.CornerRadius" Value="4" />
+      <Style.Triggers>
+        <Trigger Property="Tag" Value="True">
+          <Setter Property="Background" Value="{StaticResource ClaudeOverlayStrong}" />
+          <Setter Property="FontWeight" Value="SemiBold" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="Badge" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#1A1A1A" />
+      <Setter Property="v:ClaudeControl.CornerRadius" Value="4" />
+    </Style>
+    <Style x:Key="BadgeBorder" TargetType="Border">
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="TextElement.Foreground" Value="#1A1A1A" />
+      <Setter Property="TextElement.FontSize" Value="11" />
+    </Style>
+
+    <!-- Surfaces -->
+    <Style x:Key="UserBubble" TargetType="Border">
+      <Setter Property="Background" Value="#16D97757" />
+      <Setter Property="BorderBrush" Value="#45D97757" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12,12,4,12" />
+      <Setter Property="Padding" Value="13,10" />
+    </Style>
+    <Style x:Key="Chip" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource ClaudeOverlayStrong}" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="6,1" />
+    </Style>
+    <Style x:Key="Card" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource ClaudeOverlay}" />
+      <Setter Property="BorderBrush" Value="{StaticResource ClaudeAccent}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+    <!-- A permission, question or plan card glows softly while it waits for an answer. -->
+    <Style x:Key="PendingCard" TargetType="Border" BasedOn="{StaticResource Card}">
+      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="BorderBrush">
+        <Setter.Value>
+          <SolidColorBrush Color="#D97757" />
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsPending}" Value="True">
+          <DataTrigger.EnterActions>
+            <BeginStoryboard x:Name="Glow">
+              <Storyboard>
+                <DoubleAnimation Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Opacity)" From="1" To="0.3" Duration="0:0:1.1"
+                                 AutoReverse="True" RepeatBehavior="Forever">
+                  <DoubleAnimation.EasingFunction>
+                    <SineEase EasingMode="EaseInOut" />
+                  </DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+              </Storyboard>
+            </BeginStoryboard>
+          </DataTrigger.EnterActions>
+          <DataTrigger.ExitActions>
+            <StopStoryboard BeginStoryboardName="Glow" />
+          </DataTrigger.ExitActions>
+        </DataTrigger>
+        <DataTrigger Binding="{Binding IsResolved}" Value="True">
+          <Setter Property="BorderBrush" Value="{StaticResource ClaudeLine}" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- Each new row of the conversation fades in and rises into place. -->
+    <Style x:Key="ChatRow" TargetType="ContentPresenter">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="RenderTransform">
+        <Setter.Value>
+          <TranslateTransform Y="12" />
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+          <BeginStoryboard>
+            <Storyboard>
+              <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.3" />
+              <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" To="0" Duration="0:0:0.38">
+                <DoubleAnimation.EasingFunction>
+                  <CubicEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+              </DoubleAnimation>
+            </Storyboard>
+          </BeginStoryboard>
+        </EventTrigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- Card titles: an accent icon and a heading. -->
+    <Style x:Key="CardTitle" TargetType="TextBlock">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="Box" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource ClaudeCodeBackground}" />
+      <Setter Property="BorderBrush" Value="{StaticResource ClaudeLine}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="5" />
+    </Style>
+    <Style x:Key="MenuCard" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource {x:Static vsui:EnvironmentColors.CommandBarMenuBackgroundGradientBrushKey}}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsui:EnvironmentColors.CommandBarMenuBorderBrushKey}}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style x:Key="Dialog" TargetType="Border" BasedOn="{StaticResource MenuCard}">
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Margin" Value="16,18" />
+      <Setter Property="MaxWidth" Value="460" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style x:Key="ServerRow" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource ClaudeOverlay}" />
+      <Setter Property="BorderBrush" Value="{StaticResource ClaudeLine}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="12,9" />
+    </Style>
+    <Style x:Key="Key" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource ClaudeOverlayStrong}" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="TextElement.FontSize" Value="10" />
+    </Style>
+
+    <!-- A tool call's status dot: green when done, grey while running, red on error. -->
+    <Style x:Key="Dot" TargetType="Ellipse">
+      <Setter Property="Fill" Value="#3FB950" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsRunning}" Value="True">
+          <Setter Property="Fill" Value="{StaticResource ClaudeAccent}" />
+          <DataTrigger.EnterActions>
+            <BeginStoryboard x:Name="DotPulse">
+              <Storyboard>
+                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0.25" Duration="0:0:0.7" AutoReverse="True" RepeatBehavior="Forever">
+                  <DoubleAnimation.EasingFunction>
+                    <SineEase EasingMode="EaseInOut" />
+                  </DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+              </Storyboard>
+            </BeginStoryboard>
+          </DataTrigger.EnterActions>
+          <DataTrigger.ExitActions>
+            <StopStoryboard BeginStoryboardName="DotPulse" />
+          </DataTrigger.ExitActions>
+        </DataTrigger>
+        <DataTrigger Binding="{Binding IsError}" Value="True">
+          <Setter Property="Fill" Value="#F85149" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+
+    <DataTemplate x:Key="DiffLineTemplate" DataType="{x:Type c:DiffLine}">
+      <Border x:Name="Line" Padding="8,0">
+        <TextBlock x:Name="LineText" Style="{StaticResource Mono}" TextWrapping="Wrap">
+          <Run Text="{Binding Prefix, Mode=OneWay}" /><Run Text=" " /><Run Text="{Binding Text, Mode=OneWay}" />
+        </TextBlock>
+      </Border>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding IsAdded}" Value="True">
+          <Setter TargetName="Line" Property="Background" Value="{StaticResource ClaudeAdded}" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding IsRemoved}" Value="True">
+          <Setter TargetName="Line" Property="Background" Value="{StaticResource ClaudeRemoved}" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding IsGap}" Value="True">
+          <Setter TargetName="LineText" Property="Foreground" Value="{DynamicResource ClaudeFaintBrush}" />
+        </DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <ItemsPanelTemplate x:Key="WrapItems">
+      <WrapPanel />
+    </ItemsPanelTemplate>
+
+    <!-- ===== Conversation rows ===== -->
+    <DataTemplate DataType="{x:Type vm:UserChatItem}">
+      <Border Style="{StaticResource UserBubble}" Margin="0,12,0,4">
+        <StackPanel>
+          <ItemsControl ItemsSource="{Binding Images}" Visibility="{Binding HasImages, Converter={StaticResource Visible}}" ItemsPanel="{StaticResource WrapItems}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type vm:ClaudeAttachment}">
+                <Border CornerRadius="4" Margin="0,0,6,6" BorderBrush="{StaticResource ClaudeLine}" BorderThickness="1" ToolTip="{Binding Name}">
+                  <Image Source="{Binding Thumbnail, Converter={StaticResource Thumbnail}}" MaxHeight="110" MaxWidth="160" Stretch="Uniform" />
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBox Style="{StaticResource ClaudeSelectableText}" Text="{Binding Text, Mode=OneWay}" Visibility="{Binding HasText, Converter={StaticResource Visible}}" />
+          <Border Style="{StaticResource Chip}" Visibility="{Binding HasContext, Converter={StaticResource Visible}}" HorizontalAlignment="Left" Margin="0,6,0,0">
+            <StackPanel Orientation="Horizontal">
+              <v:VsIcon Kind="file" Width="11" Height="11" Margin="0,0,4,0" />
+              <TextBlock Text="{Binding Context}" FontSize="11" Style="{StaticResource Muted}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:TextChatItem}">
+      <v:MarkdownView Markdown="{Binding Text}" Margin="0,8,0,2" />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:ThinkingChatItem}">
+      <StackPanel Margin="0,6,0,0">
+        <Button Style="{StaticResource Row}" ToolTip="{v:L 'Show Claude\'s reasoning'}"
+                Command="{Binding DataContext.ToggleExpandCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+          <StackPanel Orientation="Horizontal">
+            <v:VsIcon x:Name="Chevron" Kind="Chevron" Width="10" Height="10" Margin="0,0,6,0" RenderTransformOrigin="0.5,0.5">
+              <v:VsIcon.RenderTransform>
+                <RotateTransform Angle="-90" />
+              </v:VsIcon.RenderTransform>
+            </v:VsIcon>
+            <TextBlock Text="{v:L 'Thought process'}" FontStyle="Italic" Style="{StaticResource Muted}" />
+          </StackPanel>
+        </Button>
+        <Border x:Name="Thought" Visibility="{Binding IsExpanded, Converter={StaticResource Visible}}" BorderBrush="{StaticResource ClaudeLine}"
+                BorderThickness="2,0,0,0" Padding="10,2,0,2" Margin="4,6,0,0" Opacity="0">
+          <TextBox Style="{StaticResource ClaudeSelectableText}" Text="{Binding Text, Mode=OneWay}" FontStyle="Italic" Foreground="{DynamicResource ClaudeMutedBrush}" FontSize="12" />
+        </Border>
+      </StackPanel>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+          <DataTrigger.EnterActions>
+            <BeginStoryboard>
+              <Storyboard>
+                <DoubleAnimation Storyboard.TargetName="Chevron" Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" To="0" Duration="0:0:0.18" />
+                <DoubleAnimation Storyboard.TargetName="Thought" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.25" />
+              </Storyboard>
+            </BeginStoryboard>
+          </DataTrigger.EnterActions>
+          <DataTrigger.ExitActions>
+            <BeginStoryboard>
+              <Storyboard>
+                <DoubleAnimation Storyboard.TargetName="Chevron" Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" To="-90" Duration="0:0:0.18" />
+                <DoubleAnimation Storyboard.TargetName="Thought" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.1" />
+              </Storyboard>
+            </BeginStoryboard>
+          </DataTrigger.ExitActions>
+        </DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:ToolChatItem}">
+      <StackPanel Margin="0,6,0,0">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Ellipse Width="7" Height="7" Margin="0,6,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" Style="{StaticResource Dot}" />
+          <Button Grid.Column="1" Style="{StaticResource Row}" ToolTip="{v:L 'Show details'}"
+                  Command="{Binding DataContext.ToggleExpandCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+            <TextBlock TextWrapping="Wrap">
+              <Run Text="{v:Tr Title}" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Target, Mode=OneWay}" FontFamily="{StaticResource ClaudeMono}" FontSize="12" />
+            </TextBlock>
+          </Button>
+        </Grid>
+        <Grid Visibility="{Binding HasSummary, Converter={StaticResource Visible}}" Margin="0,2,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Border Grid.Column="1" Width="9" Height="8" BorderBrush="{StaticResource ClaudeLine}" BorderThickness="1,0,0,1" VerticalAlignment="Top" Margin="2,1,6,0" />
+          <TextBlock x:Name="Summary" Grid.Column="2" Text="{v:Tr Summary}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
+        </Grid>
+        <StackPanel Visibility="{Binding HasChildren, Converter={StaticResource Visible}}" Margin="16,3,0,0">
+          <TextBlock Text="{v:Tr MoreChildrenText}" Visibility="{Binding HasMoreChildren, Converter={StaticResource Visible}}" Style="{StaticResource Muted}" FontSize="11" Margin="12,0,0,1" />
+          <ItemsControl ItemsSource="{Binding VisibleChildren}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type vm:ToolChatItem}">
+                <Grid Margin="0,1">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Ellipse Width="5" Height="5" Margin="1,6,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" Style="{StaticResource Dot}" />
+                  <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis" FontSize="12">
+                    <Run Text="{v:Tr Title}" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Target, Mode=OneWay}" FontFamily="{StaticResource ClaudeMono}" FontSize="11" /><Run Text="  " /><Run Text="{v:Tr Summary}" />
+                  </TextBlock>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+        <Border Style="{StaticResource Box}" Visibility="{Binding ShowDiff, Converter={StaticResource Visible}}" Margin="16,5,0,0">
+          <ItemsControl ItemsSource="{Binding Diff}" ItemTemplate="{StaticResource DiffLineTemplate}" Margin="0,3" />
+        </Border>
+        <ItemsControl ItemsSource="{Binding Todos}" Visibility="{Binding HasTodos, Converter={StaticResource Visible}}" Margin="16,4,0,0">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="{x:Type vm:TodoEntry}">
+              <StackPanel Orientation="Horizontal" Margin="0,1">
+                <Border Width="12" Height="12" CornerRadius="2" BorderBrush="#8B8B8B" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,7,0">
+                  <v:VsIcon Kind="Ok" Width="12" Height="12" Visibility="{Binding IsDone, Converter={StaticResource Visible}}" />
+                </Border>
+                <TextBlock x:Name="Todo" Text="{Binding Content}" TextWrapping="Wrap" FontSize="12" />
+              </StackPanel>
+              <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                  <Setter TargetName="Todo" Property="TextDecorations" Value="Strikethrough" />
+                  <Setter TargetName="Todo" Property="Foreground" Value="{DynamicResource ClaudeFaintBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                  <Setter TargetName="Todo" Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+              </DataTemplate.Triggers>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <StackPanel Visibility="{Binding IsExpanded, Converter={StaticResource Visible}}" Margin="16,5,0,0">
+          <Button Style="{StaticResource Pill}" Content="{v:L 'Open file'}" HorizontalAlignment="Left" Margin="0,0,0,5"
+                  Visibility="{Binding FilePath, Converter={StaticResource Visible}}"
+                  Command="{Binding DataContext.OpenFileCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}" />
+          <Border Style="{StaticResource Box}" Visibility="{Binding HasCode, Converter={StaticResource Visible}}" Margin="0,0,0,5">
+            <TextBox Style="{StaticResource ClaudeMonoText}" Text="{Binding Code, Mode=OneWay}" Margin="8,6" />
+          </Border>
+          <Border Style="{StaticResource Box}" Visibility="{Binding HasMoreResult, Converter={StaticResource Visible}}">
+            <ScrollViewer MaxHeight="320" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+              <TextBox Style="{StaticResource ClaudeMonoText}" Text="{Binding Result, Mode=OneWay}" Foreground="{DynamicResource ClaudeMutedBrush}" Margin="8,6" />
+            </ScrollViewer>
+          </Border>
+        </StackPanel>
+      </StackPanel>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding IsError}" Value="True">
+          <Setter TargetName="Summary" Property="Foreground" Value="{StaticResource ClaudeError}" />
+        </DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:PermissionChatItem}">
+      <Border Style="{StaticResource PendingCard}" Margin="0,10,0,4">
+        <StackPanel>
+          <DockPanel>
+            <v:VsIcon DockPanel.Dock="Left" Kind="Hand" Width="16" Height="16" Margin="0,0,8,0" Foreground="{StaticResource ClaudeAccent}" VerticalAlignment="Top" />
+            <TextBlock Text="{v:Tr Question}" Style="{StaticResource CardTitle}" />
+          </DockPanel>
+          <TextBlock Text="{v:Tr Description}" Visibility="{Binding HasDescription, Converter={StaticResource Visible}}" Style="{StaticResource Muted}"
+                     TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
+          <Border Style="{StaticResource Box}" Visibility="{Binding HasCode, Converter={StaticResource Visible}}" Margin="0,8,0,0">
+            <ScrollViewer MaxHeight="220" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+              <TextBox Style="{StaticResource ClaudeMonoText}" Text="{Binding Code, Mode=OneWay}" Margin="8,6" />
+            </ScrollViewer>
+          </Border>
+          <Border Style="{StaticResource Box}" Visibility="{Binding HasDiff, Converter={StaticResource Visible}}" Margin="0,8,0,0">
+            <ScrollViewer MaxHeight="260" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+              <ItemsControl ItemsSource="{Binding Diff}" ItemTemplate="{StaticResource DiffLineTemplate}" Margin="0,3" />
+            </ScrollViewer>
+          </Border>
+          <StackPanel Visibility="{Binding IsPending, Converter={StaticResource Visible}}" Margin="0,8,0,0">
+            <Button Style="{StaticResource LinkPill}" Content="{v:L 'Open side-by-side diff'}" Visibility="{Binding CanOpenDiff, Converter={StaticResource Visible}}" Margin="0,0,0,5"
+                    Command="{Binding DataContext.OpenDiffCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}" />
+            <Button Style="{StaticResource ChoiceFirst}" Margin="0,0,0,5"
+                    Command="{Binding DataContext.AllowCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+              <TextBlock Text="{v:L 'Yes, allow this'}" FontWeight="SemiBold" />
+            </Button>
+            <Button Style="{StaticResource Choice}" Visibility="{Binding HasSessionOption, Converter={StaticResource Visible}}" Margin="0,0,0,5"
+                    Command="{Binding DataContext.AllowForSessionCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+              <TextBlock Text="{v:Tr SessionLabel}" TextWrapping="Wrap" />
+            </Button>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBox Style="{StaticResource ClaudeField}" Text="{Binding Feedback, UpdateSourceTrigger=PropertyChanged}" Tag="{v:L 'No — tell Claude what to do instead'}" />
+              <Button Grid.Column="1" Style="{StaticResource Choice}" Content="{v:L 'No'}" Margin="6,0,0,0" HorizontalAlignment="Right"
+                      Command="{Binding DataContext.DenyCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}" />
+            </Grid>
+          </StackPanel>
+          <TextBlock Text="{v:Tr Outcome}" Visibility="{Binding IsResolved, Converter={StaticResource Visible}}" Style="{StaticResource Muted}" FontStyle="Italic"
+                     FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:QuestionChatItem}">
+      <Border Style="{StaticResource PendingCard}" Margin="0,10,0,4">
+        <StackPanel>
+          <DockPanel Margin="0,0,0,10">
+            <v:VsIcon DockPanel.Dock="Left" Kind="Claude" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Top" />
+            <TextBlock Text="{v:L 'Claude has a few questions'}" Style="{StaticResource CardTitle}" />
+          </DockPanel>
+          <ItemsControl ItemsSource="{Binding Questions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type vm:QuestionEntry}">
+                <StackPanel Margin="0,0,0,10">
+                  <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                    <Border Style="{StaticResource Chip}" Visibility="{Binding HasHeader, Converter={StaticResource Visible}}" VerticalAlignment="Center" Margin="0,0,7,0">
+                      <TextBlock Text="{Binding Header}" FontSize="11" />
+                    </Border>
+                    <TextBlock Text="{v:Tr Question}" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <ItemsControl ItemsSource="{Binding Options}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="{x:Type vm:QuestionOption}">
+                        <CheckBox IsChecked="{Binding IsSelected}" Margin="0,2" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}"
+                                  VerticalContentAlignment="Top">
+                          <StackPanel>
+                            <TextBlock Text="{v:Tr Label}" TextWrapping="Wrap" />
+                            <TextBlock Text="{v:Tr Description}" Visibility="{Binding HasDescription, Converter={StaticResource Visible}}" Style="{StaticResource Muted}"
+                                       FontSize="11" TextWrapping="Wrap" />
+                          </StackPanel>
+                        </CheckBox>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <TextBox Style="{StaticResource ClaudeField}" Text="{Binding Other, UpdateSourceTrigger=PropertyChanged}" Tag="{v:L 'Something else? Type your own answer'}" Margin="0,5,0,0" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel Orientation="Horizontal" Visibility="{Binding IsPending, Converter={StaticResource Visible}}">
+            <Button Style="{StaticResource ChoiceFirst}" Content="{v:L 'Submit answers'}" HorizontalAlignment="Left"
+                    Command="{Binding DataContext.SubmitAnswersCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}" />
+            <TextBlock Text="{v:Tr Outcome}" Style="{StaticResource Muted}" VerticalAlignment="Center" FontSize="12" Margin="10,0,0,0" />
+          </StackPanel>
+          <TextBlock Text="{v:Tr Outcome}" Visibility="{Binding IsResolved, Converter={StaticResource Visible}}" Style="{StaticResource Muted}" FontStyle="Italic"
+                     FontSize="12" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:PlanChatItem}">
+      <Border Style="{StaticResource PendingCard}" Margin="0,10,0,4">
+        <StackPanel>
+          <DockPanel>
+            <v:VsIcon DockPanel.Dock="Left" Kind="PlanDoc" Width="16" Height="16" Margin="0,0,8,0" Foreground="{StaticResource ClaudeAccent}" />
+            <TextBlock Text="{v:L 'Claude\'s plan'}" Style="{StaticResource CardTitle}" />
+          </DockPanel>
+          <Border Style="{StaticResource Box}" Padding="12,8" Margin="0,8,0,0">
+            <v:MarkdownView Markdown="{Binding Plan}" />
+          </Border>
+          <StackPanel Visibility="{Binding IsPending, Converter={StaticResource Visible}}" Margin="0,8,0,0">
+            <TextBlock Text="{v:L 'Ready to go ahead?'}" Margin="0,0,0,6" Style="{StaticResource Muted}" />
+            <Button Style="{StaticResource ChoiceFirst}" Content="{v:L 'Yes, and auto-accept edits'}" Margin="0,0,0,5"
+                    Command="{Binding DataContext.ApprovePlanCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}" />
+            <Button Style="{StaticResource Choice}" Content="{v:L 'Yes, and manually approve edits'}" Margin="0,0,0,5"
+                    Command="{Binding DataContext.ApprovePlanManuallyCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}" />
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBox Style="{StaticResource ClaudeField}" Text="{Binding Feedback, UpdateSourceTrigger=PropertyChanged}" Tag="{v:L 'Not yet — tell Claude what to change'}" />
+              <Button Grid.Column="1" Style="{StaticResource Choice}" Content="{v:L 'Keep planning'}" Margin="6,0,0,0"
+                      Command="{Binding DataContext.KeepPlanningCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}" />
+            </Grid>
+          </StackPanel>
+          <TextBlock Text="{v:Tr Outcome}" Visibility="{Binding IsResolved, Converter={StaticResource Visible}}" Style="{StaticResource Muted}" FontStyle="Italic"
+                     FontSize="12" Margin="0,8,0,0" />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:NoticeChatItem}">
+      <TextBlock x:Name="Notice" Text="{v:Tr Text}" Style="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding IsError}" Value="True">
+          <Setter TargetName="Notice" Property="Foreground" Value="{StaticResource ClaudeError}" />
+        </DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}">
+    <DockPanel v:MarkdownView.LinkCommand="{Binding OpenLinkCommand}">
+      <!-- ===== Header ===== -->
+      <Border DockPanel.Dock="Top" BorderBrush="{StaticResource ClaudeLine}" BorderThickness="0,0,0,1">
+        <Grid Margin="8,3">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <v:VsIcon Kind="Claude" Width="15" Height="15" Margin="0,0,7,0" />
+            <TextBlock x:Name="HeaderTitle" Text="Claude Code" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal">
+            <!-- The account conversations run with (~/.claude, ~/.claude-NAME...). -->
+            <!-- English / O'zbekcha -->
+            <Button Style="{StaticResource Pill}" Click="OnLanguageClick" Margin="0,0,2,0" ToolTip="{v:L 'Language: English / O‘zbekcha'}">
+              <StackPanel Orientation="Horizontal">
+                <v:VsIcon Kind="Globe" Width="13" Height="13" Margin="0,0,4,0" />
+                <TextBlock Text="{Binding Code, Source={x:Static v:Loc.Instance}}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource Pill}" Command="{Binding ToggleAccountsCommand}" Margin="0,0,4,0" ToolTip="{v:L 'Switch or add a Claude account'}">
+              <StackPanel Orientation="Horizontal">
+                <v:VsIcon Kind="User" Width="13" Height="13" Margin="0,0,5,0" />
+                <TextBlock Text="{v:Tr AccountName}" VerticalAlignment="Center" MaxWidth="110" TextTrimming="CharacterEllipsis" />
+                <v:VsIcon Kind="Chevron" Width="10" Height="10" Margin="3,1,0,0" Opacity="0.7" />
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource ClaudeIconButton}" Command="{Binding OpenUsageCommand}" ToolTip="{v:L 'Account &amp; usage (/usage)'}" Margin="1,0">
+              <v:VsIcon Kind="Gauge" />
+            </Button>
+            <Button Style="{StaticResource ClaudeIconButton}" Command="{Binding OpenMcpCommand}" ToolTip="{v:L 'MCP servers (/mcp)'}" Margin="1,0">
+              <v:VsIcon Kind="Plug" />
+            </Button>
+            <Button Style="{StaticResource ClaudeIconButton}" Command="{Binding ToggleHistoryCommand}" ToolTip="{v:L 'Past conversations'}" Margin="1,0">
+              <v:VsIcon Kind="History" />
+            </Button>
+            <Button Style="{StaticResource ClaudeIconButton}" Command="{Binding NewConversationCommand}" ToolTip="{v:L 'New conversation'}" Margin="1,0">
+              <v:VsIcon Kind="Plus" />
+            </Button>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- ===== Keyboard hints under the prompt ===== -->
+      <TextBlock DockPanel.Dock="Bottom" Margin="16,0,12,8" FontSize="11" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis"
+                 Visibility="{Binding IsCliMissing, Converter={StaticResource Hidden}}">
+        <Run Text="{v:L 'Enter'}" FontWeight="SemiBold" /><Run Text="{v:L ' to send  ·  '}" /><Run Text="{v:L 'Shift+Enter'}" FontWeight="SemiBold" /><Run Text="{v:L ' new line  ·  '}" /><Run Text="/" FontWeight="SemiBold" /><Run Text="{v:L ' commands  ·  '}" /><Run Text="@" FontWeight="SemiBold" /><Run Text="{v:L ' files'}" />
+      </TextBlock>
+
+      <!-- ===== Prompt ===== -->
+      <Border x:Name="InputBox" DockPanel.Dock="Bottom" Margin="10,4,10,6" CornerRadius="14" BorderThickness="1" Background="{StaticResource ClaudeOverlay}"
+              Visibility="{Binding IsCliMissing, Converter={StaticResource Hidden}}">
+        <Border.Style>
+          <Style TargetType="Border">
+            <Setter Property="BorderBrush" Value="{StaticResource ClaudeLine}" />
+            <Style.Triggers>
+              <!-- Focus: an accent frame. -->
+              <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource ClaudeAccent}" />
+                <Setter Property="BorderThickness" Value="1.5" />
+              </Trigger>
+            </Style.Triggers>
+          </Style>
+        </Border.Style>
+        <StackPanel>
+          <ListBox x:Name="SuggestionList" ItemsSource="{Binding Suggestions}" Visibility="{Binding Suggestions.Count, Converter={StaticResource Visible}}" MaxHeight="220"
+                   Background="Transparent" BorderThickness="0" Margin="4,4,4,0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}">
+            <ListBox.ItemTemplate>
+              <DataTemplate DataType="{x:Type vm:ClaudeSuggestion}">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock x:Name="Label" Text="{v:Tr Label}" FontWeight="SemiBold" />
+                  <TextBlock Grid.Column="1" Text="{v:Tr Detail}" Style="{StaticResource Muted}" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" FontSize="12" VerticalAlignment="Center" />
+                </Grid>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding IsFile}" Value="True">
+                    <Setter TargetName="Label" Property="FontFamily" Value="{StaticResource ClaudeMono}" />
+                    <Setter TargetName="Label" Property="FontSize" Value="12" />
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <ItemsControl ItemsSource="{Binding Attachments}" Visibility="{Binding HasAttachments, Converter={StaticResource Visible}}" Margin="10,8,10,0"
+                        ItemsPanel="{StaticResource WrapItems}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type vm:ClaudeAttachment}">
+                <Border Style="{StaticResource Chip}" Margin="0,0,6,6" Padding="3" ToolTip="{Binding Name}">
+                  <StackPanel Orientation="Horizontal">
+                    <Image Source="{Binding Thumbnail, Converter={StaticResource Thumbnail}}" Width="38" Height="38" Stretch="UniformToFill" Margin="0,0,6,0" />
+                    <StackPanel VerticalAlignment="Center" MaxWidth="120" Margin="0,0,6,0">
+                      <TextBlock Text="{Binding Name}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding SizeText}" FontSize="11" Style="{StaticResource Muted}" />
+                    </StackPanel>
+                    <Button Style="{StaticResource ClaudeIconButton}" VerticalAlignment="Top" ToolTip="{v:L 'Remove'}"
+                            Command="{Binding DataContext.RemoveAttachmentCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+                      <v:VsIcon Kind="Close" Width="10" Height="10" />
+                    </Button>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{v:Tr AttachmentError}" Style="{StaticResource ErrorText}" FontSize="11" Margin="12,6,12,0"
+                     Visibility="{Binding AttachmentError, Converter={StaticResource Visible}}" />
+          <TextBox x:Name="PromptBox" Style="{StaticResource ClaudePrompt}" Text="{Binding Prompt, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True"
+                   TextWrapping="Wrap" MinHeight="58" MaxHeight="240" Padding="13,11,13,4" VerticalScrollBarVisibility="Auto"
+                   Tag="{v:L 'Ask Claude to build, fix or explain something…'}" />
+          <Grid Margin="6,0,6,6">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button Style="{StaticResource Pill}" Click="OnAttachClick" ToolTip="{v:L 'Attach images or files — or just paste or drop them here'}">
+              <v:VsIcon Kind="Attach" Width="14" Height="14" />
+            </Button>
+            <Button Grid.Column="1" Style="{StaticResource Pill}" Command="{Binding ToggleContextCommand}" Visibility="{Binding HasEditorContext, Converter={StaticResource Visible}}"
+                    ToolTip="{v:L 'Claude sees this file and your selection. Click to include or leave it out.'}">
+              <StackPanel Orientation="Horizontal">
+                <v:VsIcon Kind="Eye" Width="13" Height="13" Visibility="{Binding IncludeContext, Converter={StaticResource Visible}}" Margin="0,0,5,0" />
+                <v:VsIcon Kind="EyeOff" Width="13" Height="13" Visibility="{Binding IncludeContext, Converter={StaticResource Hidden}}" Margin="0,0,5,0" />
+                <TextBlock Text="{Binding ContextLabel}" VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="2" Style="{StaticResource Pill}" Command="{Binding ToggleModesCommand}" ToolTip="{v:L 'How much Claude may do on its own, and how hard it thinks (Shift+Tab to switch)'}">
+              <StackPanel Orientation="Horizontal">
+                <v:VsIcon Kind="{Binding ModeIcon}" Width="13" Height="13" Margin="0,0,5,0" />
+                <TextBlock Text="{v:Tr ModeLabel}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <ComboBox x:Name="ModelPicker" Grid.Column="4" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" MaxWidth="170" FontSize="12"
+                      Margin="0,0,6,0" VerticalAlignment="Center" ToolTip="{v:L 'Model Claude answers with'}"
+                      Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ComboBoxStyleKey}}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:ClaudeModelChoice}">
+                  <StackPanel Margin="0,2">
+                    <TextBlock x:Name="Label" Text="{v:Tr Label}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="Description" Text="{v:Tr Description}" Visibility="{Binding HasDescription, Converter={StaticResource Visible}}"
+                               Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" MaxWidth="320" />
+                  </StackPanel>
+                  <DataTemplate.Triggers>
+                    <!-- In the closed picker (no ComboBoxItem around it): the short label only. -->
+                    <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ComboBoxItem}}" Value="{x:Null}">
+                      <Setter TargetName="Label" Property="Text" Value="{Binding ShortLabel}" />
+                      <Setter TargetName="Description" Property="Visibility" Value="Collapsed" />
+                    </DataTrigger>
+                  </DataTemplate.Triggers>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Grid.Column="5" Style="{StaticResource SendButton}" Command="{Binding SendCommand}" Visibility="{Binding IsRunning, Converter={StaticResource Hidden}}"
+                    ToolTip="{v:L 'Send (Enter)'}">
+              <v:VsIcon Kind="Send" Width="15" Height="15" Foreground="White" />
+            </Button>
+            <Button Grid.Column="5" Style="{StaticResource SendButton}" Command="{Binding StopCommand}" Visibility="{Binding IsRunning, Converter={StaticResource Visible}}"
+                    ToolTip="{v:L 'Stop Claude (Esc)'}">
+              <Grid>
+                <!-- A ring that keeps turning while Claude works. -->
+                <Ellipse Width="22" Height="22" StrokeThickness="2" Stroke="#AAFFFFFF" StrokeDashArray="4 6" v:Motion.Spin="1.6" />
+                <Border Width="9" Height="9" Background="White" CornerRadius="2" />
+              </Grid>
+            </Button>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- ===== Tokens: context with /context and /compact, and the plan's limits with when they reset ===== -->
+      <WrapPanel DockPanel.Dock="Bottom" Margin="12,2,12,0" Visibility="{Binding IsCliMissing, Converter={StaticResource Hidden}}">
+        <Button Style="{StaticResource Pill}" Command="{Binding ShowContextCommand}" ToolTip="{v:L 'How much context this conversation uses. Click for the breakdown (/context).'}"
+                Margin="0,0,2,2">
+          <StackPanel Orientation="Horizontal">
+            <v:VsIcon Kind="Gauge" Width="12" Height="12" Margin="0,0,5,0" />
+            <TextBlock Text="{v:L 'Context'}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ContextTokensText}" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center"
+                       Visibility="{Binding HasContextTokens, Converter={StaticResource Visible}}" />
+          </StackPanel>
+        </Button>
+        <Button Style="{StaticResource Pill}" Command="{Binding CompactCommand}" Margin="0,0,10,2"
+                ToolTip="{v:L 'Summarize the conversation so far so each answer costs fewer tokens (/compact)'}">
+          <StackPanel Orientation="Horizontal">
+            <v:VsIcon Kind="Compact" Width="12" Height="12" Margin="0,0,5,0" />
+            <TextBlock Text="{v:L 'Compact'}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Style="{StaticResource Pill}" Command="{Binding OpenUsageCommand}" Margin="0,0,0,2" Padding="6,2"
+                Visibility="{Binding HasLiveLimits, Converter={StaticResource Visible}}"
+                ToolTip="{v:L 'Plan limits: how much is used and when it starts over. Click for details.'}">
+          <ItemsControl ItemsSource="{Binding LiveLimits}" Focusable="False">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type vm:UsageLimit}">
+                <StackPanel Orientation="Horizontal" Margin="0,0,10,0">
+                  <StackPanel.ToolTip>
+                    <TextBlock>
+                      <Run Text="{v:Tr Label}" FontWeight="SemiBold" /><Run Text=": " /><Run Text="{Binding PercentText, Mode=OneWay}" /><LineBreak />
+                      <Run Text="{v:Tr ResetText}" /><Run Text=" · " /><Run Text="{v:Tr ResetExact}" />
+                    </TextBlock>
+                  </StackPanel.ToolTip>
+                  <TextBlock Text="{v:Tr ShortLabel}" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,5,0" />
+                  <!-- A small meter that fills as the window is used up. -->
+                  <ProgressBar x:Name="Meter" Value="{Binding Percent, Mode=OneWay}" Maximum="100" Width="38" Height="5" Foreground="#6FCF97"
+                               Background="{StaticResource ClaudeOverlayStrong}" BorderThickness="0" VerticalAlignment="Center">
+                    <ProgressBar.Template>
+                      <ControlTemplate TargetType="ProgressBar">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="2.5">
+                          <Grid>
+                            <Border x:Name="PART_Track" />
+                            <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="2.5" HorizontalAlignment="Left" />
+                          </Grid>
+                        </Border>
+                      </ControlTemplate>
+                    </ProgressBar.Template>
+                  </ProgressBar>
+                  <TextBlock Text="{Binding PercentText}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="5,0,4,0" />
+                  <TextBlock Style="{StaticResource Muted}" VerticalAlignment="Center" FontSize="11">
+                    <Run Text="&#x21BB; " /><Run Text="{v:Tr ResetShort}" />
+                  </TextBlock>
+                </StackPanel>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding Percent, Converter={StaticResource Level}}" Value="Warn">
+                    <Setter TargetName="Meter" Property="Foreground" Value="#F2C94C" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding IsHigh}" Value="True">
+                    <Setter TargetName="Meter" Property="Foreground" Value="#F28C4C" />
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Button>
+      </WrapPanel>
+
+      <!-- ===== Status ===== -->
+      <!-- A turning spark and shimmering text while Claude works, as in Claude Code. -->
+      <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="16,6,10,2" Visibility="{Binding IsRunning, Converter={StaticResource Visible}}">
+        <v:VsIcon Kind="Claude" Width="14" Height="14" Margin="0,0,8,0" v:Motion.Spin="3" v:Motion.Breathe="0.75" />
+        <TextBlock Text="{v:Tr StatusText}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" v:Motion.Shimmer="True" />
+        <TextBlock Text="{v:L 'Esc to stop'}" Style="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center" />
+      </StackPanel>
+
+      <Grid>
+        <!-- ===== Conversation ===== -->
+        <ScrollViewer x:Name="ChatScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                      Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ScrollViewerStyleKey}}">
+          <ItemsControl x:Name="ChatItems" ItemsSource="{Binding Items}" Margin="14,6,14,10" Focusable="False" ItemContainerStyle="{StaticResource ChatRow}" />
+        </ScrollViewer>
+
+        <!-- ===== Empty conversation ===== -->
+        <StackPanel Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="20"
+                    MaxWidth="360">
+          <!-- A slowly breathing, turning spark. -->
+          <v:VsIcon Kind="Claude" Width="48" Height="48" HorizontalAlignment="Center" v:Motion.Spin="24" v:Motion.Breathe="2.2" />
+          <TextBlock Text="{v:L 'What shall we build today?'}" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,14,0,6" />
+          <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" FontSize="12" Margin="0,0,0,16"
+                     Text="{v:L 'Claude works right in your solution: it reads and edits files, runs commands and explains code. You approve every change.'}" />
+          <!-- Starter prompts: a click puts the prompt in the input. -->
+          <ItemsControl Focusable="False">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <Button Style="{StaticResource Choice}" Margin="3" Padding="10,8" Click="OnStarterClick" Tag="{v:L 'Explain what the open file does and how it fits into the solution.'}">
+              <StackPanel>
+                <TextBlock Text="{v:L 'Explain this file'}" FontWeight="SemiBold" FontSize="12" />
+                <TextBlock Text="{v:L 'What it does and why'}" Style="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource Choice}" Margin="3" Padding="10,8" Click="OnStarterClick" Tag="{v:L 'Look for bugs in the open file and fix the ones you find.'}">
+              <StackPanel>
+                <TextBlock Text="{v:L 'Find and fix bugs'}" FontWeight="SemiBold" FontSize="12" />
+                <TextBlock Text="{v:L 'In the open file'}" Style="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource Choice}" Margin="3" Padding="10,8" Click="OnStarterClick" Tag="{v:L 'Write unit tests for the open file.'}">
+              <StackPanel>
+                <TextBlock Text="{v:L 'Write tests'}" FontWeight="SemiBold" FontSize="12" />
+                <TextBlock Text="{v:L 'Cover the open file'}" Style="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource Choice}" Margin="3" Padding="10,8" Click="OnStarterClick" Tag="{v:L 'Give me a short tour of this solution: projects, structure and where to start.'}">
+              <StackPanel>
+                <TextBlock Text="{v:L 'Tour the solution'}" FontWeight="SemiBold" FontSize="12" />
+                <TextBlock Text="{v:L 'Projects and structure'}" Style="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Button>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- ===== Claude Code not installed ===== -->
+        <Border Visibility="{Binding IsCliMissing, Converter={StaticResource Visible}}"
+                Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}" Padding="20">
+          <StackPanel VerticalAlignment="Center" MaxWidth="380">
+            <v:VsIcon Kind="Claude" Width="36" Height="36" HorizontalAlignment="Center" />
+            <TextBlock Text="{v:L 'Claude Code is not installed'}" FontSize="15" HorizontalAlignment="Center" Margin="0,10,0,10" />
+            <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center"
+                       Text="{v:L 'Install the Claude Code CLI (in PowerShell), sign in once by running claude in a terminal, then retry.'}" />
+            <Border Style="{StaticResource Box}" Padding="10,6" Margin="0,10,0,10">
+              <TextBox Style="{StaticResource ClaudeMonoText}" Text="irm https://claude.ai/install.ps1 | iex" />
+            </Border>
+            <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" FontSize="11" Margin="0,0,0,10"
+                       Text="{v:L 'Already installed somewhere else? Set the VSL_CLAUDE_PATH environment variable to claude.exe and restart Visual Studio.'}" />
+            <Button Style="{StaticResource ChoiceFirst}" Content="{v:L 'Retry'}" HorizontalAlignment="Center" HorizontalContentAlignment="Center" Command="{Binding CheckCliCommand}" />
+          </StackPanel>
+        </Border>
+
+        <!-- ===== Drop target ===== -->
+        <Border x:Name="DropOverlay" Visibility="Collapsed" Background="#C0202022" BorderBrush="{StaticResource ClaudeAccent}" BorderThickness="2" CornerRadius="8"
+                Margin="8" IsHitTestVisible="False">
+          <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <v:VsIcon Kind="Attach" Width="28" Height="28" HorizontalAlignment="Center" Foreground="{StaticResource ClaudeAccent}" />
+            <TextBlock Text="{v:L 'Drop images or files to attach'}" FontSize="14" Foreground="White" Margin="0,8,0,0" />
+          </StackPanel>
+        </Border>
+
+        <!-- ===== Past conversations ===== -->
+        <Border Visibility="{Binding IsHistoryOpen, Converter={StaticResource Visible}}"
+                Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="{v:L 'Past conversations'}" FontWeight="SemiBold" Margin="12,8,12,4" />
+            <TextBlock DockPanel.Dock="Top" Text="{v:L 'No conversations in this folder yet.'}" Style="{StaticResource Muted}" Margin="12,0,12,10"
+                       Visibility="{Binding History.Count, Converter={StaticResource Hidden}}" />
+            <ListBox x:Name="HistoryList" ItemsSource="{Binding History}" Background="Transparent" BorderThickness="0" Margin="4,0,4,6"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}">
+              <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                  <Setter Property="Cursor" Value="Hand" />
+                  <Setter Property="Padding" Value="6,5" />
+                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+              </ListBox.ItemContainerStyle>
+              <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type c:ClaudeConversation}">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{v:Tr Title}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{Binding Modified, StringFormat='{}{0:dd.MM HH:mm}'}" Style="{StaticResource Muted}" FontSize="11" Margin="10,0,0,0"
+                               VerticalAlignment="Center" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
+        </Border>
+      </Grid>
+    </DockPanel>
+
+    <!-- ===== Modes menu (above the prompt) ===== -->
+    <Grid Visibility="{Binding IsModesOpen, Converter={StaticResource Visible}}">
+      <Border Background="Transparent" MouseDown="OnBackdropPressed" />
+      <Border Style="{StaticResource MenuCard}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="10,0,10,96" Width="330">
+        <StackPanel>
+          <Grid Margin="12,8,10,6">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{v:L 'Modes'}" Style="{StaticResource Muted}" FontSize="12" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+              <Border Style="{StaticResource Key}"><TextBlock Text="{v:L 'Shift'}" /></Border>
+              <TextBlock Text=" + " Style="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center" />
+              <Border Style="{StaticResource Key}"><TextBlock Text="{v:L 'Tab'}" /></Border>
+              <TextBlock Text="{v:L ' to switch'}" Style="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+          <ItemsControl ItemsSource="{Binding Modes}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type vm:ModeOption}">
+                <Button Style="{StaticResource MenuRow}"
+                        Command="{Binding DataContext.SelectModeCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <v:VsIcon Kind="{Binding Icon}" Width="18" Height="18" Margin="0,1,12,0" VerticalAlignment="Top" />
+                    <StackPanel Grid.Column="1">
+                      <TextBlock Text="{v:Tr Label}" FontSize="13" />
+                      <TextBlock Text="{v:Tr Description}" Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <v:VsIcon Grid.Column="2" Kind="Check" Width="14" Height="14" Visibility="{Binding IsSelected, Converter={StaticResource Visible}}"
+                              VerticalAlignment="Center" Margin="8,0,0,0" />
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Border Height="1" Background="{StaticResource ClaudeLine}" Margin="0,4" Visibility="{Binding HasEffort, Converter={StaticResource Visible}}" />
+          <Grid Margin="12,6,12,10" Visibility="{Binding HasEffort, Converter={StaticResource Visible}}">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <v:VsIcon Kind="Gauge" Width="18" Height="18" Margin="0,0,12,0" />
+            <TextBlock Grid.Column="1" Text="{v:Tr EffortLabel}" VerticalAlignment="Center" />
+            <ItemsControl Grid.Column="2" ItemsSource="{Binding EffortSteps}" VerticalAlignment="Center">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:EffortStep}">
+                  <Button Style="{StaticResource Row}" ToolTip="{v:Tr Label}" Margin="1,0"
+                          Command="{Binding DataContext.SetEffortCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+                    <Grid Width="16" Height="16" Background="Transparent">
+                      <Ellipse x:Name="Dot" Width="5" Height="5" Fill="#6B6F7D" Visibility="{Binding IsSelected, Converter={StaticResource Hidden}}" />
+                      <Ellipse Width="13" Height="13" Fill="#C7B3FF" Visibility="{Binding IsSelected, Converter={StaticResource Visible}}" />
+                    </Grid>
+                  </Button>
+                  <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding IsReached}" Value="True">
+                      <Setter TargetName="Dot" Property="Fill" Value="{StaticResource ClaudeEffort}" />
+                    </DataTrigger>
+                  </DataTemplate.Triggers>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- ===== Accounts menu (under the header) ===== -->
+    <Grid Visibility="{Binding IsAccountsOpen, Converter={StaticResource Visible}}">
+      <Border Background="Transparent" MouseDown="OnBackdropPressed" />
+      <Border Style="{StaticResource MenuCard}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="10,38,10,10" Width="320">
+        <StackPanel>
+          <TextBlock Text="{v:L 'Accounts'}" Style="{StaticResource Muted}" FontSize="12" Margin="12,9,12,4" />
+          <ItemsControl ItemsSource="{Binding Accounts}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type c:ClaudeAccount}">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <Button Style="{StaticResource MenuRow}" Padding="12,7,6,7"
+                          Command="{Binding DataContext.SelectAccountCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource ClaudeAccentSoft}" Margin="0,0,10,0">
+                        <v:VsIcon Kind="User" Width="14" Height="14" Foreground="{StaticResource ClaudeAccent}" />
+                      </Border>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{v:Tr Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="Detail" Text="{v:Tr Detail}" Style="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <v:VsIcon x:Name="Selected" Grid.Column="2" Kind="Check" Width="14" Height="14" Margin="8,0,0,0" Visibility="Collapsed" />
+                    </Grid>
+                  </Button>
+                  <Button Grid.Column="1" Style="{StaticResource Pill}" Content="{v:L 'Sign in'}" FontSize="11" Margin="0,0,8,0" VerticalAlignment="Center"
+                          ToolTip="{v:L 'Open the Claude CLI for this account in a terminal to sign in'}"
+                          Command="{Binding DataContext.SignInCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}" />
+                </Grid>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding IsSignedIn}" Value="False">
+                    <Setter TargetName="Detail" Property="Foreground" Value="{StaticResource ClaudeAccent}" />
+                  </DataTrigger>
+                  <DataTrigger Value="True">
+                    <DataTrigger.Binding>
+                      <MultiBinding Converter="{StaticResource SameAccount}">
+                        <Binding />
+                        <Binding Path="DataContext.SelectedAccount" RelativeSource="{RelativeSource AncestorType=v:ClaudeControl}" />
+                      </MultiBinding>
+                    </DataTrigger.Binding>
+                    <Setter TargetName="Selected" Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Border Height="1" Background="{StaticResource ClaudeLine}" Margin="0,4" />
+          <TextBlock Text="{v:L 'Add an account'}" FontWeight="SemiBold" FontSize="12" Margin="12,6,12,2" />
+          <TextBlock Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="12,0,12,6"
+                     Text="{v:L 'Each account gets its own folder (~/.claude-NAME), like CLAUDE_CONFIG_DIR in a terminal. You sign in once in the terminal that opens.'}" />
+          <Grid Margin="12,0,12,8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="NewAccountBox" Style="{StaticResource ClaudeField}" Text="{Binding NewAccountName, UpdateSourceTrigger=PropertyChanged}" Tag="{v:L 'Name, e.g. work'}" />
+            <Button Grid.Column="1" Style="{StaticResource ChoiceFirst}" Content="{v:L 'Add'}" Margin="6,0,0,0" HorizontalContentAlignment="Center" Command="{Binding AddAccountCommand}" />
+          </Grid>
+          <TextBlock Text="{v:Tr AccountMessage}" Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="12,0,12,10"
+                     Visibility="{Binding AccountMessage, Converter={StaticResource Visible}}" />
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- ===== Account & Usage ===== -->
+    <Grid Visibility="{Binding IsUsageOpen, Converter={StaticResource Visible}}">
+      <Border Background="#99000000" MouseDown="OnBackdropPressed" />
+      <Border Style="{StaticResource Dialog}">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" Margin="18,14,12,6">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{v:L 'Account &amp; Usage'}" FontSize="16" FontWeight="SemiBold" />
+            <Button Grid.Column="1" Style="{StaticResource ClaudeIconButton}" Command="{Binding CloseDialogsCommand}" ToolTip="{v:L 'Close'}"><v:VsIcon Kind="Close" /></Button>
+          </Grid>
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ScrollViewerStyleKey}}">
+            <StackPanel Margin="18,0,18,16">
+              <TextBlock Text="{v:L 'Loading...'}" Style="{StaticResource Muted}" Visibility="{Binding IsUsageLoading, Converter={StaticResource Visible}}" />
+              <TextBlock Text="{v:Tr UsageError}" Style="{StaticResource ErrorText}" Visibility="{Binding UsageError, Converter={StaticResource Visible}}" />
+              <StackPanel Visibility="{Binding Usage, Converter={StaticResource Visible}}">
+                <TextBlock Text="{v:L 'ACCOUNT'}" Style="{StaticResource Section}" />
+                <ItemsControl ItemsSource="{Binding Usage.Account}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:UsageRow}">
+                      <Grid Margin="0,6">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="Auto" />
+                          <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{v:Tr Label}" Style="{StaticResource Muted}" />
+                        <TextBlock Grid.Column="1" Text="{v:Tr Value}" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="16,0,0,0" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <!-- Which CLI the panel talks to (VSL_CLAUDE_PATH can point it elsewhere). -->
+                <Grid Margin="0,6">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="CLI" Style="{StaticResource Muted}" />
+                  <TextBlock Grid.Column="1" Text="{Binding CliPath}" ToolTip="{Binding CliPath}" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="16,0,0,0"
+                             FontFamily="{StaticResource ClaudeMono}" FontSize="11" Foreground="{DynamicResource ClaudeMutedBrush}" />
+                </Grid>
+                <TextBlock Text="{v:L 'USAGE'}" Style="{StaticResource Section}" Margin="0,10,0,0" Visibility="{Binding Usage.HasLimits, Converter={StaticResource Visible}}" />
+                <ItemsControl ItemsSource="{Binding Usage.Limits}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:UsageLimit}">
+                      <StackPanel Margin="0,6">
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Text="{v:Tr Label}" />
+                          <TextBlock Grid.Column="1" Text="{Binding PercentText}" />
+                        </Grid>
+                        <ProgressBar x:Name="Bar" Value="{Binding Percent, Mode=OneWay}" Maximum="100" Height="6" Margin="0,4" Foreground="#F2C94C" Background="{StaticResource ClaudeOverlayStrong}"
+                                     BorderThickness="0">
+                          <ProgressBar.Template>
+                            <ControlTemplate TargetType="ProgressBar">
+                              <Border Background="{TemplateBinding Background}" CornerRadius="3">
+                                <Grid>
+                                  <Border x:Name="PART_Track" />
+                                  <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="3" HorizontalAlignment="Left" />
+                                </Grid>
+                              </Border>
+                            </ControlTemplate>
+                          </ProgressBar.Template>
+                        </ProgressBar>
+                        <TextBlock Text="{v:Tr ResetDetail}" Style="{StaticResource Muted}" FontSize="12" />
+                      </StackPanel>
+                      <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsHigh}" Value="True">
+                          <Setter TargetName="Bar" Property="Foreground" Value="#F28C4C" />
+                        </DataTrigger>
+                      </DataTemplate.Triggers>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Style="{StaticResource LinkButton}" Content="{v:L 'Manage usage on claude.ai'}" Command="{Binding OpenUrlCommand}" CommandParameter="https://claude.ai/settings/usage" />
+                <StackPanel Visibility="{Binding Usage.HasBehaviors, Converter={StaticResource Visible}}" Margin="0,8,0,0">
+                  <TextBlock Text="{v:L 'WHAT\'S CONTRIBUTING TO YOUR LIMITS USAGE?'}" Style="{StaticResource Section}" Margin="0,4,0,8" />
+                  <Border Background="{StaticResource ClaudeOverlay}" CornerRadius="5" Padding="2" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal">
+                      <Button Style="{StaticResource Segment}" Tag="{Binding ShowUsageWeek, Converter={StaticResource Not}}" Content="{v:L 'Day'}"
+                              Command="{Binding ShowUsagePeriodCommand}" CommandParameter="day" />
+                      <Button Style="{StaticResource Segment}" Tag="{Binding ShowUsageWeek}" Content="{v:L 'Week'}" Command="{Binding ShowUsagePeriodCommand}" CommandParameter="week" />
+                    </StackPanel>
+                  </Border>
+                  <TextBlock Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"
+                             Text="{v:L 'Approximate, from local sessions on this machine; other devices and claude.ai are not included.'}" />
+                  <TextBlock Text="{v:Tr UsagePeriodShown.Summary}" Style="{StaticResource Muted}" FontSize="11" Margin="0,8,0,0" />
+                  <ItemsControl ItemsSource="{Binding UsagePeriodShown.Insights}" Margin="0,4,0,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="{x:Type vm:UsageInsight}">
+                        <StackPanel Margin="0,4">
+                          <TextBlock Text="{v:Tr Text}" TextWrapping="Wrap" />
+                          <TextBlock Text="{v:Tr Hint}" Visibility="{Binding HasHint, Converter={StaticResource Visible}}" Style="{StaticResource Muted}" FontSize="12"
+                                     TextWrapping="Wrap" Margin="12,2,0,0" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <StackPanel Visibility="{Binding UsagePeriodShown.HasSkills, Converter={StaticResource Visible}}" Margin="0,4,0,0">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Text="{v:L 'Skills'}" FontWeight="SemiBold" FontSize="12" />
+                      <TextBlock Grid.Column="1" Text="{v:L '% of usage'}" Style="{StaticResource Muted}" FontSize="12" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding UsagePeriodShown.Skills}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:UsageShare}">
+                          <Grid Margin="12,2,0,2">
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="*" />
+                              <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Name}" FontSize="12" />
+                            <TextBlock Grid.Column="1" Text="{Binding Percent}" Style="{StaticResource Muted}" FontSize="12" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+
+    <!-- ===== MCP servers ===== -->
+    <Grid Visibility="{Binding IsMcpOpen, Converter={StaticResource Visible}}">
+      <Border Background="#99000000" MouseDown="OnBackdropPressed" />
+      <Border Style="{StaticResource Dialog}">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" Margin="18,14,12,8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{v:L 'MCP servers'}" FontSize="16" FontWeight="SemiBold" />
+            <Button Grid.Column="1" Style="{StaticResource ClaudeIconButton}" Command="{Binding CloseDialogsCommand}" ToolTip="{v:L 'Close'}"><v:VsIcon Kind="Close" /></Button>
+          </Grid>
+          <Button DockPanel.Dock="Bottom" Style="{StaticResource LinkButton}" Content="{v:L 'Learn more about MCP'}" Margin="18,8,18,14"
+                  Command="{Binding OpenUrlCommand}" CommandParameter="https://code.claude.com/docs/en/mcp" />
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ScrollViewerStyleKey}}">
+            <StackPanel Margin="18,0,18,8">
+              <TextBox Style="{StaticResource ClaudeField}" Text="{Binding McpFilter, UpdateSourceTrigger=PropertyChanged}" Tag="{v:L 'Filter servers...'}" />
+              <TextBlock Text="{v:Tr McpMessage}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
+                         Visibility="{Binding McpMessage, Converter={StaticResource Visible}}" />
+              <ItemsControl ItemsSource="{Binding McpGroups}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="{x:Type vm:McpGroup}">
+                    <StackPanel Margin="0,10,0,4">
+                      <TextBlock Text="{v:Tr Title}" FontWeight="SemiBold" Margin="0,0,0,6" />
+                      <ItemsControl ItemsSource="{Binding Servers}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate DataType="{x:Type vm:McpServerItem}">
+                            <Border Style="{StaticResource ServerRow}" Margin="0,0,0,6">
+                              <Grid>
+                                <Grid.ColumnDefinitions>
+                                  <ColumnDefinition Width="*" />
+                                  <ColumnDefinition Width="Auto" />
+                                  <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                  <TextBlock Text="{Binding Name}" Style="{StaticResource Mono}" FontSize="13" />
+                                  <TextBlock Text="{Binding Transport}" Style="{StaticResource Muted}" FontSize="11" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Style="{StaticResource Pill}" Content="{v:Tr ToggleLabel}" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center"
+                                        Command="{Binding DataContext.ToggleMcpCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}" />
+                                <Grid Grid.Column="2" VerticalAlignment="Center">
+                                  <Border Style="{StaticResource BadgeBorder}" Background="#6FCF97" Visibility="{Binding IsConnected, Converter={StaticResource Visible}}">
+                                    <TextBlock Text="{v:L 'Connected'}" />
+                                  </Border>
+                                  <Border Style="{StaticResource BadgeBorder}" Background="#8E92A3" Visibility="{Binding IsPending, Converter={StaticResource Visible}}">
+                                    <TextBlock Text="{v:L 'Connecting'}" />
+                                  </Border>
+                                  <Border Style="{StaticResource BadgeBorder}" Background="#5A5D6B" Visibility="{Binding IsDisabled, Converter={StaticResource Visible}}">
+                                    <TextBlock Text="{v:L 'Disabled'}" Foreground="#E0E0E0" />
+                                  </Border>
+                                  <Button Style="{StaticResource Badge}" Background="#F2C94C" Visibility="{Binding NeedsAuth, Converter={StaticResource Visible}}"
+                                          ToolTip="{v:L 'Sign in to this server in your browser'}"
+                                          Command="{Binding DataContext.AuthenticateMcpCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+                                    <TextBlock Text="{v:L 'Needs Auth'}" />
+                                  </Button>
+                                  <Button Style="{StaticResource Badge}" Background="#EB6F6F" Visibility="{Binding IsFailed, Converter={StaticResource Visible}}" ToolTip="{v:L 'Reconnect'}"
+                                          Command="{Binding DataContext.ReconnectMcpCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+                                    <TextBlock Text="{v:L 'Failed - retry'}" />
+                                  </Button>
+                                </Grid>
+                              </Grid>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Style="{StaticResource Choice}" Background="Transparent" BorderBrush="{StaticResource ClaudeLine}" BorderThickness="1" Content="{v:L 'Add server'}"
+                      HorizontalContentAlignment="Center" Margin="0,6,0,0" Command="{Binding StartAddMcpServerCommand}"
+                      Visibility="{Binding IsAddingMcpServer, Converter={StaticResource Hidden}}" />
+              <Border Style="{StaticResource ServerRow}" Visibility="{Binding IsAddingMcpServer, Converter={StaticResource Visible}}" Padding="12" Margin="0,6,0,0">
+                <StackPanel DataContext="{Binding McpDraft}">
+                  <TextBlock Text="{v:L 'Add an MCP server'}" FontWeight="SemiBold" />
+                  <TextBox Style="{StaticResource ClaudeField}" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Tag="{v:L 'Name (e.g. github)'}" Margin="0,8,0,0" />
+                  <ComboBox ItemsSource="{Binding Transports}" SelectedItem="{Binding Transport}" HorizontalAlignment="Stretch" Margin="0,8,0,0"
+                            Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ComboBoxStyleKey}}" />
+                  <TextBox Style="{StaticResource ClaudeField}" Text="{Binding Target, UpdateSourceTrigger=PropertyChanged}" Tag="{v:Tr TargetHint}" Margin="0,8,0,0" />
+                  <ComboBox ItemsSource="{Binding DataContext.McpScopes, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" SelectedItem="{Binding Scope}"
+                            HorizontalAlignment="Stretch" Margin="0,8,0,0" Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ComboBoxStyleKey}}" />
+                  <ItemsControl ItemsSource="{Binding Errors}" Margin="0,8,0,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{v:Tr .}" Style="{StaticResource ErrorText}" FontSize="12" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button Style="{StaticResource Choice}" Content="{v:L 'Cancel'}" Margin="0,0,8,0"
+                            Command="{Binding DataContext.CancelAddMcpServerCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" />
+                    <Button Style="{StaticResource ChoiceFirst}" Content="{v:L 'Add'}"
+                            Command="{Binding DataContext.AddMcpServerCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

@@ -62,6 +62,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         Effort = settings.ClaudeEffort;
         RefreshModes();
         RefreshEffortSteps();
+        LoadAccounts();
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsEmpty));
         Attachments.CollectionChanged += (_, _) =>
         {
@@ -178,12 +179,13 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         try
         {
             await StopSessionAsync();
-            var session = await ClaudeSession.StartAsync(new ClaudeStartOptions(CliPath!, cwd, SelectedModel?.Value, PermissionMode, _resumeId));
+            var session = await ClaudeSession.StartAsync(new ClaudeStartOptions(CliPath!, cwd, SelectedModel?.Value, PermissionMode, _resumeId, SelectedAccount));
             session.Event += ev => Dispatcher.UIThread.Post(() => Handle(session, ev));
             _session = session;
             _sessionCwd = cwd;
             ApplyInitialization(session.Initialization);
             await ApplySessionSettingsAsync(session);
+            _ = RefreshLimitsAsync(session);
             return session;
         }
         finally
@@ -209,7 +211,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         {
             await EnsureSessionAsync();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or OperationCanceledException or System.ComponentModel.Win32Exception)
+        catch (Exception)
         {
             // Reported when the user sends a prompt.
         }
@@ -274,6 +276,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _timer.Stop();
+        _limitsTimer?.Stop();
         await StopSessionAsync();
     }
 
@@ -307,6 +310,8 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         Prompt = "";
         Suggestions.Clear();
         IsHistoryOpen = false;
+        IsAccountsOpen = false;
+        IsModesOpen = false;
         AttachmentError = null;
         // A slash command goes on its own; attachments wait for the next prompt.
         var isCommand = IsSlashCommand(text);
@@ -325,8 +330,9 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
             else
                 await session.SendUserMessageAsync(text, context is null ? null : [ContextBlock(context)], images.Select(i => i.ToImage()));
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or OperationCanceledException or System.ComponentModel.Win32Exception)
+        catch (Exception ex)
         {
+            // Whatever goes wrong, the panel reports it; an exception out of a command would bring the IDE down.
             EndTurn();
             Items.Add(new NoticeChatItem("Claude Code could not be started: " + ex.Message, isError: true));
         }
@@ -383,11 +389,14 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         Items.Clear();
         _tools.Clear();
         IsHistoryOpen = false;
+        ContextTokens = null;
     }
 
     void BeginTurn()
     {
         IsRunning = true;
+        CompactCommand.NotifyCanExecuteChanged();
+        ShowContextCommand.NotifyCanExecuteChanged();
         _turnStarted = DateTime.Now;
         _tokens = 0;
         _thinking = false;
@@ -400,6 +409,8 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         IsRunning = false;
         _timer.Stop();
         StatusText = "";
+        CompactCommand.NotifyCanExecuteChanged();
+        ShowContextCommand.NotifyCanExecuteChanged();
     }
 
     void UpdateStatus()
@@ -519,10 +530,18 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
 
             case ClaudeNotice notice:
                 Items.Add(new NoticeChatItem(notice.Text, notice.IsError));
+                if (notice.Text == "Conversation compacted")
+                    ContextTokens = null;
+                break;
+
+            case ClaudeRateLimits limits when live:
+                ApplyRateLimits(limits);
                 break;
 
             case ClaudeResult result:
                 _resumeId = result.SessionId ?? _resumeId;
+                if (result.ContextTokens is { } contextTokens)
+                    ContextTokens = contextTokens;
                 CancelPendingCards("Cancelled");
                 // Drop text blocks that never received content (a stream cut short).
                 foreach (var empty in Items.OfType<TextChatItem>().Where(t => t.Text.Length == 0).ToList())
@@ -538,6 +557,9 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
                         "error_during_execution" when _interrupting || detail.Length == 0 => "Interrupted.",
                         _ => detail.Length > 0 ? detail : "Claude Code reported an error.",
                     };
+                    // The CLI often sends the error as an answer too ("Your organization has disabled..."): show it once, as an error.
+                    if (Items.LastOrDefault() is TextChatItem echoed && echoed.Text.Trim() == message.Trim())
+                        Items.Remove(echoed);
                     Items.Add(new NoticeChatItem(message, isError: message != "Interrupted."));
                 }
                 else if (_pendingModelCommand is { } model && Models.FirstOrDefault(m => m.Value == model) is { } choice)
@@ -606,12 +628,17 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
 
     // ---- Tool calls ----------------------------------------------------------------------------------------
 
-    string Relative(string? path)
+    string Relative(string? path) => path is null ? "" : RelativeTo(_sessionCwd ?? _workingDirectory(), path);
+
+    /// <summary>A path inside <paramref name="folder"/> relative to it; any other path as it is.</summary>
+    internal static string RelativeTo(string folder, string path)
     {
-        if (path is null)
-            return "";
-        var cwd = _sessionCwd ?? _workingDirectory();
-        return path.StartsWith(cwd + "/", StringComparison.Ordinal) ? path[(cwd.Length + 1)..] : path;
+        // Windows paths ignore case (and take either separator); Linux paths keep theirs.
+        var comparison = Path.DirectorySeparatorChar == '\\' ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return path.Length > folder.Length + 1 && path.StartsWith(folder, comparison)
+            && (path[folder.Length] == Path.DirectorySeparatorChar || path[folder.Length] == Path.AltDirectorySeparatorChar)
+            ? path[(folder.Length + 1)..]
+            : path;
     }
 
     static string FirstLine(string? text, int max = 100)
@@ -693,7 +720,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
             {
                 var title = tool.Name;
                 if (tool.Name.StartsWith("mcp__", StringComparison.Ordinal) && tool.Name.Split("__") is { Length: >= 3 } parts)
-                    title = $"{parts[1]} - {string.Join("__", parts[2..])}";
+                    title = $"{parts[1]} - {string.Join("__", parts.Skip(2))}";
                 var json = input.ValueKind == JsonValueKind.Undefined ? "" : input.GetRawText();
                 return new ToolChatItem(tool.Id, tool.Name, title, json.Length > 90 ? json[..87] + "..." : json, null)
                 {
@@ -861,7 +888,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
                 continue;
             if (ClaudeJson.Bool(edit, "replace_all"))
             {
-                text = text.Replace(oldString, newString, StringComparison.Ordinal);
+                text = text.Replace(oldString, newString);
             }
             else
             {
@@ -1110,7 +1137,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
     public void RefreshHistory()
     {
         History.Clear();
-        foreach (var conversation in ClaudeHistory.List(_workingDirectory()))
+        foreach (var conversation in ClaudeHistory.List(_workingDirectory(), configDirectory: SelectedAccount?.ConfigDirectory))
             History.Add(conversation);
     }
 
@@ -1190,7 +1217,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
 
         void Mention(string path)
         {
-            var shown = path.StartsWith(cwd + "/", StringComparison.Ordinal) ? path[(cwd.Length + 1)..] : path;
+            var shown = RelativeTo(cwd, path);
             var mention = "@" + (shown.Contains(' ') ? $"\"{shown}\"" : shown) + " ";
             Prompt = Prompt.Length == 0 || Prompt.EndsWith(' ') || Prompt.EndsWith('\n') ? Prompt + mention : Prompt + " " + mention;
         }
@@ -1245,7 +1272,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         if (File.Exists(path))
             return (path, line);
         // A bare file name ("Program.cs:12"): open it when exactly one project file has that name.
-        if (!target.Contains('/'))
+        if (target.IndexOfAny(['/', Path.DirectorySeparatorChar]) < 0)
         {
             var candidates = _projectFiles().Where(f => Path.GetFileName(f).Equals(target, StringComparison.Ordinal)).Take(2).ToList();
             if (candidates.Count == 1)
@@ -1277,7 +1304,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
             var typed = mention.Groups[1].Value;
             var cwd = _workingDirectory();
             var files = _projectFiles()
-                .Select(f => f.StartsWith(cwd + "/", StringComparison.Ordinal) ? f[(cwd.Length + 1)..] : f)
+                .Select(f => RelativeTo(cwd, f))
                 .Where(f => typed.Length == 0 || f.Contains(typed, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(f => Path.GetFileName(f).StartsWith(typed, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
                 .ThenBy(f => f.Length)

@@ -48,9 +48,28 @@ public sealed partial class EffortStep(string value, string label) : ObservableO
 public sealed record UsageRow(string Label, string Value);
 
 /// <summary>One plan limit: a bar with its use and when it resets.</summary>
-public sealed record UsageLimit(string Label, double Percent, string ResetText, bool IsHigh)
+public sealed record UsageLimit(string Label, double Percent, string ResetText, bool IsHigh, DateTimeOffset? ResetsAt = null)
 {
     public string PercentText => $"{Math.Round(Percent)}%";
+
+    /// <summary>"Session" or "Week", for the compact meter under the conversation.</summary>
+    public string ShortLabel => Label switch
+    {
+        "Session (5hr)" => "Session",
+        "Weekly (7 day)" => "Week",
+        _ => Label.StartsWith("Weekly ", StringComparison.Ordinal) ? "Week " + Label.Substring(7) : Label,
+    };
+
+    /// <summary>The exact local time the window starts over ("Oct 15, 19:30").</summary>
+    public string ResetExact => ResetsAt?.ToLocalTime().ToString("MMM d, HH:mm", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+
+    /// <summary>"Resets in 2h · Oct 15, 19:30", or "Resets Oct 21, 09:00" when it is days away.</summary>
+    public string ResetDetail => ResetsAt is null ? ResetText
+        : ResetText.StartsWith("Resets in", StringComparison.Ordinal) || ResetText == "Resets soon" ? $"{ResetText} · {ResetExact}"
+        : $"Resets {ResetExact}";
+
+    /// <summary>"in 2h", "Oct 3": when the window starts over.</summary>
+    public string ResetShort => ResetText.StartsWith("Resets ", StringComparison.Ordinal) ? ResetText.Substring(7) : ResetText;
 }
 
 public sealed record UsageInsight(string Text, string? Hint)

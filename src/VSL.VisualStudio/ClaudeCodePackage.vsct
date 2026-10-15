@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+
+  <Commands package="guidClaudeCodePackage">
+    <Groups>
+      <Group guid="guidClaudeCodeCommandSet" id="EditorContextGroup" priority="0x0100">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN" />
+      </Group>
+      <!-- The Standard toolbar: one click opens the panel. -->
+      <Group guid="guidClaudeCodeCommandSet" id="ToolbarGroup" priority="0xF000">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_TOOL_STANDARD" />
+      </Group>
+      <!-- Solution Explorer: files, folders and projects. -->
+      <Group guid="guidClaudeCodeCommandSet" id="ItemContextGroup" priority="0x0100">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_ITEMNODE" />
+      </Group>
+    </Groups>
+
+    <Buttons>
+      <!-- View > Other Windows > Claude Code -->
+      <Button guid="guidClaudeCodeCommandSet" id="ShowClaudeCommand" priority="0x0100" type="Button">
+        <Parent guid="guidSHLMainMenu" id="IDG_VS_WNDO_OTRWNDWS1" />
+        <Icon guid="guidClaudeImages" id="claudeIcon" />
+        <Strings>
+          <ButtonText>Claude Code</ButtonText>
+          <CanonicalName>.View.ClaudeCode</CanonicalName>
+          <LocCanonicalName>.View.ClaudeCode</LocCanonicalName>
+        </Strings>
+      </Button>
+      <!-- Editor context menu: Ask Claude (the current file and selection go with the next prompt) -->
+      <Button guid="guidClaudeCodeCommandSet" id="AskClaudeCommand" priority="0x0100" type="Button">
+        <Parent guid="guidClaudeCodeCommandSet" id="EditorContextGroup" />
+        <Icon guid="guidClaudeImages" id="claudeIcon" />
+        <Strings>
+          <ButtonText>Ask Claude</ButtonText>
+          <CanonicalName>.Edit.AskClaude</CanonicalName>
+          <LocCanonicalName>.Edit.AskClaude</LocCanonicalName>
+        </Strings>
+      </Button>
+      <!-- Solution Explorer context menu: the chosen files go into the prompt as @mentions. -->
+      <Button guid="guidClaudeCodeCommandSet" id="AskClaudeAboutItemsCommand" priority="0x0100" type="Button">
+        <Parent guid="guidClaudeCodeCommandSet" id="ItemContextGroup" />
+        <Icon guid="guidClaudeImages" id="claudeIcon" />
+        <Strings>
+          <ButtonText>Ask Claude</ButtonText>
+          <CanonicalName>.Project.AskClaude</CanonicalName>
+          <LocCanonicalName>.Project.AskClaude</LocCanonicalName>
+        </Strings>
+      </Button>
+    </Buttons>
+
+    <!-- The same Ask Claude on folders and projects, and the panel's button on the toolbar. -->
+    <Groups>
+      <Group guid="guidClaudeCodeCommandSet" id="FolderContextGroup" priority="0x0100">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_FOLDERNODE" />
+      </Group>
+      <Group guid="guidClaudeCodeCommandSet" id="ProjectContextGroup" priority="0x0100">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_PROJNODE" />
+      </Group>
+    </Groups>
+
+    <Bitmaps>
+      <Bitmap guid="guidClaudeImages" href="Resources\Commands.png" usedList="claudeIcon" />
+    </Bitmaps>
+  </Commands>
+
+  <CommandPlacements>
+    <CommandPlacement guid="guidClaudeCodeCommandSet" id="ShowClaudeCommand" priority="0x0100">
+      <Parent guid="guidClaudeCodeCommandSet" id="ToolbarGroup" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidClaudeCodeCommandSet" id="AskClaudeAboutItemsCommand" priority="0x0100">
+      <Parent guid="guidClaudeCodeCommandSet" id="FolderContextGroup" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidClaudeCodeCommandSet" id="AskClaudeAboutItemsCommand" priority="0x0100">
+      <Parent guid="guidClaudeCodeCommandSet" id="ProjectContextGroup" />
+    </CommandPlacement>
+  </CommandPlacements>
+
+  <KeyBindings>
+    <!-- Alt+K (free in Visual Studio; no menu uses K) or Ctrl+\, Ctrl+K opens the panel. Ctrl+Esc, as in VS Code,
+         belongs to the Windows Start menu. -->
+    <KeyBinding guid="guidClaudeCodeCommandSet" id="ShowClaudeCommand" editor="guidVSStd97" key1="K" mod1="Alt" />
+    <KeyBinding guid="guidClaudeCodeCommandSet" id="ShowClaudeCommand" editor="guidVSStd97" key1="VK_OEM_5" mod1="Control" key2="K" mod2="Control" />
+  </KeyBindings>
+
+  <Symbols>
+    <GuidSymbol name="guidClaudeCodePackage" value="{31c3e855-194a-456e-a97a-f98c671e7c8e}" />
+    <GuidSymbol name="guidClaudeCodeCommandSet" value="{63fdda5c-caa1-42fe-b0ca-724e9f26da87}">
+      <IDSymbol name="EditorContextGroup" value="0x1020" />
+      <IDSymbol name="ShowClaudeCommand" value="0x0100" />
+      <IDSymbol name="AskClaudeCommand" value="0x0101" />
+      <IDSymbol name="AskClaudeAboutItemsCommand" value="0x0102" />
+      <IDSymbol name="ToolbarGroup" value="0x1021" />
+      <IDSymbol name="ItemContextGroup" value="0x1022" />
+      <IDSymbol name="FolderContextGroup" value="0x1023" />
+      <IDSymbol name="ProjectContextGroup" value="0x1024" />
+    </GuidSymbol>
+    <GuidSymbol name="guidClaudeImages" value="{169517b6-742c-45f9-8f7e-b895c31e550c}">
+      <IDSymbol name="claudeIcon" value="1" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>

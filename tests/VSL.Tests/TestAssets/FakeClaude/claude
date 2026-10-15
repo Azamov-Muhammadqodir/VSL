@@ -189,8 +189,13 @@ def tool_result(tool_id, content, is_error=False):
 
 
 def result(text, subtype="success", is_error=False):
+    # What Claude Code 2.1.300 reports after a model call: the plan's limits, then the turn with its token usage.
+    out({"type": "rate_limit_event", "session_id": SESSION, "rate_limit_info": {"status": "allowed", "unifiedWindows": {
+        "five_hour": {"utilization": 0.64, "resetsAt": 1792073400}, "seven_day": {"utilization": 0.21, "resetsAt": 1792418400}}}})
     out({"type": "result", "subtype": subtype, "is_error": is_error, "duration_ms": 1200, "total_cost_usd": 0.01,
-         "result": text, "session_id": SESSION})
+         "result": text, "session_id": SESSION, "usage": {"input_tokens": 2, "cache_creation_input_tokens": 10599,
+         "cache_read_input_tokens": 14166, "output_tokens": 480, "iterations": [{"input_tokens": 2, "output_tokens": 480,
+         "cache_read_input_tokens": 14166, "cache_creation_input_tokens": 10599}]}})
 
 
 def permission(tool, tool_input, suggestions, tool_id):
