@@ -63,9 +63,16 @@ jobs:
           $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
           $manifest.publisher = $env:VS_MARKETPLACE_PUBLISHER
           $manifest | ConvertTo-Json -Depth 5 | Set-Content $manifestPath
-          # VsixPublisher ships with the VSSDK build tools package the project restores.
-          $publisher = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.vssdk.buildtools" -Recurse -Filter VsixPublisher.exe | Select-Object -First 1
-          if (-not $publisher) { throw 'VsixPublisher.exe not found.' }
+          # Visual Studio's own VsixPublisher (the copy in the VSSDK build tools package fails to load its telemetry
+          # dependencies when started from the NuGet cache).
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $publisherPath = & $vswhere -latest -products * -find 'VSSDK\VisualStudioIntegration\Tools\Bin\VsixPublisher.exe' | Select-Object -First 1
+          if (-not $publisherPath) {
+            $publisherPath = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.vssdk.buildtools" -Recurse -Filter VsixPublisher.exe | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $publisherPath) { throw 'VsixPublisher.exe not found.' }
+          Write-Host "Using $publisherPath"
+          $publisher = Get-Item $publisherPath
           $vsix = Get-Item src/VSL.VisualStudio/bin/Release/net48/*.vsix | Select-Object -First 1
           & $publisher.FullName publish -payload $vsix.FullName -publishManifest (Resolve-Path $manifestPath) -personalAccessToken $env:VS_MARKETPLACE_TOKEN
           if ($LASTEXITCODE -ne 0) { throw "VsixPublisher failed with exit code $LASTEXITCODE." }

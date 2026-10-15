@@ -3,7 +3,7 @@
   <Metadata>
     <Identity Id="VSL.ClaudeCode.VisualStudio.8f3a1c52-6d0e-4b8a-9a43-2f7d5c1e9b60" Version="0.1.0" Language="en-US" Publisher="Nodirbek Abdulaxadov" />
     <DisplayName>Claude Code for Visual Studio (VSL)</DisplayName>
-    <Description xml:space="preserve">A Claude Code tool window for Visual Studio, from VSL: it drives your installed claude CLI in its headless stream-json mode in the solution folder. Streams answers, shows tool calls with inline diffs, asks before edits and commands, answers Claude's questions and plans, modes and effort, model picker, usage, MCP servers, current file and selection as context, / commands and @ files, images, past conversations.</Description>
+    <Description xml:space="preserve">Claude Code in a Visual Studio tool window. Runs your installed claude CLI in the solution folder: streamed answers, inline diffs, approval for every edit and command, plans, modes and effort, usage limits, MCP servers, @ files, images and past conversations.</Description>
     <License>LICENSE</License>
     <Icon>Resources\ClaudeCode.png</Icon>
     <PreviewImage>Resources\ClaudeCode.png</PreviewImage>
