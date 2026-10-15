@@ -767,6 +767,50 @@ public class UiTests
         await vm.DisposeAsync();
     }
 
+    [AvaloniaFact]
+    public async Task Diff_sides_scroll_together()
+    {
+        // A long file where a block is re-indented, like a real change.
+        var before = string.Join("\n", Enumerable.Range(1, 600).Select(i => $"line {i}"));
+        var after = string.Join("\n", Enumerable.Range(1, 600).Select(i => i is > 300 and < 340 ? $"    line {i}" : $"line {i}"));
+        var diff = new VSL.Editor.DiffView("/x/Program.cs", before, after, "Program.cs;Index", "Program.cs;Working Tree");
+        var window = new Avalonia.Controls.Window { Width = 1200, Height = 700, Content = diff };
+        window.Show();
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        var editors = diff.GetVisualDescendants().OfType<AvaloniaEdit.TextEditor>().ToList();
+        Assert.Equal(2, editors.Count);
+        var (left, right) = (editors[0], editors[1]);
+
+        // Mouse wheel over either side moves both.
+        var overLeft = left.TranslatePoint(new Point(200, 200), window)!.Value;
+        for (var i = 0; i < 25; i++)
+        {
+            window.MouseWheel(overLeft, new Vector(0, -3));
+            Dispatcher.UIThread.RunJobs();
+        }
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Assert.True(left.VerticalOffset > 500, $"left {left.VerticalOffset}");
+        Assert.Equal(left.VerticalOffset, right.VerticalOffset, 0.5);
+        var overRight = right.TranslatePoint(new Point(200, 200), window)!.Value;
+        for (var i = 0; i < 10; i++)
+        {
+            window.MouseWheel(overRight, new Vector(0, 3));
+            Dispatcher.UIThread.RunJobs();
+        }
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Assert.Equal(right.VerticalOffset, left.VerticalOffset, 0.5);
+
+        // Jumping (scroll bar, Next Change) keeps them together too.
+        right.ScrollToVerticalOffset(4000);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Assert.Equal(right.VerticalOffset, left.VerticalOffset, 0.5);
+        diff.Go(1);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Assert.Equal(left.VerticalOffset, right.VerticalOffset, 0.5);
+        Snapshot(window, "diff-scrolled");
+        window.Close();
+    }
+
     /// <summary>A small red PNG, encoded by Avalonia.</summary>
     static byte[] RedPng()
     {

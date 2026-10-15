@@ -1,4 +1,6 @@
 using Avalonia;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -64,7 +66,7 @@ public sealed class DiffView : DockPanel
     readonly TextEditor _right;
     readonly IReadOnlyList<int> _changeStarts;
     readonly TextBlock _position;
-    bool _syncing;
+    TextEditor? _driver;
     int _current = -1;
 
     public DiffView(string filePath, string leftText, string rightText, string leftLabel, string rightLabel)
@@ -82,8 +84,8 @@ public sealed class DiffView : DockPanel
         var spans = Rows.Select((r, i) => r.Kind == DiffRowKind.Modified ? ChangedSpan(leftRows[i], rightRows[i]) : default).ToList();
         _left = CreateSide(filePath, leftRows, spans.Select(s => s.Left).ToList(), left: true);
         _right = CreateSide(filePath, rightRows, spans.Select(s => s.Right).ToList(), left: false);
-        _left.TextArea.TextView.ScrollOffsetChanged += (_, _) => Sync(_left, _right);
-        _right.TextArea.TextView.ScrollOffsetChanged += (_, _) => Sync(_right, _left);
+        FollowEachOther(_left, _right);
+        FollowEachOther(_right, _left);
 
         _position = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray, Margin = new Thickness(8, 0) };
         UpdatePosition();
@@ -181,14 +183,38 @@ public sealed class DiffView : DockPanel
         return editor;
     }
 
-    void Sync(TextEditor from, TextEditor to)
+    /// <summary>
+    /// Scrolling one side (wheel, scroll bar, keys, Next Change) scrolls the other to the same place. Only the
+    /// side the user is working in leads, so the follower's own scroll events (or its clamping when its lines are
+    /// shorter) never push back. The offset goes straight to the follower's scroll viewer: the editor's
+    /// ScrollToVerticalOffset does not move an editor that is not being interacted with.
+    /// </summary>
+    void FollowEachOther(TextEditor editor, TextEditor other)
     {
-        if (_syncing)
-            return;
-        _syncing = true;
-        to.ScrollToVerticalOffset(from.VerticalOffset);
-        to.ScrollToHorizontalOffset(from.HorizontalOffset);
-        _syncing = false;
+        void Lead(object? sender, RoutedEventArgs e) => _driver = editor;
+        editor.AddHandler(PointerWheelChangedEvent, Lead, RoutingStrategies.Tunnel, handledEventsToo: true);
+        editor.AddHandler(PointerPressedEvent, Lead, RoutingStrategies.Tunnel, handledEventsToo: true);
+        editor.AddHandler(KeyDownEvent, Lead, RoutingStrategies.Tunnel, handledEventsToo: true);
+        editor.PointerEntered += (_, _) => _driver = editor;
+        editor.TemplateApplied += (_, e) =>
+        {
+            if (e.NameScope.Find<ScrollViewer>("PART_ScrollViewer") is not { } viewer)
+                return;
+            _viewers[editor] = viewer;
+            viewer.ScrollChanged += (_, _) =>
+            {
+                if ((_driver is null || _driver == editor) && _viewers.TryGetValue(other, out var follower))
+                    Follow(viewer, follower);
+            };
+        };
+    }
+
+    readonly Dictionary<TextEditor, ScrollViewer> _viewers = [];
+
+    static void Follow(ScrollViewer from, ScrollViewer to)
+    {
+        if (Math.Abs(to.Offset.Y - from.Offset.Y) > 0.5 || Math.Abs(to.Offset.X - from.Offset.X) > 0.5)
+            to.Offset = from.Offset;
     }
 
     /// <summary>Moves to the next (+1) or previous (-1) block of changes, wrapping around.</summary>
@@ -198,9 +224,9 @@ public sealed class DiffView : DockPanel
             return;
         _current = (_current + direction + _changeStarts.Count) % _changeStarts.Count;
         var line = _changeStarts[_current] + 1;
+        _driver = _right;
         _right.ScrollToLine(line);
         _right.TextArea.Caret.Line = line;
-        _left.ScrollToLine(line);
         UpdatePosition();
     }
 
