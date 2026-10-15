@@ -5,5 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <AvaloniaVersion>12.1.4</AvaloniaVersion>
+    <!-- Release builds pass -p:Version from the vX.Y.Z tag (see .github/workflows/release.yml). -->
+    <Version>0.1.0</Version>
+    <Product>VSL - Visual Studio for Linux</Product>
+    <Copyright>Copyright (c) 2026 Nodirbek Abdulaxadov</Copyright>
   </PropertyGroup>
 </Project>

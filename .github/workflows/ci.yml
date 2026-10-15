@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore VSL.slnx
+
+      - name: Build
+        run: dotnet build VSL.slnx -c Release --no-restore
+
+      # Unit tests plus the headless UI tests of the main window; the integration tests restore and build a
+      # sample Blazor solution, install roslyn-language-server and netcoredbg, and drive a fake Claude Code CLI.
+      - name: Test
+        run: dotnet test VSL.slnx -c Release --no-build

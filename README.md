@@ -6,14 +6,36 @@ Visual Studio uses), including cohosted Razor support.
 
 ## Install
 
+From a [release](https://github.com/nbkabdulakhadov/VSL/releases) (Linux x64, no .NET runtime needed to run VSL):
+
+```bash
+sudo apt install ./vsl_0.1.0_amd64.deb                 # Debian/Ubuntu: `vsl` command and menu entry
+chmod +x VSL-0.1.0-x86_64.AppImage && ./VSL-0.1.0-x86_64.AppImage   # any distribution
+tar xzf vsl-0.1.0-linux-x64.tar.gz && vsl-0.1.0/VSL     # unpack anywhere
+```
+
+From source:
+
 ```bash
 ./scripts/install.sh          # publishes to ~/.local/share/VSL/app, adds `vsl` and an app-menu entry
 vsl path/to/App.sln           # opens it directly (a .slnx or .csproj works too)
 vsl                           # start window: recent, clone, open, create a new project
 ```
 
-Requires the .NET 10 SDK (`~/.dotnet` or `DOTNET_ROOT`). On first solution open VSL installs
-`roslyn-language-server` (nuget.org, MIT) into `~/.local/share/VSL/roslyn/`.
+Building and running solutions needs the .NET 10 SDK (`~/.dotnet`, `DOTNET_ROOT` or on `PATH`). On first
+solution open VSL installs `roslyn-language-server` (nuget.org, MIT) into `~/.local/share/VSL/roslyn/`.
+
+### Releasing
+
+CI (`.github/workflows/ci.yml`) builds and runs the tests on every push and pull request. A version tag
+publishes a release with the `.deb`, `.AppImage` and `.tar.gz` (`.github/workflows/release.yml`):
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+Running the release workflow by hand (Actions > release > Run workflow) builds the packages as artifacts
+without releasing. `deploy/linux/package.sh` builds the same packages locally.
 
 ## What works
 

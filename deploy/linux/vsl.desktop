@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=VSL
+GenericName=Visual Studio for Linux
+Comment=C#, ASP.NET Core and Blazor IDE
+Exec=vsl %f
+Icon=vsl
+Terminal=false
+Categories=Development;IDE;
+Keywords=visual;studio;csharp;dotnet;blazor;razor;ide;
+StartupWMClass=VSL

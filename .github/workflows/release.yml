@@ -1,0 +1,79 @@
+# A `vX.Y.Z` tag → self-contained VSL for Linux x64 → GitHub Release with:
+#   vsl_X_amd64.deb            Debian/Ubuntu: apt installs the dependencies; `vsl` command and menu entry
+#   VSL-X-x86_64.AppImage      any distribution, no install
+#   vsl-X-linux-x64.tar.gz     unpack anywhere and run ./VSL
+# workflow_dispatch builds the packages as artifacts only (version 0.0.<run number>) without releasing.
+# None of the packages needs a .NET runtime; working on solutions needs the .NET SDK, as in any .NET IDE.
+# Packaging is deploy/linux/package.sh (also runs locally).
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # Includes the headless Avalonia UI tests of the IDE window.
+      - name: Test
+        run: dotnet test VSL.slnx -c Release
+
+  package:
+    name: Package — linux-x64
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION="0.0.${GITHUB_RUN_NUMBER}"; fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Publish
+        run: dotnet publish src/VSL -c Release -r linux-x64 --self-contained -o out -p:Version=$VERSION
+
+      - name: Package (.deb, .AppImage, .tar.gz)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q desktop-file-utils   # desktop-file-validate — required by appimagetool
+          curl -sSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          APPIMAGETOOL=$PWD/appimagetool deploy/linux/package.sh out "$VERSION" packages
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsl-linux-x64
+          path: packages/*
+          if-no-files-found: error
+
+  release:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: VSL ${{ github.ref_name }}
+          generate_release_notes: true
+          files: dist/*

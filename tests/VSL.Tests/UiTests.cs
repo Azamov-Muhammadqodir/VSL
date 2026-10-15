@@ -1227,7 +1227,7 @@ public class UiTests
         await vm.ManageNuGetPackagesCommand.ExecuteAsync(components);
         var nuget = Assert.IsType<NuGetViewModel>(vm.ActiveDocument);
         Assert.Equal("NuGet: Components", nuget.Title);
-        Assert.Empty(nuget.Packages.Where(p => p.IsInstalled));
+        Assert.DoesNotContain(nuget.Packages, p => p.IsInstalled);
 
         // Browse: search, pick a version, install.
         nuget.SearchText = "Humanizer.Core";
