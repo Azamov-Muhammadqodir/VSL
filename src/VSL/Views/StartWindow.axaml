@@ -1,0 +1,403 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VSL.ViewModels"
+        xmlns:t="using:VSL.Templates"
+        xmlns:v="using:VSL.Views"
+        x:Class="VSL.Views.StartWindow"
+        x:DataType="vm:StartViewModel"
+        Title="VSL"
+        Width="1060" Height="700" MinWidth="820" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Icon="/Assets/vsl.png"
+        Background="{StaticResource VsToolWindowBrush}"
+        Foreground="{StaticResource VsTextBrush}">
+  <Window.Styles>
+    <Style Selector="TextBlock.pageTitle">
+      <Setter Property="FontSize" Value="28" />
+      <Setter Property="FontWeight" Value="Light" />
+      <Setter Property="Margin" Value="0,0,0,20" />
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="17" />
+    </Style>
+    <Style Selector="TextBlock.gray">
+      <Setter Property="Foreground" Value="{StaticResource VsGrayTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.label">
+      <Setter Property="Margin" Value="0,16,0,5" />
+    </Style>
+
+    <!-- Get started cards -->
+    <Style Selector="Button.card">
+      <Setter Property="Background" Value="#333337" />
+      <Setter Property="BorderBrush" Value="#333337" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.card:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#3E3E40" />
+      <Setter Property="BorderBrush" Value="#007ACC" />
+    </Style>
+
+    <!-- Recent entries -->
+    <Style Selector="Button.recent">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="8,7" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.recent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#3E3E40" />
+    </Style>
+    <Style Selector="Button.recent Button.pin">
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="Button.recent:pointerover Button.pin, Button.pin.pinned">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="2" />
+      <Setter Property="Foreground" Value="#3794FF" />
+    </Style>
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#75BEFF" />
+    </Style>
+    <Style Selector="Button.primary, Button.secondary">
+      <Setter Property="MinWidth" Value="96" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="Padding" Value="16,6" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#0E639C" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#1177BB" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.secondary">
+      <Setter Property="Background" Value="#3F3F46" />
+    </Style>
+    <Style Selector="Border.tag">
+      <Setter Property="BorderBrush" Value="#5A5A5E" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="6,1" />
+      <Setter Property="Margin" Value="0,2,6,2" />
+    </Style>
+    <Style Selector="Border.tag > TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#C8C8C8" />
+    </Style>
+    <Style Selector="TextBox, ComboBox">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Background" Value="#333337" />
+      <Setter Property="BorderBrush" Value="#434346" />
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="#333337" />
+      <Setter Property="BorderBrush" Value="#007ACC" />
+    </Style>
+    <Style Selector="ListBox.templates">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.templates > ListBoxItem">
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="*,Auto" Margin="40,28,40,22">
+
+    <!-- ===== Home ===== -->
+    <Grid IsVisible="{Binding IsHome}" RowDefinitions="Auto,*" ColumnDefinitions="*,56,380">
+      <StackPanel Grid.ColumnSpan="3" Margin="0,0,0,26" Orientation="Horizontal" Spacing="14">
+        <TextBlock Text="VSL" FontSize="30" FontWeight="Light" VerticalAlignment="Bottom" />
+        <TextBlock Text="Visual Studio for Linux" FontSize="15" Classes="gray" VerticalAlignment="Bottom" Margin="0,0,0,4" />
+      </StackPanel>
+
+      <DockPanel Grid.Row="1">
+        <TextBlock DockPanel.Dock="Top" Classes="section" Text="Open recent" />
+        <TextBox Name="RecentSearchBox" DockPanel.Dock="Top" Text="{Binding RecentSearch}" PlaceholderText="Search recent (Alt+S)" Margin="0,12,0,6" />
+        <TextBlock DockPanel.Dock="Top" IsVisible="{Binding !HasRecent}" Classes="gray" TextWrapping="Wrap" Margin="0,10,0,0" MaxWidth="460" HorizontalAlignment="Left"
+                   Text="As you use VSL, any solutions or projects that you open will show up here for quick access. You can pin anything that you open frequently so that it's always at the top of the list." />
+        <ScrollViewer>
+          <ItemsControl Name="RecentList" ItemsSource="{Binding RecentGroups}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:RecentGroup">
+                <StackPanel Margin="0,8,0,0">
+                  <TextBlock Text="{Binding Header}" FontWeight="SemiBold" Margin="2,2,0,4" />
+                  <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:RecentItem">
+                        <Button Classes="recent" ToolTip.Tip="{Binding Path}"
+                                Command="{Binding $parent[Window].((vm:StartViewModel)DataContext).OpenRecentCommand}" CommandParameter="{Binding}">
+                          <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                            <v:VsIcon Kind="{Binding IconKind}" Width="22" Height="22" Margin="0,1,12,0" VerticalAlignment="Top" />
+                            <StackPanel Grid.Column="1" Spacing="2">
+                              <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding Folder}" Classes="gray" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="2" Text="{Binding DateText}" Classes="gray" VerticalAlignment="Top" Margin="12,1,6,0" />
+                            <Button Grid.Column="3" Classes="tbi pin" Classes.pinned="{Binding IsPinned}" VerticalAlignment="Top"
+                                    ToolTip.Tip="Pin / unpin this item"
+                                    Command="{Binding $parent[Window].((vm:StartViewModel)DataContext).TogglePinCommand}" CommandParameter="{Binding}">
+                              <v:VsIcon Kind="Pin" />
+                            </Button>
+                          </Grid>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+
+      <StackPanel Grid.Row="1" Grid.Column="2" Spacing="8">
+        <TextBlock Classes="section" Text="Get started" Margin="0,0,0,6" />
+        <Button Name="CloneCard" Classes="card" Command="{Binding ShowCloneCommand}">
+          <Grid ColumnDefinitions="Auto,*">
+            <v:VsIcon Kind="CloneRepository" Width="32" Height="32" Margin="0,2,14,0" VerticalAlignment="Top" />
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Text="Clone a repository" FontSize="15" />
+              <TextBlock Classes="gray" TextWrapping="Wrap" Text="Get code from an online repository like GitHub or Azure DevOps" />
+            </StackPanel>
+          </Grid>
+        </Button>
+        <Button Classes="card" Command="{Binding OpenProjectOrSolutionCommand}">
+          <Grid ColumnDefinitions="Auto,*">
+            <v:VsIcon Kind="OpenProject" Width="32" Height="32" Margin="0,2,14,0" VerticalAlignment="Top" />
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Text="Open a project or solution" FontSize="15" />
+              <TextBlock Classes="gray" TextWrapping="Wrap" Text="Open a local .sln, .slnx or project file" />
+            </StackPanel>
+          </Grid>
+        </Button>
+        <Button Classes="card" Command="{Binding OpenFolderCommand}">
+          <Grid ColumnDefinitions="Auto,*">
+            <v:VsIcon Kind="FolderOpen" Width="32" Height="32" Margin="0,2,14,0" VerticalAlignment="Top" />
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Text="Open a local folder" FontSize="15" />
+              <TextBlock Classes="gray" TextWrapping="Wrap" Text="Open the solution or project in a folder" />
+            </StackPanel>
+          </Grid>
+        </Button>
+        <Button Name="NewProjectCard" Classes="card" Command="{Binding ShowNewProjectCommand}">
+          <Grid ColumnDefinitions="Auto,*">
+            <v:VsIcon Kind="NewProject" Width="32" Height="32" Margin="0,2,14,0" VerticalAlignment="Top" />
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Text="Create a new project" FontSize="15" />
+              <TextBlock Classes="gray" TextWrapping="Wrap" Text="Choose a project template with code scaffolding to get started" />
+            </StackPanel>
+          </Grid>
+        </Button>
+        <Button Classes="link" Command="{Binding ContinueWithoutCodeCommand}" HorizontalAlignment="Right" Margin="0,10,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <TextBlock Text="Continue without code" />
+            <v:VsIcon Kind="ArrowRight" Width="13" Height="13" Foreground="#3794FF" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <!-- ===== Create a new project ===== -->
+    <Grid IsVisible="{Binding IsNewProject}" ColumnDefinitions="300,36,*">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Classes="pageTitle" Text="Create a new project" />
+        <TextBlock DockPanel.Dock="Top" Classes="section" FontSize="15" Text="Recent project templates" />
+        <TextBlock DockPanel.Dock="Top" Classes="gray" TextWrapping="Wrap" Margin="0,10,0,0" IsVisible="{Binding !RecentTemplates.Count}"
+                   Text="A list of your recently accessed templates will be displayed here." />
+        <ListBox Classes="templates" Margin="0,8,0,0" ItemsSource="{Binding RecentTemplates}" SelectedItem="{Binding SelectedTemplate}" DoubleTapped="OnTemplateDoubleTapped">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:TemplateItem">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Panel Width="20" Height="20" Margin="0,0,10,0">
+                  <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}" />
+                  <v:VsIcon Kind="{Binding FallbackIcon}" IsVisible="{Binding !HasIcon}" Width="20" Height="20" />
+                </Panel>
+                <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="2" Text="{Binding Language}" Classes="gray" VerticalAlignment="Center" Margin="8,0,0,0" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+
+      <DockPanel Grid.Column="2" Margin="0,8,0,0">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto">
+          <TextBox Name="TemplateSearchBox" Text="{Binding TemplateSearch}" PlaceholderText="Search for templates (Alt+S)" />
+          <Button Grid.Column="1" Classes="link" Content="Clear all" Margin="12,0,0,0" Command="{Binding ClearTemplateFiltersCommand}" />
+        </Grid>
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,8,*,8,*" Margin="0,10,0,8">
+          <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding LanguageFilter}" HorizontalAlignment="Stretch" />
+          <ComboBox Grid.Column="2" ItemsSource="{Binding Platforms}" SelectedItem="{Binding PlatformFilter}" HorizontalAlignment="Stretch" />
+          <ComboBox Grid.Column="4" ItemsSource="{Binding ProjectTypes}" SelectedItem="{Binding ProjectTypeFilter}" HorizontalAlignment="Stretch" />
+        </Grid>
+        <Panel>
+          <ListBox Name="TemplateList" Classes="templates" ItemsSource="{Binding Templates}" SelectedItem="{Binding SelectedTemplate}"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" DoubleTapped="OnTemplateDoubleTapped">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:TemplateItem">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Panel Width="32" Height="32" Margin="0,2,14,0" VerticalAlignment="Top">
+                    <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}" />
+                    <v:VsIcon Kind="{Binding FallbackIcon}" IsVisible="{Binding !HasIcon}" Width="32" Height="32" />
+                  </Panel>
+                  <StackPanel Grid.Column="1" Spacing="4">
+                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Description}" Classes="gray" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                    <ItemsControl ItemsSource="{Binding Tags}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <Border Classes="tag">
+                            <TextBlock Text="{Binding}" />
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <StackPanel IsVisible="{Binding TemplatesLoading}" Orientation="Horizontal" Spacing="10" Margin="10" VerticalAlignment="Top">
+            <ProgressBar IsIndeterminate="True" Width="120" />
+            <TextBlock Text="Loading templates..." Classes="gray" />
+          </StackPanel>
+        </Panel>
+      </DockPanel>
+    </Grid>
+
+    <!-- ===== Configure your new project ===== -->
+    <ScrollViewer IsVisible="{Binding IsConfigure}">
+      <StackPanel HorizontalAlignment="Left" Width="600">
+        <TextBlock Classes="pageTitle" Text="Configure your new project" />
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <TextBlock Text="{Binding SelectedTemplateName}" FontSize="15" VerticalAlignment="Center" />
+          <ItemsControl ItemsSource="{Binding SelectedTemplateTags}" VerticalAlignment="Center">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <Border Classes="tag">
+                  <TextBlock Text="{Binding}" />
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+        <TextBlock Classes="label" Text="Project name" Margin="0,22,0,5" />
+        <TextBox Name="ProjectNameBox" Text="{Binding ProjectName}" />
+        <TextBlock Classes="label" Text="Location" />
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox Text="{Binding Location}" />
+          <Button Grid.Column="1" Classes="secondary" MinWidth="36" Padding="8,4" Margin="6,0,0,0" Content="..." ToolTip.Tip="Browse"
+                  Command="{Binding BrowseLocationCommand}" />
+        </Grid>
+        <TextBlock Classes="label" Text="Solution name" />
+        <TextBox Text="{Binding SolutionName}" IsEnabled="{Binding CanEditSolutionName}" />
+        <CheckBox IsChecked="{Binding SolutionInSameDirectory}" Content="Place solution and project in the same directory" Margin="0,12,0,0" />
+        <TextBlock Text="{Binding CreatedInText}" Classes="gray" TextWrapping="Wrap" Margin="0,16,0,0" />
+        <TextBlock Text="{Binding ConfigureError}" Foreground="{StaticResource VsErrorBrush}" TextWrapping="Wrap" Margin="0,8,0,0"
+                   IsVisible="{Binding ConfigureError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- ===== Additional information ===== -->
+    <ScrollViewer IsVisible="{Binding IsAdditionalInformation}">
+      <StackPanel HorizontalAlignment="Left" Width="600">
+        <TextBlock Classes="pageTitle" Text="Additional information" />
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <TextBlock Text="{Binding SelectedTemplateName}" FontSize="15" VerticalAlignment="Center" />
+          <ItemsControl ItemsSource="{Binding SelectedTemplateTags}" VerticalAlignment="Center">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <Border Classes="tag">
+                  <TextBlock Text="{Binding}" />
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+        <ItemsControl ItemsSource="{Binding Options}" Margin="0,8,0,0">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:OptionItem">
+              <StackPanel Margin="0,14,0,0" ToolTip.Tip="{Binding Description}">
+                <StackPanel IsVisible="{Binding IsChoice}" Spacing="5">
+                  <TextBlock Text="{Binding Label}" />
+                  <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="t:TemplateChoice">
+                        <TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding Description}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+                <CheckBox IsVisible="{Binding IsCheckbox}" IsChecked="{Binding IsChecked}" Content="{Binding Label}" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Classes="gray" Margin="0,14,0,0" Text="This template has no additional options." IsVisible="{Binding !Options.Count}" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- ===== Clone a repository ===== -->
+    <StackPanel IsVisible="{Binding IsClone}" HorizontalAlignment="Left" Width="600">
+      <TextBlock Classes="pageTitle" Text="Clone a repository" />
+      <TextBlock Text="Enter a Git repository URL" FontSize="15" />
+      <TextBlock Classes="label" Text="Repository location" />
+      <TextBox Name="CloneUrlBox" Text="{Binding CloneUrl}" PlaceholderText="https://github.com/owner/repository.git" />
+      <TextBlock Classes="label" Text="Path" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox Text="{Binding ClonePath}" />
+        <Button Grid.Column="1" Classes="secondary" MinWidth="36" Padding="8,4" Margin="6,0,0,0" Content="..." ToolTip.Tip="Browse"
+                Command="{Binding BrowseClonePathCommand}" />
+      </Grid>
+      <TextBlock Text="{Binding CloneError}" Classes="gray" TextWrapping="Wrap" Margin="0,10,0,0"
+                 IsVisible="{Binding CloneError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </StackPanel>
+
+    <!-- ===== Status and navigation ===== -->
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+      <StackPanel Spacing="6" VerticalAlignment="Center">
+        <TextBlock Text="{Binding Message}" Foreground="{StaticResource VsErrorBrush}" TextWrapping="Wrap"
+                   IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsBusy}">
+          <ProgressBar IsIndeterminate="True" Width="140" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding BusyText}" Classes="gray" TextTrimming="CharacterEllipsis" MaxWidth="560" VerticalAlignment="Center" />
+        </StackPanel>
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" IsVisible="{Binding !IsHome}">
+        <Button Classes="secondary" Content="Back" Command="{Binding BackCommand}" />
+        <Button Name="NextButton" Classes="primary" Content="Next" Command="{Binding NextCommand}" IsVisible="{Binding ShowNext}" />
+        <Button Name="CreateButton" Classes="primary" Content="Create" Command="{Binding CreateCommand}" IsVisible="{Binding IsAdditionalInformation}" />
+        <Button Name="CloneButton" Classes="primary" Content="Clone" Command="{Binding CloneCommand}" IsVisible="{Binding IsClone}" />
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Window>

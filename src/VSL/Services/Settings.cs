@@ -11,6 +11,17 @@ public sealed class Settings
     /// <summary>Tool window id → dock side ("Left", "Right", "Bottom") for windows the user moved.</summary>
     public Dictionary<string, string> ToolLayout { get; set; } = [];
     public List<string> RecentSolutions { get; set; } = [];
+
+    /// <summary>When each recent solution was last opened (for the start window's Today / This week groups).</summary>
+    public Dictionary<string, DateTime> RecentOpened { get; set; } = [];
+
+    /// <summary>Solutions pinned to the top of the start window's recent list.</summary>
+    public List<string> PinnedSolutions { get; set; } = [];
+
+    /// <summary>Template identities used for new projects, most recent first.</summary>
+    public List<string> RecentTemplates { get; set; } = [];
+
+    public string? NewProjectLocation { get; set; }
     public Dictionary<string, SolutionState> Solutions { get; set; } = [];
 
     public sealed class SolutionState
@@ -36,13 +47,34 @@ public sealed class Settings
         return state;
     }
 
+    const int MaxRecent = 20;
+
     public void AddRecent(string solutionPath)
     {
         LastSolution = solutionPath;
         RecentSolutions.Remove(solutionPath);
         RecentSolutions.Insert(0, solutionPath);
-        if (RecentSolutions.Count > 10)
-            RecentSolutions.RemoveRange(10, RecentSolutions.Count - 10);
+        RecentOpened[solutionPath] = DateTime.Now;
+        // Pinned entries never fall off the list.
+        while (RecentSolutions.Count > MaxRecent && RecentSolutions.LastOrDefault(p => !PinnedSolutions.Contains(p)) is { } oldest)
+            RemoveRecent(oldest);
+    }
+
+    public void RemoveRecent(string solutionPath)
+    {
+        RecentSolutions.Remove(solutionPath);
+        RecentOpened.Remove(solutionPath);
+        PinnedSolutions.Remove(solutionPath);
+        if (LastSolution == solutionPath)
+            LastSolution = RecentSolutions.FirstOrDefault();
+    }
+
+    public void AddRecentTemplate(string identity)
+    {
+        RecentTemplates.Remove(identity);
+        RecentTemplates.Insert(0, identity);
+        if (RecentTemplates.Count > 5)
+            RecentTemplates.RemoveRange(5, RecentTemplates.Count - 5);
     }
 
     public static Settings Load()

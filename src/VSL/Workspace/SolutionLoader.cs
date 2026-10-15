@@ -5,7 +5,10 @@ namespace VSL.Workspace;
 
 public sealed class SolutionInfo
 {
+    /// <summary>The .sln/.slnx, or the project file when a project was opened on its own (as VS allows).</summary>
     public required string FilePath { get; init; }
+
+    public bool IsProjectOnly => SolutionLoader.IsProjectFile(FilePath);
     public string Name => Path.GetFileNameWithoutExtension(FilePath);
     public string Directory => Path.GetDirectoryName(FilePath)!;
     public required IReadOnlyList<ProjectInfo> Projects { get; init; }
@@ -17,8 +20,20 @@ public static class SolutionLoader
 {
     static readonly HashSet<string> HiddenDirectories = new(StringComparer.OrdinalIgnoreCase) { "bin", "obj", "node_modules" };
 
+    static readonly string[] ProjectExtensions = [".csproj", ".fsproj", ".vbproj"];
+
+    public static bool IsProjectFile(string path) => ProjectExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    public static bool IsSolutionFile(string path) =>
+        path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>What File > Open accepts: a solution, or a single project.</summary>
+    public static bool CanOpen(string path) => IsSolutionFile(path) || IsProjectFile(path);
+
     public static async Task<SolutionInfo> LoadAsync(string solutionPath, CancellationToken ct = default)
     {
+        if (IsProjectFile(solutionPath))
+            return LoadProject(solutionPath);
         var serializer = SolutionSerializers.GetSerializerByMoniker(solutionPath)
             ?? throw new NotSupportedException($"Unsupported solution format: {solutionPath}");
         var model = await serializer.OpenAsync(solutionPath, ct);
@@ -62,6 +77,18 @@ public static class SolutionLoader
         root.IsExpanded = true;
 
         return new SolutionInfo { FilePath = solutionPath, Projects = projects, Root = root };
+    }
+
+    /// <summary>A project opened without a solution: VS shows it under an implicit solution of the same name.</summary>
+    static SolutionInfo LoadProject(string projectPath)
+    {
+        if (!File.Exists(projectPath))
+            throw new FileNotFoundException("The project file was not found.", projectPath);
+        var project = ProjectInfo.Load(Path.GetFileNameWithoutExtension(projectPath), Path.GetFullPath(projectPath));
+        var root = new ExplorerNode(NodeKind.Solution, $"Solution '{project.Name}'", projectPath) { Detail = "(1 of 1 project)" };
+        root.Children.Add(ProjectNode(project));
+        root.IsExpanded = true;
+        return new SolutionInfo { FilePath = projectPath, Projects = [project], Root = root };
     }
 
     public static ExplorerNode ProjectNode(ProjectInfo project) =>

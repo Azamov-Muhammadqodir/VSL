@@ -119,6 +119,12 @@ public partial class MainWindow : Window, IDialogService
             e.Handled = true;
             return;
         }
+        if (ctrl && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key == Key.N)
+        {
+            _ = ShowStartWindowAsync(StartPage.NewProject);
+            e.Handled = true;
+            return;
+        }
         if (ctrl && e.Key == Key.OemSemicolon)
         {
             ExplorerSearch.Focus();
@@ -146,6 +152,31 @@ public partial class MainWindow : Window, IDialogService
         RecentMenu.IsEnabled = RecentMenu.Items.Count > 0;
     }
 
+    // ---- Start window --------------------------------------------------------------------------------------
+
+    void OnStartWindow(object? sender, RoutedEventArgs e) => _ = ShowStartWindowAsync(StartPage.Home);
+
+    void OnNewProject(object? sender, RoutedEventArgs e) => _ = ShowStartWindowAsync(StartPage.NewProject);
+
+    void OnCloneRepository(object? sender, RoutedEventArgs e) => _ = ShowStartWindowAsync(StartPage.Clone);
+
+    /// <summary>Opens the start window over the IDE; whatever it opens, creates or clones replaces the current solution.</summary>
+    public async Task ShowStartWindowAsync(StartPage page)
+    {
+        if (Vm is not { } vm)
+            return;
+        var startVm = new StartViewModel(vm.Settings);
+        var start = new StartWindow { DataContext = startVm };
+        if (page == StartPage.NewProject)
+            startVm.ShowNewProjectCommand.Execute(null);
+        else
+            startVm.Page = page;
+        var chosen = await start.ShowDialog<string?>(this);
+        if (chosen is not null)
+            await vm.OpenSolutionAsync(chosen);
+        BuildRecentMenu();
+    }
+
     // ---- IDialogService ----------------------------------------------------------------------------------
 
     public async Task<string?> PickSolutionAsync()
@@ -156,7 +187,9 @@ public partial class MainWindow : Window, IDialogService
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType("Solution files") { Patterns = ["*.sln", "*.slnx"] },
+                new FilePickerFileType("All Project Files") { Patterns = ["*.sln", "*.slnx", "*.csproj", "*.fsproj", "*.vbproj"] },
+                new FilePickerFileType("Solution Files") { Patterns = ["*.sln", "*.slnx"] },
+                new FilePickerFileType("Project Files") { Patterns = ["*.csproj", "*.fsproj", "*.vbproj"] },
                 new FilePickerFileType("All files") { Patterns = ["*"] },
             ],
         });

@@ -33,7 +33,12 @@
     <!-- ===== Menu ===== -->
     <Menu DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}">
       <MenuItem Header="_File">
-        <MenuItem Header="_Open Solution..." InputGesture="Ctrl+Shift+O" Command="{Binding OpenSolutionCommand}" />
+        <MenuItem Header="Start _Window" Click="OnStartWindow" />
+        <MenuItem Header="_New">
+          <MenuItem Header="_Project..." InputGesture="Ctrl+Shift+N" Click="OnNewProject" />
+        </MenuItem>
+        <MenuItem Header="_Open Project/Solution..." InputGesture="Ctrl+Shift+O" Command="{Binding OpenSolutionCommand}" />
+        <MenuItem Header="Clone _Repository..." Click="OnCloneRepository" />
         <MenuItem Name="RecentMenu" Header="Recent _Solutions" />
         <MenuItem Header="_Close Solution" Command="{Binding CloseSolutionCommand}" />
         <Separator />
@@ -336,12 +341,26 @@
           <StackPanel IsVisible="{Binding !HasSolution}" Margin="60,50" Spacing="14" MaxWidth="720" HorizontalAlignment="Left">
             <TextBlock Text="VSL" FontSize="34" FontWeight="Light" />
             <TextBlock Text="Visual Studio for Linux" FontSize="16" Foreground="{StaticResource VsGrayTextBrush}" />
-            <Button Command="{Binding OpenSolutionCommand}" Padding="16,10" Margin="0,16,0,0" Background="#333337">
-              <StackPanel Spacing="2">
-                <TextBlock Text="Open a project or solution" FontSize="14" />
-                <TextBlock Text="Open a local .sln or .slnx file" Foreground="{StaticResource VsGrayTextBrush}" />
-              </StackPanel>
-            </Button>
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
+              <Button Command="{Binding OpenSolutionCommand}" Padding="16,10" Background="#333337">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="Open a project or solution" FontSize="14" />
+                  <TextBlock Text="Open a local .sln, .slnx or project file" Foreground="{StaticResource VsGrayTextBrush}" />
+                </StackPanel>
+              </Button>
+              <Button Click="OnNewProject" Padding="16,10" Background="#333337">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="Create a new project" FontSize="14" />
+                  <TextBlock Text="Start from a project template" Foreground="{StaticResource VsGrayTextBrush}" />
+                </StackPanel>
+              </Button>
+              <Button Click="OnCloneRepository" Padding="16,10" Background="#333337">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="Clone a repository" FontSize="14" />
+                  <TextBlock Text="Get code from GitHub or another Git server" Foreground="{StaticResource VsGrayTextBrush}" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
             <TextBlock Text="Open recent" FontSize="14" Margin="0,16,0,0" />
             <ItemsControl ItemsSource="{Binding RecentSolutions}">
               <ItemsControl.ItemTemplate>

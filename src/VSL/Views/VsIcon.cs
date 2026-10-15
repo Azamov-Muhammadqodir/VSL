@@ -36,7 +36,7 @@ public sealed class VsIcon : Control
         "Keyword", "Snippet", "Constant", "TypeParameter", "Operator", "ClearAll",
         "Error", "Warning", "Info", "Ok", "Pending", "Running", "Solution", "Folder", "FolderOpen", "PropertiesFolder", "WebFolder", "Project",
         "Dependencies", "Package", "Framework", "cs", "razor", "css", "js", "json", "xml", "html", "sql", "md", "proto",
-        "yaml", "image", "binary", "file",
+        "yaml", "image", "binary", "file", "CloneRepository", "OpenProject", "NewProject", "FsProject", "VbProject", "ArrowRight",
     ];
 
     public string? Kind
@@ -385,6 +385,36 @@ public sealed class VsIcon : Control
             case "ProjectReference":
                 Fill(dc, "M1.5,1.5 L14.5,1.5 L14.5,14.5 L1.5,14.5 Z M2.5,2.5 L2.5,13.5 L13.5,13.5 L13.5,2.5 Z", Color.Parse("#388A34"));
                 Label(dc, "C#", Color.Parse("#388A34"), new Rect(3.5, 3.5, 9, 9));
+                break;
+            case "FsProject":
+                Fill(dc, "M1.5,1.5 L14.5,1.5 L14.5,14.5 L1.5,14.5 Z M2.5,2.5 L2.5,13.5 L13.5,13.5 L13.5,2.5 Z", Color.Parse("#378BBA"));
+                Label(dc, "F#", Color.Parse("#378BBA"), new Rect(3.5, 3.5, 9, 9));
+                break;
+            case "VbProject":
+                Fill(dc, "M1.5,1.5 L14.5,1.5 L14.5,14.5 L1.5,14.5 Z M2.5,2.5 L2.5,13.5 L13.5,13.5 L13.5,2.5 Z", Color.Parse("#00539C"));
+                Label(dc, "VB", Color.Parse("#00539C"), new Rect(3.5, 3.5, 9, 9));
+                break;
+
+            // ---- Start window --------------------------------------------------------------------------------
+            case "CloneRepository":
+                // A repository box with a download arrow.
+                Stroke(dc, "M2.5,6.5 L2.5,14.5 L13.5,14.5 L13.5,6.5", Gray, 1.1);
+                Stroke(dc, "M1.5,6.5 L5,6.5 M11,6.5 L14.5,6.5", Gray, 1.1);
+                Fill(dc, "M6.9,1 L9.1,1 L9.1,7 L11.4,7 L8,10.6 L4.6,7 L6.9,7 Z", Blue);
+                break;
+            case "OpenProject":
+                FolderIcon(dc, open: true);
+                Fill(dc, "M8.5,8.5 L15.5,8.5 L15.5,15.5 L8.5,15.5 Z", Color.Parse("#252526"));
+                Fill(dc, "M9,9 L15,9 L15,15 L9,15 Z M9.8,10.8 L9.8,14.2 L14.2,14.2 L14.2,10.8 Z", Purple);
+                Fill(dc, "M10.6,11.6 L11.8,11.6 L11.8,13.4 L10.6,13.4 Z M12.2,11.6 L13.4,11.6 L13.4,13.4 L12.2,13.4 Z", Purple);
+                break;
+            case "NewProject":
+                Fill(dc, "M2,0.5 L8.5,0.5 L12.5,4.5 L12.5,9 L11.5,9 L11.5,5.5 L7.5,5.5 L7.5,1.5 L3,1.5 L3,14.5 L8,14.5 L8,15.5 L2,15.5 Z", Page);
+                Fill(dc, "M8.5,1.9 L11.1,4.5 L8.5,4.5 Z", Page);
+                Stroke(dc, "M12.5,10 L12.5,15.5 M9.75,12.75 L15.25,12.75", Blue, 1.6);
+                break;
+            case "ArrowRight":
+                Stroke(dc, "M2.5,8 L13,8 M9,4 L13,8 L9,12", fg, 1.3);
                 break;
             case "Dependencies":
                 Stroke(dc, "M2.5,3.5 L7.5,3.5 L7.5,7.5 L2.5,7.5 Z M8.5,8.5 L13.5,8.5 L13.5,12.5 L8.5,12.5 Z M5,7.5 L5,10.5 L8.5,10.5", Gray, 1.1);

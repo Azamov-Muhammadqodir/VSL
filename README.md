@@ -8,7 +8,8 @@ Visual Studio uses), including cohosted Razor support.
 
 ```bash
 ./scripts/install.sh          # publishes to ~/.local/share/VSL/app, adds `vsl` and an app-menu entry
-vsl path/to/App.sln           # or open VSL from the applications menu
+vsl path/to/App.sln           # opens it directly (a .slnx or .csproj works too)
+vsl                           # start window: recent, clone, open, create a new project
 ```
 
 Requires the .NET 10 SDK (`~/.dotnet` or `DOTNET_ROOT`). On first solution open VSL installs
@@ -18,7 +19,9 @@ Requires the .NET 10 SDK (`~/.dotnet` or `DOTNET_ROOT`). On first solution open 
 
 | Area | Details |
 |---|---|
-| Solutions | `.sln` / `.slnx`, solution folders, Solution Explorer with VS file nesting (`X.razor.cs`, `X.razor.css`, `appsettings.*.json`, `*.Designer.cs`), Dependencies (frameworks, packages, projects), search (Ctrl+;) |
+| Start window | Shown at launch like VS: Open recent (search, Today / This week groups, pin, remove), Clone a repository, Open a project or solution, Open a local folder, Create a new project, Continue without code; also File > Start Window, File > New > Project (Ctrl+Shift+N), File > Clone Repository |
+| New project | Every project template installed in the .NET SDK (`dotnet new`), with its own icon, search and language / platform / project type filters, recent templates; Configure (name, location, solution, same directory) and Additional information (framework, authentication, HTTPS and the options VS shows for that template); creates the solution and opens it |
+| Solutions | `.sln` / `.slnx`, or a project file on its own (as VS opens a .csproj), solution folders, Solution Explorer with VS file nesting (`X.razor.cs`, `X.razor.css`, `appsettings.*.json`, `*.Designer.cs`), Dependencies (frameworks, packages, projects), search (Ctrl+;) |
 | Editor | Syntax highlighting (VS Dark), C# and Razor IntelliSense, parameter info, Quick Info hover, squiggles, Quick Actions and Refactorings (Ctrl+. lightbulb: add using, generate type/method, refactorings), Go To Definition / Implementation, Find All References, Rename, Format Document, comment/uncomment, find (Ctrl+F) and Find in Files, VS-style editor context menu, zoom (Ctrl+wheel, Ctrl+Shift+. / Ctrl+Shift+, , Ctrl+0, 20–400 % picker) with the document health indicator |
 | Build | Build / Rebuild / Clean via `dotnet`, Output window, Error List (Build + IntelliSense) |
 | Run | Startup project and `launchSettings.json` profiles, Start Without Debugging (Ctrl+F5), Stop; opens the browser for `launchBrowser` profiles |
@@ -51,6 +54,7 @@ src/VSL/
   Terminal/    integrated terminal session (Exclr8.Terminal control + Porta.Pty)
   Git/         git CLI wrapper (porcelain v2 status, stage/commit/sync/branches) and line diff for the margin
   Packages/    NuGet search/list/install/uninstall through the dotnet CLI
+  Templates/   SDK project templates (template engine cache + ide.host.json) and dotnet new project creation
   Editor/      AvaloniaEdit host: sync, completion, hover, squiggles, TextMate theme, side-by-side diff view
   ViewModels/  main window state, documents, Error List, Output
   Views/       main window (XAML), tool window docking, NuGet manager, icons, dialogs

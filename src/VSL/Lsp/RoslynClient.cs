@@ -92,7 +92,10 @@ public sealed class RoslynClient : IAsyncDisposable
             capabilities = ClientCapabilities,
         }, ct);
         await rpc.NotifyAsync("initialized", new { });
-        await rpc.NotifyAsync("solution/open", new { solution = ToUri(solutionPath) });
+        if (Workspace.SolutionLoader.IsProjectFile(solutionPath))
+            await rpc.NotifyAsync("project/open", new { projects = new[] { ToUri(solutionPath) } });
+        else
+            await rpc.NotifyAsync("solution/open", new { solution = ToUri(solutionPath) });
         return client;
     }
 

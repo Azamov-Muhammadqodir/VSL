@@ -48,7 +48,7 @@ public class UiTests
         return vm;
     }
 
-    static string Snapshot(MainWindow window, string name)
+    static string Snapshot(Avalonia.Controls.Window window, string name)
     {
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         Dispatcher.UIThread.RunJobs();
@@ -378,6 +378,132 @@ public class UiTests
 
         Assert.True(await vm.CloseSolutionCoreAsync());
         Assert.False(vm.HasGit);
+    }
+
+    [AvaloniaFact]
+    public async Task Start_window_lists_recent_and_creates_a_project_from_a_template()
+    {
+        SampleSolution.EnsureConfigIsolated();
+        var root = Path.Combine(Path.GetTempPath(), "vsl-start-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Shop"));
+        var existing = Path.Combine(root, "Shop", "Shop.slnx");
+        File.WriteAllText(existing, "<Solution />");
+        var missing = Path.Combine(root, "Gone", "Gone.sln");
+        var now = DateTime.Now;
+        var settings = new VSL.Services.Settings { NewProjectLocation = root };
+        settings.RecentSolutions.AddRange([existing, missing, "/home/user/source/repos/Api/Api.csproj"]);
+        settings.RecentOpened[existing] = now.AddMinutes(-5);
+        settings.RecentOpened[missing] = now.AddDays(-3);
+        settings.PinnedSolutions.Add("/home/user/source/repos/Api/Api.csproj");
+
+        var vm = new StartViewModel(settings);
+        var window = new StartWindow { DataContext = vm, Width = 1060, Height = 700 };
+        string? chosen = null;
+        window.Finished += path => chosen = path;
+        window.Show();
+        Assert.Equal(["Pinned", "Today", "This week"], vm.RecentGroups.Select(g => g.Header));
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Snapshot(window, "start-home");
+
+        // A recent entry that no longer exists explains itself instead of opening.
+        vm.OpenRecentCommand.Execute(vm.RecentGroups[2].Items[0]);
+        Assert.Contains("could not be found", vm.Message);
+        Assert.Null(chosen);
+
+        // Create a new project: pick a template...
+        vm.ShowNewProjectCommand.Execute(null);
+        await WaitUntil(() => !vm.TemplatesLoading && vm.Templates.Count > 0, TimeSpan.FromMinutes(1));
+        Assert.Contains("C#", vm.Languages);
+        Assert.Equal("console", vm.Templates[0].Template.ShortName);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        Snapshot(window, "start-templates");
+        vm.TemplateSearch = "console";
+        vm.LanguageFilter = "C#";
+        vm.SelectedTemplate = Assert.Single(vm.Templates);
+        Assert.Equal("Console App", vm.SelectedTemplate.Name);
+        vm.NextCommand.Execute(null);
+
+        // ...configure it (the solution name follows the project name until edited)...
+        Assert.True(vm.IsConfigure);
+        Assert.False(vm.CreateCommand.CanExecute(null));
+        Assert.Equal("ConsoleApp1", vm.ProjectName);
+        vm.ProjectName = "HelloVsl";
+        Assert.Equal("HelloVsl", vm.SolutionName);
+        Assert.Contains(Path.Combine(root, "HelloVsl", "HelloVsl"), vm.CreatedInText);
+        Assert.Null(vm.ConfigureError);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Snapshot(window, "start-configure");
+        vm.NextCommand.Execute(null);
+
+        // ...and choose the additional information VS offers for it.
+        Assert.True(vm.IsAdditionalInformation);
+        var framework = vm.Options.First(o => o.Label == "Framework");
+        Assert.StartsWith(".NET 10.0", framework.SelectedChoice!.Label);
+        var programMain = vm.Options.First(o => o.Option.Symbol == "UseProgramMain");
+        Assert.Equal("Do not use top-level statements", programMain.Label);
+        programMain.IsChecked = true;
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Snapshot(window, "start-additional");
+        Assert.True(vm.CreateCommand.CanExecute(null));
+        await vm.CreateCommand.ExecuteAsync(null);
+        Assert.Null(vm.Message);
+
+        Assert.Equal(Path.Combine(root, "HelloVsl", "HelloVsl.slnx"), chosen);
+        Assert.Contains("static void Main", File.ReadAllText(Path.Combine(root, "HelloVsl", "HelloVsl", "Program.cs")));
+        Assert.Equal(vm.Templates[0].Template.Identity, settings.RecentTemplates[0]);
+
+        // The start window can also clone: a local repository holding a solution opens right away.
+        var origin = Path.Combine(root, "origin");
+        Directory.CreateDirectory(origin);
+        File.WriteAllText(Path.Combine(origin, "Repo.slnx"), "<Solution />");
+        TempRepo.Git(origin, "init", "-q", "-b", "main");
+        TempRepo.Git(origin, "add", "-A");
+        TempRepo.Git(origin, "-c", "user.name=VSL Tests", "-c", "user.email=tests@example.invalid", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial");
+        var cloneVm = new StartViewModel(settings) { Page = StartPage.Clone };
+        string? cloned = null;
+        cloneVm.SolutionChosen += path => cloned = path;
+        cloneVm.CloneUrl = origin;
+        Assert.Equal(Path.Combine(StartViewModel.DefaultReposDirectory, "origin"), cloneVm.ClonePath);
+        cloneVm.ClonePath = Path.Combine(root, "clones", "Repo");
+        await cloneVm.CloneCommand.ExecuteAsync(null);
+        Assert.Null(cloneVm.Message);
+        Assert.Equal(Path.Combine(root, "clones", "Repo", "Repo.slnx"), cloned);
+
+        // Closing the start window (X) continues without code, exactly once.
+        var closing = new StartWindow { DataContext = new StartViewModel(settings) };
+        var finished = new List<string?>();
+        closing.Finished += finished.Add;
+        closing.Show();
+        closing.Close();
+        Assert.Equal([null], finished);
+    }
+
+    [AvaloniaFact]
+    public async Task Opens_a_project_without_a_solution()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var vm = NewViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
+        window.Show();
+        var project = SampleSolution.PathOf(sln, "Web/Web.csproj");
+        await vm.OpenSolutionAsync(project);
+
+        // VS shows the project under an implicit solution of the same name.
+        Assert.True(vm.Solution!.IsProjectOnly);
+        Assert.Equal("Web", Assert.Single(vm.Solution.Projects).Name);
+        Assert.Equal("Solution 'Web'", vm.ExplorerRoots[0].Name);
+        Assert.Equal(project, vm.Settings.RecentSolutions[0]);
+
+        // Roslyn loads it (project/open) and IntelliSense works.
+        var host = vm.OpenDocument(SampleSolution.PathOf(sln, "Web/Program.cs"))!.Host;
+        await WaitUntil(() => vm.ServerStatus == "IntelliSense: ready", TimeSpan.FromMinutes(5));
+        Assert.Equal("IntelliSense: ready", vm.ServerStatus);
+        host.Document.Insert(host.Document.TextLength, "\nint broken = \"text\";\n");
+        await WaitUntil(() => host.Diagnostics.Any(d => d.Code == "CS0029"), TimeSpan.FromSeconds(60));
+        Assert.Contains(host.Diagnostics, d => d.Code == "CS0029");
+        while (host.Editor.CanUndo)
+            host.Editor.Undo();
+        Assert.True(await vm.CloseSolutionCoreAsync());
     }
 
     [AvaloniaFact]

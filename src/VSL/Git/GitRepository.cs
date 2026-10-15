@@ -61,6 +61,14 @@ public sealed class GitRepository
 
     public string Relative(string path) => System.IO.Path.GetRelativePath(Root, path);
 
+    /// <summary>git clone into <paramref name="directory"/> (which must not exist or be empty), streaming progress.</summary>
+    public static async Task<GitResult> CloneAsync(string url, string directory, Action<string>? output = null)
+    {
+        var parent = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(directory))!;
+        Directory.CreateDirectory(parent);
+        return await RunAsync(parent, ["clone", "--progress", "--", url, directory], output: output);
+    }
+
     public async Task<GitStatus> StatusAsync()
     {
         var result = await RunAsync(Root, ["status", "--porcelain=v2", "--branch", "--untracked-files=all", "-z"], optionalLocks: false);
