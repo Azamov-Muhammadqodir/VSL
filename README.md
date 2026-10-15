@@ -55,26 +55,17 @@ Fix All, floating tool windows, history / blame, merge conflict editor, WinForms
 ## Claude Code for Visual Studio (Windows)
 
 `src/VSL.VisualStudio` is VSL's Claude Code panel as a Visual Studio 2022 (17.14+) / 2026 extension: the same CLI
-session, protocol, transcripts, diffs and view model (shared with VSL, not copied), with a WPF view that follows the
-Visual Studio theme.
+session, protocol and view model (shared with VSL, not copied), with a WPF view that follows the Visual Studio theme.
+What it does and how to use it is in [its README](src/VSL.VisualStudio/README.md), which is also its Marketplace page.
 
-- **Open it** with Alt+K, the Claude button on the Standard toolbar or View > Other Windows > Claude Code. Ask Claude in the
-  editor's context menu sends the current file and selection; on files, folders and projects in Solution Explorer it puts
-  them in the prompt as @mentions. File links open in the editor at the line; proposed edits open in VS's diff window.
-- **Accounts**: like `CLAUDE_CONFIG_DIR` in a terminal, the picker lists `~/.claude` and every `~/.claude-NAME` folder with
-  its email; Add account creates one and opens the CLI in a terminal to sign in.
-- **Tokens**: the context size with Context (`/context`) and Compact (`/compact`), and the session and weekly limits with
-  when each resets (from the CLI's rate limit events and `get_usage`, which cost no tokens).
-- **English / Uzbek** with the globe button.
-
-It needs the Claude Code CLI (`irm https://claude.ai/install.ps1 | iex`, or `VSL_CLAUDE_PATH` pointing at `claude.exe`).
-Build it with Visual Studio's MSBuild (the VSIX targets need .NET Framework MSBuild, not `dotnet build`), then open the
-`.vsix` to install; a Debug build deploys to the experimental instance (`devenv /rootsuffix Exp`). The project is not in
-`VSL.slnx`, so the Linux build and CI are unchanged.
+The `vsix` workflow builds `VSL.ClaudeCode.VisualStudio.vsix` on Windows for every change to the extension or the shared
+Claude code (download it from the run's artifacts; open it to install). Running the workflow by hand with **publish**
+ticked uploads it to the Visual Studio Marketplace; raise the version in `source.extension.vsixmanifest` first. Locally
+it builds with Visual Studio's MSBuild (not `dotnet build`); the project is not in `VSL.slnx`, so the Linux build is
+unchanged:
 
 ```powershell
 msbuild src/VSL.VisualStudio/VSL.VisualStudio.csproj -restore -p:Configuration=Release
-# src/VSL.VisualStudio/bin/Release/net48/VSL.ClaudeCode.VisualStudio.vsix
 ```
 
 ## Development

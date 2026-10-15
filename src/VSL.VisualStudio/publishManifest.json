@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json.schemastore.org/vsix-publish",
+  "categories": [ "coding", "other" ],
+  "identity": {
+    "internalName": "claude-code-vsl"
+  },
+  "overview": "README.md",
+  "priceCategory": "free",
+  "publisher": "",
+  "private": false,
+  "qna": true
+}

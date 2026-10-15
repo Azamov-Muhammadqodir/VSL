@@ -1,6 +1,9 @@
 # Claude Code for Visual Studio (src/VSL.VisualStudio) → VSL.ClaudeCode.VisualStudio.vsix as a build artifact.
 # The VSIX targets (VSCT, pkgdef, the .vsix container) need Visual Studio's .NET Framework MSBuild, so this runs on Windows.
 # It also catches shared Claude code (src/VSL/Claude, the Claude view model) that no longer builds for .NET Framework.
+# Run it by hand with "publish" ticked to upload the .vsix to the Visual Studio Marketplace: that needs the
+# VS_MARKETPLACE_TOKEN secret (an Azure DevOps token with Marketplace > Manage) and the VS_MARKETPLACE_PUBLISHER variable
+# (the Marketplace publisher ID). Raise the Version in source.extension.vsixmanifest before each upload.
 name: vsix
 
 on:
@@ -22,6 +25,11 @@ on:
       - 'src/VSL/Views/MarkdownParser.cs'
       - '.github/workflows/vsix.yml'
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish to the Visual Studio Marketplace
+        type: boolean
+        default: false
 
 jobs:
   vsix:
@@ -41,3 +49,23 @@ jobs:
           name: VSL.ClaudeCode.VisualStudio
           path: src/VSL.VisualStudio/bin/Release/net48/*.vsix
           if-no-files-found: error
+
+      - name: Publish to the Visual Studio Marketplace
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        shell: pwsh
+        env:
+          VS_MARKETPLACE_TOKEN: ${{ secrets.VS_MARKETPLACE_TOKEN }}
+          VS_MARKETPLACE_PUBLISHER: ${{ vars.VS_MARKETPLACE_PUBLISHER }}
+        run: |
+          if (-not $env:VS_MARKETPLACE_TOKEN) { throw 'Add the VS_MARKETPLACE_TOKEN secret.' }
+          if (-not $env:VS_MARKETPLACE_PUBLISHER) { throw 'Add the VS_MARKETPLACE_PUBLISHER variable (the Marketplace publisher ID).' }
+          $manifestPath = 'src/VSL.VisualStudio/publishManifest.json'
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $manifest.publisher = $env:VS_MARKETPLACE_PUBLISHER
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content $manifestPath
+          # VsixPublisher ships with the VSSDK build tools package the project restores.
+          $publisher = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.vssdk.buildtools" -Recurse -Filter VsixPublisher.exe | Select-Object -First 1
+          if (-not $publisher) { throw 'VsixPublisher.exe not found.' }
+          $vsix = Get-Item src/VSL.VisualStudio/bin/Release/net48/*.vsix | Select-Object -First 1
+          & $publisher.FullName publish -payload $vsix.FullName -publishManifest (Resolve-Path $manifestPath) -personalAccessToken $env:VS_MARKETPLACE_TOKEN
+          if ($LASTEXITCODE -ne 0) { throw "VsixPublisher failed with exit code $LASTEXITCODE." }
