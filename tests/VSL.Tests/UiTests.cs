@@ -32,7 +32,7 @@ public static class TestAppBuilder
 [Collection(SampleSolutionCollection.Name)]
 public class UiTests
 {
-    static async Task WaitUntil(Func<bool> condition, TimeSpan timeout)
+    internal static async Task WaitUntil(Func<bool> condition, TimeSpan timeout)
     {
         var end = DateTime.UtcNow + timeout;
         while (!condition() && DateTime.UtcNow < end)
@@ -44,7 +44,7 @@ public class UiTests
     }
 
     /// <summary>A view model with no remembered per-solution state, so tests do not depend on each other's order.</summary>
-    static MainViewModel NewViewModel()
+    internal static MainViewModel NewViewModel()
     {
         // The Claude Code window must never start the user's real CLI from a test.
         FakeClaude.Ensure();
@@ -80,6 +80,12 @@ public class UiTests
         await vm.BuildSolutionCommand.ExecuteAsync(null);
         Assert.Contains("========== Build: succeeded", vm.BuildOutput.Document.Text);
         Assert.Equal(0, vm.ErrorCount);
+
+        // The Output window follows the build with its last line at the bottom, not scrolled out of view.
+        vm.ShowToolWindow(ToolWindows.Output);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        var output = window.GetVisualDescendants().OfType<AvaloniaEdit.TextEditor>().Single(e => e.Name == "OutputEditor").TextArea.TextView;
+        Assert.InRange(output.ScrollOffset.Y, 1, output.DocumentHeight - output.Bounds.Height + 1);
 
         // A compile error on disk lands in the Error List with file, line and project.
         var program = SampleSolution.PathOf(sln, "Web/Program.cs");
