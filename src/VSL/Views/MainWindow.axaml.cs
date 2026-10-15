@@ -330,6 +330,77 @@ public partial class MainWindow : Window, IDialogService
         }
     }
 
+    /// <summary>Right-click in Solution Explorer: VS's context menu for solutions, projects, folders and files.</summary>
+    void OnExplorerContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (sender is not Control { DataContext: ExplorerNode node } anchor || Vm is not { } vm)
+            return;
+        e.Handled = true;
+        ExplorerTree.SelectedItem = node;
+        MenuItem Item(string header, Action action, bool enabled = true)
+        {
+            var item = new MenuItem { Header = header, IsEnabled = enabled };
+            item.Click += (_, _) => action();
+            return item;
+        }
+        var path = node.Path;
+        var folder = node.Kind switch
+        {
+            NodeKind.Solution or NodeKind.Project => path is null ? null : Path.GetDirectoryName(path),
+            NodeKind.Folder => path,
+            NodeKind.File => path is null ? null : Path.GetDirectoryName(path),
+            _ => null,
+        };
+        var items = new List<object>();
+        switch (node.Kind)
+        {
+            case NodeKind.Solution:
+                items.Add(Item("Build Solution", () => vm.BuildSolutionCommand.Execute(null)));
+                items.Add(Item("Rebuild Solution", () => vm.RebuildSolutionCommand.Execute(null)));
+                items.Add(Item("Clean Solution", () => vm.CleanSolutionCommand.Execute(null)));
+                items.Add(new Separator());
+                items.Add(Item("Manage NuGet Packages for Solution...", () => vm.ManageNuGetPackagesCommand.Execute(null)));
+                break;
+            case NodeKind.Project when node.Project is { } project:
+                items.Add(Item("Build", () => vm.BuildProjectCommand.Execute(project)));
+                items.Add(Item("Rebuild", () => vm.RebuildProjectCommand.Execute(project)));
+                items.Add(Item("Clean", () => vm.CleanProjectCommand.Execute(project)));
+                items.Add(new Separator());
+                items.Add(Item("Manage NuGet Packages...", () => vm.ManageNuGetPackagesCommand.Execute(project)));
+                items.Add(Item("Set as Startup Project", () => vm.SetStartupProjectCommand.Execute(project), project.IsRunnable));
+                break;
+            case NodeKind.Dependencies or NodeKind.DependencyGroup or NodeKind.Package:
+                var owner = vm.Solution?.Projects.FirstOrDefault(p => vm.ExplorerRoots.FirstOrDefault()?.Children
+                    .Any(c => c.Project == p && Contains(c, node)) == true);
+                items.Add(Item("Manage NuGet Packages...", () => vm.ManageNuGetPackagesCommand.Execute(owner), owner is not null));
+                break;
+            case NodeKind.File when path is not null:
+                items.Add(Item("Open", () => vm.OpenNode(node)));
+                items.Add(Item("Compare with Unmodified", () =>
+                {
+                    if (vm.OpenDocument(path) is { } doc)
+                        _ = vm.CompareWithUnmodifiedAsync(doc);
+                }, vm.HasGit));
+                break;
+        }
+        if (folder is not null)
+        {
+            if (items.Count > 0)
+                items.Add(new Separator());
+            if (node.Kind != NodeKind.File)
+                items.Add(Item("Open in Terminal", () => _ = vm.OpenTerminalAtAsync(folder)));
+            items.Add(Item(node.Kind == NodeKind.File ? "Open Containing Folder" : "Open Folder in File Explorer", () => OpenFolder(folder)));
+        }
+        if (path is not null)
+            items.Add(Item("Copy Full Path", () => _ = Clipboard?.SetTextAsync(path)));
+        if (items.Count == 0)
+            return;
+        new ContextMenu { ItemsSource = items }.Open(anchor);
+
+        static bool Contains(ExplorerNode parent, ExplorerNode target) =>
+            parent.Children.Any(c => c == target || Contains(c, target));
+    }
+
     void OnExplorerKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter && ExplorerTree.SelectedItem is ExplorerNode node && Vm is { } vm)

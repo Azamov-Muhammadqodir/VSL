@@ -43,7 +43,7 @@ public partial class MainViewModel : ObservableObject
         BuildOutput = new OutputChannel("Build");
         DebugOutput = new OutputChannel("Debug");
         ServerOutput = new OutputChannel("Language Server");
-        OutputChannels = [BuildOutput, DebugOutput, ServerOutput, GitOutput];
+        OutputChannels = [BuildOutput, DebugOutput, ServerOutput, GitOutput, PackageManagerOutput];
         SelectedOutput = BuildOutput;
         InitializeDebugging();
         EditorHost.DefaultZoom = Math.Clamp(Settings.EditorZoom, EditorHost.MinZoom, EditorHost.MaxZoom);
@@ -519,6 +519,75 @@ public partial class MainViewModel : ObservableObject
             ActiveDocument = Documents.Count == 0 ? null : Documents[Math.Clamp(index, 0, Documents.Count - 1)];
         RefreshErrorList();
         SaveSession();
+    }
+
+    // ---- NuGet --------------------------------------------------------------------------------------------------
+
+    public OutputChannel PackageManagerOutput { get; } = new("Package Manager");
+
+    /// <summary>Opens the NuGet Package Manager for a project, or for the whole solution when null.</summary>
+    [RelayCommand]
+    async Task ManageNuGetPackages(ProjectInfo? project)
+    {
+        if (Solution is not { } solution)
+            return;
+        var key = project is null ? "nuget:solution" : "nuget:" + project.FilePath;
+        if (Documents.FirstOrDefault(d => d.Key == key) is { } open)
+        {
+            ActiveDocument = open;
+            return;
+        }
+        var manager = new NuGetViewModel(solution, project, PackageManagerOutput.Append, OnPackagesChangedAsync);
+        Documents.Add(manager);
+        ActiveDocument = manager;
+        await manager.InitializeAsync();
+    }
+
+    /// <summary>After install/uninstall: reload project files so Solution Explorer's Dependencies are current.</summary>
+    async Task OnPackagesChangedAsync()
+    {
+        if (Solution is null)
+            return;
+        var startup = StartupProject?.FilePath;
+        var profile = LaunchProfile;
+        var reloaded = await SolutionLoader.LoadAsync(Solution.FilePath);
+        Solution = reloaded;
+        StartupProjects.Clear();
+        foreach (var p in reloaded.Projects.Where(p => p.IsRunnable))
+            StartupProjects.Add(p);
+        StartupProject = StartupProjects.FirstOrDefault(p => p.FilePath == startup) ?? StartupProjects.FirstOrDefault();
+        if (profile is not null && LaunchProfiles.Contains(profile))
+            LaunchProfile = profile;
+        reloaded.Root.RefreshGitBadges();
+        ExplorerRoots.Clear();
+        ExplorerRoots.Add(reloaded.Root);
+        _targetPaths.Clear();
+    }
+
+    // ---- Solution Explorer context menu ----------------------------------------------------------------------
+
+    [RelayCommand]
+    Task BuildProject(ProjectInfo? project) => project is null ? Task.CompletedTask : RunBuildAsync("build", "Build", project.FilePath);
+
+    [RelayCommand]
+    Task RebuildProject(ProjectInfo? project) => project is null ? Task.CompletedTask : RunBuildAsync("rebuild", "Rebuild", project.FilePath);
+
+    [RelayCommand]
+    Task CleanProject(ProjectInfo? project) => project is null ? Task.CompletedTask : RunBuildAsync("clean", "Clean", project.FilePath);
+
+    [RelayCommand]
+    void SetStartupProject(ProjectInfo? project)
+    {
+        if (project is not null && StartupProjects.FirstOrDefault(p => p.FilePath == project.FilePath) is { } match)
+            StartupProject = match;
+    }
+
+    /// <summary>Starts a new terminal in the given folder (Solution Explorer > Open in Terminal).</summary>
+    public async Task OpenTerminalAtAsync(string folder)
+    {
+        Terminal.WorkingDirectory = folder;
+        ShowTerminal();
+        await Terminal.RestartAsync();
     }
 
     // ---- Document tab commands (tab context menu) -----------------------------------------------------------

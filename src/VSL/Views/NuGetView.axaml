@@ -1,0 +1,146 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VSL.ViewModels"
+             xmlns:v="using:VSL.Views"
+             x:Class="VSL.Views.NuGetView"
+             x:DataType="vm:NuGetViewModel"
+             Background="#1E1E1E">
+  <UserControl.Styles>
+    <!-- Browse / Installed / Updates, styled like VS's NuGet tabs -->
+    <Style Selector="RadioButton.ngtab">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Foreground" Value="#A0A0A0" />
+      <Setter Property="Padding" Value="0,2" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <StackPanel Spacing="3" Background="Transparent">
+            <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" />
+            <Border Name="PART_Underline" Height="2" Background="Transparent" />
+          </StackPanel>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="RadioButton.ngtab:checked">
+      <Setter Property="Foreground" Value="#F1F1F1" />
+    </Style>
+    <Style Selector="RadioButton.ngtab:checked /template/ Border#PART_Underline">
+      <Setter Property="Background" Value="#3794FF" />
+    </Style>
+    <Style Selector="RadioButton.ngtab:pointerover">
+      <Setter Property="Foreground" Value="#F1F1F1" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid ColumnDefinitions="*,4,430">
+    <!-- Package list -->
+    <DockPanel Margin="14,10,8,0">
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="22">
+          <RadioButton Classes="ngtab" GroupName="ngtabs" Content="Browse" IsChecked="{Binding IsBrowseTab}" />
+          <RadioButton Classes="ngtab" GroupName="ngtabs" Content="Installed" IsChecked="{Binding IsInstalledTab}" />
+          <RadioButton Classes="ngtab" GroupName="ngtabs" IsChecked="{Binding IsUpdatesTab}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Updates" />
+              <Border Background="#3794FF" CornerRadius="8" Padding="6,0" IsVisible="{Binding !!UpdateCount}">
+                <TextBlock Text="{Binding UpdateCount}" FontSize="11" Foreground="White" />
+              </Border>
+            </StackPanel>
+          </RadioButton>
+        </StackPanel>
+        <TextBlock Grid.Column="2" Text="{Binding Header}" FontSize="16" VerticalAlignment="Center" Foreground="#D0D0D0" />
+      </Grid>
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,10,0,8">
+        <TextBox Text="{Binding SearchText}" Width="320" Classes="search" PlaceholderText="Search (Enter)" KeyDown="OnSearchKeyDown" />
+        <Button Classes="tbi" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh"><v:VsIcon Kind="Refresh" /></Button>
+        <CheckBox Content="Include prerelease" IsChecked="{Binding IncludePrerelease}" VerticalAlignment="Center" />
+        <Button Classes="tb" Content="Update All" Command="{Binding UpdateAllCommand}" IsVisible="{Binding IsUpdatesTab}" />
+      </StackPanel>
+      <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Height="24">
+        <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Foreground="#A0A0A0" TextTrimming="CharacterEllipsis" />
+        <ProgressBar Grid.Column="1" IsIndeterminate="True" Width="120" IsVisible="{Binding IsBusy}" />
+      </Grid>
+      <ListBox ItemsSource="{Binding Packages}" SelectedItem="{Binding SelectedPackage}" Background="Transparent">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:PackageItem">
+            <Grid ColumnDefinitions="40,*,Auto" Margin="0,4">
+              <v:VsIcon Kind="Package" Width="28" Height="28" VerticalAlignment="Top" />
+              <StackPanel Grid.Column="1" Spacing="2">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="{Binding Id}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Byline}" Foreground="#A0A0A0" />
+                </StackPanel>
+                <TextBlock Text="{Binding Description}" Foreground="#C0C0C0" TextWrapping="Wrap" MaxHeight="34" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <StackPanel Grid.Column="2" Margin="12,0,4,0" HorizontalAlignment="Right">
+                <TextBlock Text="{Binding VersionText}" HorizontalAlignment="Right" />
+                <StackPanel Orientation="Horizontal" Spacing="3" HorizontalAlignment="Right" IsVisible="{Binding HasUpdate}">
+                  <v:VsIcon Kind="Push" Width="12" Height="12" />
+                  <TextBlock Text="{Binding LatestVersion}" Foreground="#3794FF" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+
+    <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
+
+    <!-- Details -->
+    <Border Grid.Column="2" Background="#252526">
+      <ScrollViewer>
+        <StackPanel Margin="16,12" Spacing="10" IsVisible="{Binding HasSelection}">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <v:VsIcon Kind="Package" Width="32" Height="32" />
+            <TextBlock Text="{Binding SelectedPackage.Id}" FontSize="18" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="340" />
+          </StackPanel>
+
+          <!-- Solution scope: pick the projects -->
+          <StackPanel Spacing="4" IsVisible="{Binding IsSolutionScope}">
+            <Grid ColumnDefinitions="*,120">
+              <TextBlock Text="Project" Foreground="#A0A0A0" />
+              <TextBlock Grid.Column="1" Text="Installed" Foreground="#A0A0A0" />
+            </Grid>
+            <ItemsControl ItemsSource="{Binding ProjectChoices}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ProjectChoice">
+                  <Grid ColumnDefinitions="*,120">
+                    <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked}" />
+                    <TextBlock Grid.Column="1" Text="{Binding InstalledVersion}" VerticalAlignment="Center" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding SelectedPackage.IsInstalled}">
+            <TextBlock Text="Installed:" VerticalAlignment="Center" Foreground="#A0A0A0" Width="70" />
+            <TextBlock Grid.Column="1" Text="{Binding SelectedPackage.InstalledVersion}" VerticalAlignment="Center" />
+            <Button Grid.Column="2" Content="Uninstall" Command="{Binding UninstallCommand}" MinWidth="90" HorizontalContentAlignment="Center" />
+          </Grid>
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Text="Version:" VerticalAlignment="Center" Foreground="#A0A0A0" Width="70" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Versions}" SelectedItem="{Binding SelectedVersion}" HorizontalAlignment="Stretch" Margin="0,0,8,0" />
+            <Button Grid.Column="2" Content="{Binding InstallButtonText}" Command="{Binding InstallCommand}" MinWidth="90"
+                    HorizontalContentAlignment="Center" Background="#0E639C" Foreground="White" />
+          </Grid>
+
+          <Border Height="1" Background="#3F3F46" Margin="0,6" />
+          <TextBlock Text="Description" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding SelectedPackage.Description}" TextWrapping="Wrap" Foreground="#C8C8C8" />
+          <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4,0,0">
+            <TextBlock Text="Owner(s):" Foreground="#A0A0A0" />
+            <TextBlock Grid.Column="1" Text="{Binding SelectedPackage.Owners}" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="1" Text="Downloads:" Foreground="#A0A0A0" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedPackage.DownloadsText}" />
+            <TextBlock Grid.Row="2" Text="Project URL:" Foreground="#A0A0A0" />
+            <Button Grid.Row="2" Grid.Column="1" Classes="tb" Padding="0" HorizontalAlignment="Left" Click="OnProjectUrlClick"
+                    IsVisible="{Binding SelectedPackage.ProjectUrl, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <TextBlock Text="{Binding SelectedPackage.ProjectUrl}" Foreground="#3794FF" TextDecorations="Underline" TextTrimming="CharacterEllipsis" MaxWidth="300" />
+            </Button>
+          </Grid>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>

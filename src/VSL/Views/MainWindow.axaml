@@ -171,6 +171,10 @@
         <MenuItem Header="_New Branch..." Command="{Binding NewBranchCommand}" />
       </MenuItem>
       <MenuItem Header="_Tools">
+        <MenuItem Header="_NuGet Package Manager">
+          <MenuItem Header="Manage NuGet Packages for _Solution..." Command="{Binding ManageNuGetPackagesCommand}" />
+        </MenuItem>
+        <Separator />
         <MenuItem Header="_Restart Language Server" Command="{Binding RestartLanguageServerCommand}" />
       </MenuItem>
       <MenuItem Header="_Help">
@@ -295,6 +299,11 @@
                     </Border>
                     <ContentControl Content="{Binding Host.Editor}" />
                   </DockPanel>
+                </Border>
+              </DataTemplate>
+              <DataTemplate DataType="vm:NuGetViewModel" x:DataType="vm:NuGetViewModel">
+                <Border BorderBrush="#007ACC" BorderThickness="0,2,0,0">
+                  <v:NuGetView />
                 </Border>
               </DataTemplate>
               <DataTemplate DataType="vm:DiffViewModel" x:DataType="vm:DiffViewModel">
@@ -543,7 +552,7 @@
                   </TreeView.Styles>
                   <TreeView.ItemTemplate>
                     <TreeDataTemplate x:DataType="ws:ExplorerNode" ItemsSource="{Binding Children}">
-                      <StackPanel Orientation="Horizontal" Spacing="6" Height="20">
+                      <StackPanel Orientation="Horizontal" Spacing="6" Height="20" Background="Transparent" ContextRequested="OnExplorerContextRequested">
                         <ContentControl Content="{Binding IconKey, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />

@@ -519,6 +519,72 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task NuGet_manager_browses_installs_and_uninstalls()
+    {
+        using (var probe = new HttpClient { Timeout = TimeSpan.FromSeconds(5) })
+        {
+            var online = false;
+            try
+            {
+                online = (await probe.GetAsync("https://api.nuget.org/v3/index.json", TestContext.Current.CancellationToken)).IsSuccessStatusCode;
+            }
+            catch (Exception)
+            {
+            }
+            Assert.SkipUnless(online, "nuget.org is not reachable");
+        }
+        var sln = await SampleSolution.GetAsync();
+        var vm = NewViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1600, Height = 1000 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+        var components = vm.Solution!.Projects.Single(p => p.Name == "Components");
+        var csproj = File.ReadAllText(components.FilePath);
+
+        await vm.ManageNuGetPackagesCommand.ExecuteAsync(components);
+        var nuget = Assert.IsType<NuGetViewModel>(vm.ActiveDocument);
+        Assert.Equal("NuGet: Components", nuget.Title);
+        Assert.Empty(nuget.Packages.Where(p => p.IsInstalled));
+
+        // Browse: search, pick a version, install.
+        nuget.SearchText = "Humanizer.Core";
+        await nuget.SearchCommand.ExecuteAsync(null);
+        var humanizer = nuget.Packages.First(p => p.Id == "Humanizer.Core");
+        nuget.SelectedPackage = humanizer;
+        await WaitUntil(() => nuget.Versions.Contains("2.14.1"), TimeSpan.FromSeconds(60));
+        Assert.Contains("2.14.1", nuget.Versions);
+        Assert.False(string.IsNullOrEmpty(humanizer.Description));
+        nuget.SelectedVersion = "2.14.1";
+        Assert.Equal("Install", nuget.InstallButtonText);
+        await nuget.InstallCommand.ExecuteAsync(null);
+        await WaitUntil(() => !nuget.IsBusy, TimeSpan.FromSeconds(60));
+        Assert.Contains("Humanizer.Core", File.ReadAllText(components.FilePath));
+        Assert.Equal("2.14.1", nuget.Packages.First(p => p.Id == "Humanizer.Core").InstalledVersion);
+        Assert.True(nuget.UpdateCount >= 1);
+        // Solution Explorer's Dependencies now list the package.
+        Assert.Contains(vm.Solution!.Projects.Single(p => p.Name == "Components").Packages, p => p.Name == "Humanizer.Core");
+
+        // Installed and Updates tabs.
+        nuget.Tab = NuGetTab.Installed;
+        await WaitUntil(() => !nuget.IsBusy && nuget.Packages.Any(p => p.Id == "Humanizer.Core"), TimeSpan.FromSeconds(30));
+        nuget.Tab = NuGetTab.Updates;
+        await WaitUntil(() => !nuget.IsBusy && nuget.Packages.Any(p => p.Id == "Humanizer.Core"), TimeSpan.FromSeconds(30));
+        Assert.True(nuget.Packages.Single(p => p.Id == "Humanizer.Core").HasUpdate);
+        await WaitUntil(() => nuget.Versions.Count > 0 && nuget.SelectedPackage?.Description is not null, TimeSpan.FromSeconds(60));
+        Assert.Equal("Update", nuget.InstallButtonText);
+        Snapshot(window, "nuget");
+
+        // Uninstall restores the project file.
+        nuget.SelectedPackage = nuget.Packages.Single(p => p.Id == "Humanizer.Core");
+        await nuget.UninstallCommand.ExecuteAsync(null);
+        await WaitUntil(() => !nuget.IsBusy, TimeSpan.FromSeconds(60));
+        Assert.DoesNotContain("Humanizer.Core", File.ReadAllText(components.FilePath));
+        File.WriteAllText(components.FilePath, csproj);
+
+        Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
     public async Task Start_window_renders_without_solution()
     {
         var vm = NewViewModel();
