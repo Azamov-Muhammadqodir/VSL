@@ -343,6 +343,39 @@ public class UiTests
 
         await vm.SwitchBranchCommand.ExecuteAsync("main");
         Assert.Equal("main", vm.GitBranch);
+
+        // In a narrow Git Changes window long names are trimmed and the row buttons stay visible.
+        window.MoveToolWindow(ToolWindows.GitChanges, DockSide.Left);
+        vm.ShowToolWindow(ToolWindows.GitChanges);
+        const string longName = "AVeryLongFileNameThatCannotFitIntoTheNarrowGitChangesWindow.cs";
+        File.WriteAllText(Path.Combine(dir, "Web", longName), "class Long {}\n");
+        await WaitUntil(() => vm.UnstagedChanges.Any(c => c.FileName == longName), TimeSpan.FromSeconds(10));
+        Assert.Contains(vm.UnstagedChanges, c => c.FileName == longName);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        var rowActions = window.GetVisualDescendants().OfType<Avalonia.Controls.StackPanel>().Where(p => p.Classes.Contains("rowActions") && p.IsEffectivelyVisible).ToList();
+        Assert.NotEmpty(rowActions);
+        foreach (var actions in rowActions)
+        {
+            var list = actions.FindAncestorOfType<Avalonia.Controls.ListBox>()!;
+            var right = actions.TranslatePoint(new Point(actions.Bounds.Width, 0), list)!.Value.X;
+            Assert.True(right <= list.Bounds.Width + 0.5, $"row buttons end at {right}, list is {list.Bounds.Width} wide");
+        }
+        Snapshot(window, "git-changes-narrow");
+
+        // A commit and a checkout made outside VSL (e.g. in the terminal) show up without any VSL action,
+        // and the open editor follows the checkout.
+        TempRepo.Git(dir, "add", "-A");
+        TempRepo.Git(dir, "commit", "-q", "-m", "outside");
+        await WaitUntil(() => vm.GitChangeCount == 0, TimeSpan.FromSeconds(10));
+        Assert.Equal(0, vm.GitChangeCount);
+        Assert.StartsWith("// top", host.Document.Text);
+        TempRepo.Git(dir, "switch", "-q", "feature/x");
+        await WaitUntil(() => vm.GitBranch == "feature/x" && !host.Document.Text.StartsWith("// top", StringComparison.Ordinal), TimeSpan.FromSeconds(10));
+        Assert.Equal("feature/x", vm.GitBranch);
+        Assert.False(host.Document.Text.StartsWith("// top", StringComparison.Ordinal));
+        Assert.False(doc.IsDirty);
+        window.ResetWindowLayout();
+
         Assert.True(await vm.CloseSolutionCoreAsync());
         Assert.False(vm.HasGit);
     }

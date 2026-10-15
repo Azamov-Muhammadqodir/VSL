@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using VSL.Git;
 
@@ -84,6 +85,44 @@ public class GitRepositoryTests
         Assert.True((await repo.SwitchAsync("main")).Success);
         Assert.Equal("Console.WriteLine(1);\n", await File.ReadAllTextAsync(file, TestContext.Current.CancellationToken));
         Assert.Empty((await repo.StatusAsync()).Changes);
+    }
+
+    [Fact]
+    public void Watcher_treats_head_index_and_refs_as_repository_state()
+    {
+        foreach (var path in new[] { "HEAD", "index", "packed-refs", "MERGE_HEAD", "refs/heads/main", "refs/remotes/origin/main" })
+            Assert.True(GitWatcher.IsRepositoryState(path), path);
+        foreach (var path in new[] { "index.lock", "refs/heads/main.lock", "objects/ab/cdef", "logs/HEAD", "COMMIT_EDITMSG", "FETCH_HEAD" })
+            Assert.False(GitWatcher.IsRepositoryState(path), path);
+    }
+
+    [Fact]
+    public async Task Watcher_reports_edits_and_commits_made_outside()
+    {
+        var repo = await TempRepo.CreateAsync();
+        Assert.Equal(Path.Combine(repo.Root, ".git"), repo.GitDir);
+        using var watcher = new GitWatcher(repo.Root, repo.GitDir, TimeSpan.FromMilliseconds(100));
+        var events = new ConcurrentQueue<(bool Repository, IReadOnlyCollection<string> Files)>();
+        watcher.Changed += (repository, files) => events.Enqueue((repository, files));
+
+        var file = Path.Combine(repo.Root, "a.txt");
+        await File.WriteAllTextAsync(file, "x", TestContext.Current.CancellationToken);
+        Assert.True(await Eventually(() => events.Any(e => e.Files.Contains(file))));
+        Assert.DoesNotContain(events, e => e.Repository);
+
+        events.Clear();
+        TempRepo.Git(repo.Root, "add", "-A");
+        TempRepo.Git(repo.Root, "commit", "-q", "-m", "outside");
+        Assert.True(await Eventually(() => events.Any(e => e.Repository)));
+        // git's own bookkeeping (objects, logs, lock files) is not reported as working-tree edits.
+        Assert.DoesNotContain(events, e => e.Files.Any(f => f.Contains("/.git", StringComparison.Ordinal)));
+    }
+
+    static async Task<bool> Eventually(Func<bool> condition)
+    {
+        for (var i = 0; i < 50 && !condition(); i++)
+            await Task.Delay(100);
+        return condition();
     }
 }
 

@@ -14,6 +14,9 @@ public sealed record GitFileItem(GitFileChange Change)
 
     public string Folder => Path.GetDirectoryName(Change.RelativePath) is { Length: > 0 } dir ? dir : "";
 
+    /// <summary>The folder shown after the file name, gray, as in VS.</summary>
+    public string FolderSuffix => Folder.Length > 0 ? "  " + Folder : "";
+
     public string Letter => Change.Letter;
 
     public string LetterColor => Change.Kind switch
@@ -29,6 +32,7 @@ public sealed record GitFileItem(GitFileChange Change)
 public partial class MainViewModel
 {
     GitRepository? _git;
+    GitWatcher? _gitWatcher;
     GitStatus? _gitStatus;
     Dictionary<string, string> _gitBadges = [];
     bool _gitRefreshing;
@@ -68,12 +72,38 @@ public partial class MainViewModel
         _git = await GitRepository.OpenAsync(solution.Directory);
         HasGit = _git is not null;
         ExplorerNode.GitStatusProvider = path => _gitBadges.GetValueOrDefault(path);
-        if (_git is not null)
-            await RefreshGitAsync();
+        if (_git is not { } git)
+            return;
+        await RefreshGitAsync();
+        try
+        {
+            var watcher = new GitWatcher(solution.Directory, git.GitDir, TimeSpan.FromMilliseconds(400));
+            watcher.Changed += (repository, files) => Dispatcher.UIThread.Post(() => _ = OnRepositoryChangedAsync(watcher, repository, files));
+            _gitWatcher = watcher;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            GitOutput.Append("Not watching the repository for outside changes: " + ex.Message);
+        }
+    }
+
+    /// <summary>A commit, checkout or edit made outside VSL (e.g. in the terminal): follow it right away.</summary>
+    async Task OnRepositoryChangedAsync(GitWatcher watcher, bool repository, IReadOnlyCollection<string> files)
+    {
+        if (_gitWatcher != watcher)
+            return;
+        await RefreshGitAsync();
+        foreach (var doc in Editors.Where(d => files.Contains(d.FilePath)).ToList())
+            if (doc.Host.ReloadIfChangedOnDisk())
+                SetStatus($"{doc.FileName} was reloaded because it changed on disk.");
+        if (repository)
+            await RefreshAllGitBaselinesAsync();
     }
 
     void CloseGit()
     {
+        _gitWatcher?.Dispose();
+        _gitWatcher = null;
         _git = null;
         _gitStatus = null;
         _gitBadges = [];

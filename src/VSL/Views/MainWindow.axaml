@@ -695,15 +695,19 @@
                     <TextBlock Text="{Binding StagedChanges.Count, StringFormat=Staged Changes ({0})}" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <Button Grid.Column="1" Classes="tb" Command="{Binding UnstageAllCommand}" ToolTip.Tip="Unstage All"><v:VsIcon Kind="Minus" Width="14" Height="14" /></Button>
                   </Grid>
-                  <ListBox Classes="dense" ItemsSource="{Binding StagedChanges}" DoubleTapped="OnGitItemDoubleTapped">
+                  <ListBox Classes="dense" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ItemsSource="{Binding StagedChanges}" DoubleTapped="OnGitItemDoubleTapped">
                     <ListBox.ItemTemplate>
                       <DataTemplate x:DataType="vm:GitFileItem">
-                        <Grid ColumnDefinitions="18,Auto,*,Auto" ToolTip.Tip="{Binding Change.RelativePath}">
+                        <Grid Classes="gitRow" ColumnDefinitions="18,*,Auto" ToolTip.Tip="{Binding Change.RelativePath}">
                           <TextBlock Text="{Binding Letter}" FontWeight="SemiBold" Foreground="{Binding LetterColor, Converter={x:Static v:ColorStringConverter.Instance}}" />
-                          <TextBlock Grid.Column="1" Text="{Binding FileName}" />
-                          <TextBlock Grid.Column="2" Text="{Binding Folder}" Margin="8,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" TextTrimming="CharacterEllipsis" />
-                          <Button Grid.Column="3" Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Unstage"
-                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).UnstageCommand}" CommandParameter="{Binding}"><v:VsIcon Kind="Minus" Width="13" Height="13" /></Button>
+                          <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis">
+                            <Run Text="{Binding FileName}" />
+                            <Run Text="{Binding FolderSuffix}" Foreground="{StaticResource VsGrayTextBrush}" />
+                          </TextBlock>
+                          <StackPanel Grid.Column="2" Classes="rowActions" Orientation="Horizontal">
+                            <Button Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Unstage"
+                                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).UnstageCommand}" CommandParameter="{Binding}"><v:VsIcon Kind="Minus" Width="13" Height="13" /></Button>
+                          </StackPanel>
                         </Grid>
                       </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -712,17 +716,21 @@
                     <TextBlock Text="{Binding UnstagedChanges.Count, StringFormat=Changes ({0})}" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <Button Grid.Column="1" Classes="tb" Command="{Binding StageAllCommand}" ToolTip.Tip="Stage All"><v:VsIcon Kind="Plus" Width="14" Height="14" /></Button>
                   </Grid>
-                  <ListBox Classes="dense" ItemsSource="{Binding UnstagedChanges}" DoubleTapped="OnGitItemDoubleTapped">
+                  <ListBox Classes="dense" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ItemsSource="{Binding UnstagedChanges}" DoubleTapped="OnGitItemDoubleTapped">
                     <ListBox.ItemTemplate>
                       <DataTemplate x:DataType="vm:GitFileItem">
-                        <Grid ColumnDefinitions="18,Auto,*,Auto,Auto" ToolTip.Tip="{Binding Change.RelativePath}">
+                        <Grid Classes="gitRow" ColumnDefinitions="18,*,Auto" ToolTip.Tip="{Binding Change.RelativePath}">
                           <TextBlock Text="{Binding Letter}" FontWeight="SemiBold" Foreground="{Binding LetterColor, Converter={x:Static v:ColorStringConverter.Instance}}" />
-                          <TextBlock Grid.Column="1" Text="{Binding FileName}" />
-                          <TextBlock Grid.Column="2" Text="{Binding Folder}" Margin="8,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" TextTrimming="CharacterEllipsis" />
-                          <Button Grid.Column="3" Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Undo Changes"
-                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).DiscardCommand}" CommandParameter="{Binding}"><v:VsIcon Kind="Discard" Width="13" Height="13" /></Button>
-                          <Button Grid.Column="4" Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Stage"
-                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).StageCommand}" CommandParameter="{Binding}"><v:VsIcon Kind="Plus" Width="13" Height="13" /></Button>
+                          <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis">
+                            <Run Text="{Binding FileName}" />
+                            <Run Text="{Binding FolderSuffix}" Foreground="{StaticResource VsGrayTextBrush}" />
+                          </TextBlock>
+                          <StackPanel Grid.Column="2" Classes="rowActions" Orientation="Horizontal">
+                            <Button Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Undo Changes"
+                                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).DiscardCommand}" CommandParameter="{Binding}"><v:VsIcon Kind="Discard" Width="13" Height="13" /></Button>
+                            <Button Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Stage"
+                                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).StageCommand}" CommandParameter="{Binding}"><v:VsIcon Kind="Plus" Width="13" Height="13" /></Button>
+                          </StackPanel>
                         </Grid>
                       </DataTemplate>
                     </ListBox.ItemTemplate>

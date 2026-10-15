@@ -39,16 +39,24 @@ public sealed record GitResult(int ExitCode, string Output)
 /// <summary>Repository operations over the git CLI (the user's config, hooks and credential helpers apply).</summary>
 public sealed class GitRepository
 {
-    GitRepository(string root) => Root = root;
+    GitRepository(string root, string gitDir)
+    {
+        Root = root;
+        GitDir = gitDir;
+    }
 
     public string Root { get; }
+
+    /// <summary>The repository's git directory (usually Root/.git; elsewhere for worktrees).</summary>
+    public string GitDir { get; }
 
     public static async Task<GitRepository?> OpenAsync(string directory)
     {
         if (!Directory.Exists(directory))
             return null;
-        var result = await RunAsync(directory, ["rev-parse", "--show-toplevel"]);
-        return result.Success ? new GitRepository(result.Output.Trim()) : null;
+        var result = await RunAsync(directory, ["rev-parse", "--show-toplevel", "--absolute-git-dir"]);
+        var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return result.Success && lines.Length == 2 ? new GitRepository(lines[0], lines[1]) : null;
     }
 
     public string Relative(string path) => System.IO.Path.GetRelativePath(Root, path);
