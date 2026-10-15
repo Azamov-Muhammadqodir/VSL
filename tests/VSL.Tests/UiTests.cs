@@ -49,6 +49,8 @@ public class UiTests
         // The Claude Code window must never start the user's real CLI from a test.
         FakeClaude.Ensure();
         var vm = new MainViewModel();
+        // Other tests may be building in parallel: never shut down the shared build servers.
+        vm.ShutdownBuildServers = () => Task.CompletedTask;
         vm.Settings.Solutions.Clear();
         vm.Settings.ClaudePermissionMode = null;
         vm.Settings.ClaudeModel = null;
@@ -115,7 +117,13 @@ public class UiTests
         Assert.False(vm.IsRunning);
         Assert.Contains("has exited with code", vm.DebugOutput.Document.Text);
 
-        Assert.True(await vm.CloseSolutionCoreAsync());
+        // Closing VSL after building shuts down the compiler server and MSBuild nodes the builds left running.
+        var shutdowns = 0;
+        vm.ShutdownBuildServers = () => { shutdowns++; return Task.CompletedTask; };
+        window.Close();
+        await WaitUntil(() => !window.IsVisible, TimeSpan.FromSeconds(30));
+        Assert.Equal(1, shutdowns);
+        Assert.False(vm.HasSolution);
     }
 
     [AvaloniaFact]

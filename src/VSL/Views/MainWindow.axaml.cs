@@ -80,6 +80,7 @@ public partial class MainWindow : Window, IDialogService
         {
             await vm.ShutdownTerminalAsync();
             await vm.ShutdownClaudeAsync();
+            await vm.ShutdownBuildServersAsync();
             _closingConfirmed = true;
             Close();
         }
