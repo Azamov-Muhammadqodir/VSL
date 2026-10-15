@@ -245,14 +245,6 @@ public partial class MainViewModel
     }
 }
 
-/// <summary>Static outcomes for XAML ({x:Static}) so toolbar counters reuse the tree's glyphs.</summary>
-public static class TestStateIcons
-{
-    public static readonly TestState Passed = TestState.Passed;
-    public static readonly TestState Failed = TestState.Failed;
-    public static readonly TestState Skipped = TestState.Skipped;
-}
-
 public enum TestNodeKind
 {
     Project,
@@ -274,7 +266,7 @@ public partial class TestNode(TestNodeKind kind, string name, TestNode? parent) 
     public int Line { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StateColor))]
+    [NotifyPropertyChangedFor(nameof(StateIcon))]
     public partial TestState State { get; set; }
 
     [ObservableProperty]
@@ -293,13 +285,14 @@ public partial class TestNode(TestNodeKind kind, string name, TestNode? parent) 
     [ObservableProperty]
     public partial bool IsExpanded { get; set; }
 
-    public string StateColor => State switch
+    /// <summary><see cref="Views.VsIcon"/> kind for the outcome.</summary>
+    public string StateIcon => State switch
     {
-        TestState.Passed => "#89D185",
-        TestState.Failed => "#F14C4C",
-        TestState.Skipped => "#CCA700",
-        TestState.Running => "#3794FF",
-        _ => "#8A8A8A",
+        TestState.Passed => "Ok",
+        TestState.Failed => "Error",
+        TestState.Skipped => "Warning",
+        TestState.Running => "Running",
+        _ => "Pending",
     };
 
     public string DurationText => Duration <= TimeSpan.Zero ? ""

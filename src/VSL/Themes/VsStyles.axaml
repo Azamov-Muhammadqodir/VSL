@@ -33,6 +33,58 @@
   <Style Selector="Button.tb:disabled">
     <Setter Property="Opacity" Value="0.4" />
   </Style>
+  <!-- Icon-only toolbar button (VS: 22px high, icon centered, flat until hovered) -->
+  <Style Selector="Button.tbi">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.tbi:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#3E3E40" />
+  </Style>
+  <Style Selector="Button.tbi:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#007ACC" />
+  </Style>
+  <Style Selector="Button.tbi:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.tb:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#007ACC" />
+  </Style>
+
+  <!-- Toolbar separator -->
+  <Style Selector="Border.tbsep">
+    <Setter Property="Width" Value="1" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Margin" Value="5,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Background" Value="#4A4A4F" />
+  </Style>
+
+  <!-- Close / pin buttons inside document tabs -->
+  <Style Selector="Button.tabbtn">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="MinHeight" Value="16" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.tabbtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#52B0EF" />
+  </Style>
+
   <Style Selector="ToggleButton.tb">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="1" />

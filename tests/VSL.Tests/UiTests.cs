@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using VSL.ViewModels;
 using VSL.Testing;
 using VSL.Views;
@@ -346,7 +347,8 @@ public class UiTests
         host.SetZoom(1.0);
         await WaitUntil(() => host.Editor.IsVisible && host.Editor.Bounds.Width > 0, TimeSpan.FromSeconds(5));
         Assert.Equal("100 %", doc.ZoomText);
-        Assert.Equal("✔ No issues found", doc.IssuesText);
+        Assert.Equal("No issues found", doc.IssuesText);
+        Assert.Equal("Ok", doc.IssuesIcon);
 
         // Ctrl + mouse wheel over the editor, like VS.
         var point = host.Editor.TranslatePoint(new Avalonia.Point(200, 100), window)!.Value;
@@ -424,6 +426,83 @@ public class UiTests
 
         Assert.True(await vm.CloseSolutionCoreAsync().WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
         await vm.ShutdownTerminalAsync().WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+    }
+
+    [AvaloniaFact]
+    public void Icon_gallery_renders_every_icon()
+    {
+        var panel = new Avalonia.Controls.WrapPanel { Margin = new Avalonia.Thickness(8) };
+        foreach (var kind in VsIcon.AllKinds)
+            panel.Children.Add(new Avalonia.Controls.StackPanel
+            {
+                Width = 96,
+                Margin = new Avalonia.Thickness(4),
+                Spacing = 4,
+                Children =
+                {
+                    new Avalonia.Controls.StackPanel
+                    {
+                        Orientation = Avalonia.Layout.Orientation.Horizontal,
+                        Spacing = 8,
+                        Children = { new VsIcon { Kind = kind }, new VsIcon { Kind = kind, Width = 32, Height = 32 } },
+                    },
+                    new Avalonia.Controls.TextBlock { Text = kind, FontSize = 10, Foreground = Avalonia.Media.Brushes.Gray },
+                },
+            });
+        var window = new Avalonia.Controls.Window
+        {
+            Width = 1100,
+            Height = 560,
+            Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#2D2D30")),
+            Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#C5C5C5")),
+            Content = panel,
+        };
+        window.Show();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        window.CaptureRenderedFrame()?.Save(Path.Combine(SampleSolution.ArtifactsDir, "icons.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        Assert.True(File.Exists(Path.Combine(SampleSolution.ArtifactsDir, "icons.png")));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task Document_tab_context_menu_commands()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var vm = NewViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+        string[] files = ["Web/Program.cs", "Components/Home.razor", "Components/Greeting.razor", "Components/Greeting.razor.cs"];
+        var docs = files.Select(f => vm.OpenDocument(SampleSolution.PathOf(sln, f))!).ToList();
+        string Names() => string.Join(",", vm.Documents.Select(d => d.FileName));
+
+        // Pinning moves the tab to the left edge.
+        vm.TogglePinCommand.Execute(docs[2]);
+        Assert.True(docs[2].IsPinned);
+        Assert.Equal("Greeting.razor,Program.cs,Home.razor,Greeting.razor.cs", Names());
+
+        // Right-clicking a tab header opens VS's tab menu.
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        var header = window.GetVisualDescendants().OfType<Avalonia.Controls.StackPanel>().First(p => p.DataContext == docs[0]);
+        var args = new Avalonia.Input.ContextRequestedEventArgs { RoutedEvent = Avalonia.Controls.Control.ContextRequestedEvent };
+        header.RaiseEvent(args);
+        Assert.True(args.Handled);
+
+        // "Close All Tabs to the Right" of Program.cs keeps pinned tabs and those on the left.
+        await vm.CloseTabsToRightCommand.ExecuteAsync(docs[0]);
+        Assert.Equal("Greeting.razor,Program.cs", Names());
+
+        // "Close All But Pinned" leaves only the pinned tab; "Close All Documents" closes it too.
+        await vm.CloseAllButPinnedCommand.ExecuteAsync(null);
+        Assert.Equal("Greeting.razor", Names());
+        vm.OpenDocument(SampleSolution.PathOf(sln, "Web/Program.cs"));
+        await vm.CloseAllButThisCommand.ExecuteAsync(vm.Documents.Single(d => d.FileName == "Program.cs"));
+        Assert.Equal("Program.cs", Names());
+        await vm.CloseAllDocumentsCommand.ExecuteAsync(null);
+        Assert.Empty(vm.Documents);
+
+        Assert.True(await vm.CloseSolutionCoreAsync());
     }
 
     [AvaloniaFact]

@@ -128,12 +128,21 @@ public partial class MainViewModel : ObservableObject
     public partial bool ShowMessages { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ErrorCountText))]
     public partial int ErrorCount { get; set; }
 
+    public string ErrorCountText => ErrorCount == 1 ? "1 Error" : $"{ErrorCount} Errors";
+
+    public string WarningCountText => WarningCount == 1 ? "1 Warning" : $"{WarningCount} Warnings";
+
+    public string MessageCountText => MessageCount == 1 ? "1 Message" : $"{MessageCount} Messages";
+
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WarningCountText))]
     public partial int WarningCount { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MessageCountText))]
     public partial int MessageCount { get; set; }
 
     [ObservableProperty]
@@ -501,6 +510,62 @@ public partial class MainViewModel : ObservableObject
             ActiveDocument = Documents.Count == 0 ? null : Documents[Math.Clamp(index, 0, Documents.Count - 1)];
         RefreshErrorList();
         SaveSession();
+    }
+
+    // ---- Document tab commands (tab context menu) -----------------------------------------------------------
+
+    async Task CloseDocumentsAsync(IEnumerable<DocumentViewModel> docs)
+    {
+        foreach (var doc in docs.ToList())
+        {
+            var before = Documents.Count;
+            await CloseDocument(doc);
+            if (Documents.Count == before)
+                return; // the user cancelled a save prompt
+        }
+    }
+
+    [RelayCommand]
+    Task CloseAllButThis(DocumentViewModel? doc) => CloseDocumentsAsync(Documents.Where(d => d != doc));
+
+    [RelayCommand]
+    Task CloseAllButPinned() => CloseDocumentsAsync(Documents.Where(d => !d.IsPinned));
+
+    [RelayCommand]
+    Task CloseAllDocuments() => CloseDocumentsAsync(Documents);
+
+    [RelayCommand]
+    Task CloseTabsToLeft(DocumentViewModel? doc) =>
+        doc is null ? Task.CompletedTask : CloseDocumentsAsync(Documents.Take(Documents.IndexOf(doc)).Where(d => !d.IsPinned));
+
+    [RelayCommand]
+    Task CloseTabsToRight(DocumentViewModel? doc) =>
+        doc is null ? Task.CompletedTask : CloseDocumentsAsync(Documents.Skip(Documents.IndexOf(doc) + 1).Where(d => !d.IsPinned));
+
+    /// <summary>Pinned tabs move to the left edge, in pin order, like VS.</summary>
+    [RelayCommand]
+    void TogglePin(DocumentViewModel? doc)
+    {
+        if (doc is null)
+            return;
+        doc.IsPinned = !doc.IsPinned;
+        var target = doc.IsPinned ? Documents.Count(d => d.IsPinned && d != doc) : Documents.Count(d => d.IsPinned);
+        var active = ActiveDocument;
+        Documents.Move(Documents.IndexOf(doc), Math.Min(target, Documents.Count - 1));
+        ActiveDocument = active;
+    }
+
+    public void SaveDocument(DocumentViewModel doc)
+    {
+        try
+        {
+            doc.Host.Save();
+            SetStatus("Item(s) Saved");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            SetStatus("Save failed: " + ex.Message);
+        }
     }
 
     [RelayCommand]

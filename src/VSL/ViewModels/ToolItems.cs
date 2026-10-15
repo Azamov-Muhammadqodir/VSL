@@ -20,18 +20,12 @@ public sealed record ErrorItem(
 
     public string LineText => Line > 0 ? Line.ToString() : "";
 
-    public string SeverityGlyph => Severity switch
+    /// <summary><see cref="Views.VsIcon"/> kind for the severity column.</summary>
+    public string SeverityIcon => Severity switch
     {
-        DiagnosticSeverity.Error => "⨂",
-        DiagnosticSeverity.Warning => "⚠",
-        _ => "ⓘ",
-    };
-
-    public string SeverityColor => Severity switch
-    {
-        DiagnosticSeverity.Error => "#F14C4C",
-        DiagnosticSeverity.Warning => "#CCA700",
-        _ => "#3794FF",
+        DiagnosticSeverity.Error => "Error",
+        DiagnosticSeverity.Warning => "Warning",
+        _ => "Info",
     };
 }
 

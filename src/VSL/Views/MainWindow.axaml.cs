@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -205,6 +206,89 @@ public partial class MainWindow : Window, IDialogService
         menu.Items.Add(new MenuItem { Header = "New Branch...", Command = vm.NewBranchCommand });
         menu.Items.Add(new MenuItem { Header = "Git Changes", Command = vm.ShowGitChangesCommand });
         menu.ShowAt(button);
+    }
+
+    void OnLaunchProfilesClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm || sender is not Control anchor)
+            return;
+        var menu = new MenuFlyout();
+        foreach (var profile in vm.LaunchProfiles)
+        {
+            var item = new MenuItem { Header = (profile == vm.LaunchProfile ? "✓ " : "   ") + profile };
+            item.Click += (_, _) => vm.LaunchProfile = profile;
+            menu.Items.Add(item);
+        }
+        if (vm.LaunchProfiles.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "No launch profiles (Properties/launchSettings.json)", IsEnabled = false });
+        menu.Items.Add(new Separator());
+        menu.Items.Add(new MenuItem { Header = "Start Without Debugging", Command = vm.StartWithoutDebuggingCommand, InputGesture = new KeyGesture(Key.F5, KeyModifiers.Control) });
+        menu.ShowAt(anchor);
+    }
+
+    /// <summary>Right-click on a document tab: VS's tab context menu.</summary>
+    void OnDocumentTabContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (sender is not Control { DataContext: DocumentViewModel doc } anchor || Vm is not { } vm)
+            return;
+        e.Handled = true;
+        MenuItem Item(string header, Action action, string? gesture = null, bool enabled = true)
+        {
+            var item = new MenuItem { Header = header, IsEnabled = enabled };
+            if (gesture is not null)
+                item.InputGesture = KeyGesture.Parse(gesture);
+            item.Click += (_, _) => action();
+            return item;
+        }
+        var index = vm.Documents.IndexOf(doc);
+        var menu = new ContextMenu
+        {
+            ItemsSource = new object[]
+            {
+                Item($"Save {doc.FileName}", () => vm.SaveDocument(doc), "Ctrl+S", doc.IsDirty),
+                new Separator(),
+                Item("Close", () => vm.CloseDocumentCommand.Execute(doc), "Ctrl+F4"),
+                Item("Close All But This", () => vm.CloseAllButThisCommand.Execute(doc), enabled: vm.Documents.Count > 1),
+                Item("Close All But Pinned", () => vm.CloseAllButPinnedCommand.Execute(null), enabled: vm.Documents.Any(d => !d.IsPinned)),
+                Item("Close All Documents", () => vm.CloseAllDocumentsCommand.Execute(null)),
+                Item("Close All Tabs to the Left", () => vm.CloseTabsToLeftCommand.Execute(doc), enabled: index > 0),
+                Item("Close All Tabs to the Right", () => vm.CloseTabsToRightCommand.Execute(doc), enabled: index < vm.Documents.Count - 1),
+                new Separator(),
+                Item(doc.IsPinned ? "Unpin Tab" : "Pin Tab", () => vm.TogglePinCommand.Execute(doc)),
+                new Separator(),
+                Item("Copy Full Path", () => _ = Clipboard?.SetTextAsync(doc.FilePath)),
+                Item("Open Containing Folder", () => OpenFolder(Path.GetDirectoryName(doc.FilePath)!)),
+                Item("Select in Solution Explorer", () =>
+                {
+                    vm.ActiveDocument = doc;
+                    vm.RightTabIndex = 0;
+                    OnSyncWithActiveDocument(this, new RoutedEventArgs());
+                }, enabled: vm.Solution is not null),
+            },
+        };
+        menu.Open(anchor);
+    }
+
+    /// <summary>Middle-click closes a tab, like VS.</summary>
+    void OnDocumentTabPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.InitialPressMouseButton == MouseButton.Middle && sender is Control { DataContext: DocumentViewModel doc })
+        {
+            Vm?.CloseDocumentCommand.Execute(doc);
+            e.Handled = true;
+        }
+    }
+
+    static void OpenFolder(string folder)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("xdg-open", folder) { UseShellExecute = false });
+        }
+        catch (Exception)
+        {
+            // No file manager registered.
+        }
     }
 
     void OnGitItemDoubleTapped(object? sender, TappedEventArgs e)

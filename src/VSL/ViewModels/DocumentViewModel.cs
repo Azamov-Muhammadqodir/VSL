@@ -17,6 +17,7 @@ public partial class DocumentViewModel : ObservableObject, IDisposable
         host.DiagnosticsChanged += () =>
         {
             OnPropertyChanged(nameof(IssuesText));
+            OnPropertyChanged(nameof(IssuesIcon));
             OnPropertyChanged(nameof(HasIssues));
         };
     }
@@ -35,9 +36,17 @@ public partial class DocumentViewModel : ObservableObject, IDisposable
         {
             var errors = Host.Diagnostics.Count(d => d.Severity == Lsp.DiagnosticSeverity.Error);
             var warnings = Host.Diagnostics.Count(d => d.Severity == Lsp.DiagnosticSeverity.Warning);
-            return errors + warnings == 0 ? "✔ No issues found" : $"⨂ {errors}   ⚠ {warnings}";
+            return errors + warnings == 0 ? "No issues found" : $"{errors} error(s), {warnings} warning(s)";
         }
     }
+
+    public string IssuesIcon => Host.Diagnostics.Any(d => d.Severity == Lsp.DiagnosticSeverity.Error) ? "Error"
+        : Host.Diagnostics.Any(d => d.Severity == Lsp.DiagnosticSeverity.Warning) ? "Warning"
+        : "Ok";
+
+    /// <summary>Pinned tabs stay at the left and survive "Close All But Pinned".</summary>
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+    public partial bool IsPinned { get; set; }
 
     public EditorHost Host { get; }
 

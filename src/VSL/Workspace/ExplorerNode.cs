@@ -87,10 +87,14 @@ public partial class ExplorerNode : ObservableObject
             ".xlsx" or ".docx" or ".pdf" => "binary",
             _ => "file",
         },
+        NodeKind.Folder when Name == "Properties" => "PropertiesFolder",
+        NodeKind.Folder when Name == "wwwroot" => "WebFolder",
+        NodeKind.Folder or NodeKind.SolutionFolder or NodeKind.DependencyGroup => IsExpanded ? "FolderOpen" : "Folder",
         _ => Kind.ToString(),
     };
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IconKey))]
     public partial bool IsExpanded { get; set; }
 
     partial void OnIsExpandedChanged(bool value)

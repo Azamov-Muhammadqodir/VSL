@@ -4,7 +4,6 @@ using System.Text.RegularExpressions;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Media.Immutable;
 using AvaloniaEdit.CodeCompletion;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Editing;
@@ -43,58 +42,37 @@ public sealed class CompletionData(LspCompletionItem item, Action<LspCompletionI
             ((TextBlock)Description).Text = text;
     }
 
-    Control BuildContent()
+    Control BuildContent() => new StackPanel
     {
-        var (glyph, color) = KindGlyph(Item.Kind);
-        return new StackPanel
+        Orientation = Orientation.Horizontal,
+        Spacing = 6,
+        Children =
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Children =
-            {
-                new Border
-                {
-                    Width = 14,
-                    Height = 14,
-                    CornerRadius = new Avalonia.CornerRadius(2),
-                    Background = new ImmutableSolidColorBrush(color),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = new TextBlock
-                    {
-                        Text = glyph,
-                        FontSize = 9,
-                        FontWeight = FontWeight.Bold,
-                        Foreground = Brushes.Black,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center,
-                    },
-                },
-                new TextBlock { Text = Item.Label, VerticalAlignment = VerticalAlignment.Center },
-            },
-        };
-    }
+            new Views.VsIcon { Kind = KindIcon(Item.Kind) },
+            new TextBlock { Text = Item.Label, VerticalAlignment = VerticalAlignment.Center },
+        },
+    };
 
-    /// <summary>Glyph letter and color per LSP CompletionItemKind, approximating VS's icon colors.</summary>
-    public static (string Glyph, Color Color) KindGlyph(int kind) => kind switch
+    /// <summary>Visual Studio's IntelliSense glyph for an LSP CompletionItemKind.</summary>
+    public static string KindIcon(int kind) => kind switch
     {
-        2 or 3 => ("M", Color.Parse("#B180D7")),   // Method / Function
-        4 => ("C", Color.Parse("#B180D7")),        // Constructor
-        5 => ("F", Color.Parse("#75BEFF")),        // Field
-        6 => ("V", Color.Parse("#75BEFF")),        // Variable
-        7 => ("C", Color.Parse("#EE9D28")),        // Class
-        8 => ("I", Color.Parse("#75BEFF")),        // Interface
-        9 => ("N", Color.Parse("#C5C5C5")),        // Module / Namespace
-        10 => ("P", Color.Parse("#C5C5C5")),       // Property
-        13 => ("E", Color.Parse("#EE9D28")),       // Enum
-        14 => ("K", Color.Parse("#C5C5C5")),       // Keyword
-        15 => ("S", Color.Parse("#C5C5C5")),       // Snippet
-        20 => ("e", Color.Parse("#75BEFF")),       // EnumMember
-        21 => ("c", Color.Parse("#C5C5C5")),       // Constant
-        22 => ("S", Color.Parse("#EE9D28")),       // Struct
-        23 => ("⚡", Color.Parse("#EE9D28")),      // Event
-        24 => ("O", Color.Parse("#C5C5C5")),       // Operator
-        25 => ("T", Color.Parse("#C5C5C5")),       // TypeParameter
-        _ => ("·", Color.Parse("#C5C5C5")),
+        2 or 3 or 4 => "Method",      // Method, Function, Constructor
+        5 => "Field",
+        6 => "Local",                 // Variable
+        7 => "Class",
+        8 => "Interface",
+        9 => "Namespace",             // Module
+        10 => "Property",
+        13 => "Enum",
+        14 => "Keyword",
+        15 => "Snippet",
+        20 => "EnumMember",
+        21 => "Constant",
+        22 => "Struct",
+        23 => "Event",
+        24 => "Operator",
+        25 => "TypeParameter",
+        _ => "Keyword",
     };
 
     public void Complete(TextArea textArea, ISegment completionSegment, EventArgs insertionRequestEventArgs)

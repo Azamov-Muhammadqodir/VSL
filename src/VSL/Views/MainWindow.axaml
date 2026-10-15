@@ -178,51 +178,42 @@
       </MenuItem>
     </Menu>
 
-    <!-- ===== Standard toolbar ===== -->
-    <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="0,0,0,1" Padding="4,2">
-      <StackPanel Orientation="Horizontal" Spacing="2">
-        <Button Classes="tb" ToolTip.Tip="Open Solution (Ctrl+Shift+O)" Command="{Binding OpenSolutionCommand}">📂</Button>
-        <Button Classes="tb" ToolTip.Tip="Save (Ctrl+S)" Command="{Binding SaveCommand}">💾</Button>
-        <Button Classes="tb" ToolTip.Tip="Save All (Ctrl+Shift+S)" Command="{Binding SaveAllCommand}">⧉</Button>
-        <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
-        <Button Classes="tb" ToolTip.Tip="Undo (Ctrl+Z)" Click="OnUndo">↶</Button>
-        <Button Classes="tb" ToolTip.Tip="Redo (Ctrl+Y)" Click="OnRedo">↷</Button>
-        <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
-        <ComboBox Classes="tb" Width="90" ItemsSource="{Binding Configurations}" SelectedItem="{Binding Configuration}" ToolTip.Tip="Solution Configurations" />
-        <ComboBox Classes="tb" Width="160" ItemsSource="{Binding StartupProjects}" SelectedItem="{Binding StartupProject}" ToolTip.Tip="Startup Project" />
-        <Button Classes="tb" Command="{Binding StartDebuggingCommand}" ToolTip.Tip="Start (F5)">
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <PathIcon Data="{StaticResource IconStart}" Foreground="#89D185" Width="12" Height="12" />
-            <TextBlock Text="{Binding StartButtonText}" />
+    <!-- ===== Standard toolbar (VS layout: files | undo | configuration | start | debug | build) ===== -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="0,0,0,1" Padding="6,3">
+      <StackPanel Orientation="Horizontal" Spacing="1">
+        <Button Classes="tbi" ToolTip.Tip="Open Project/Solution (Ctrl+Shift+O)" Command="{Binding OpenSolutionCommand}"><v:VsIcon Kind="Open" /></Button>
+        <Button Classes="tbi" ToolTip.Tip="Save (Ctrl+S)" Command="{Binding SaveCommand}"><v:VsIcon Kind="Save" /></Button>
+        <Button Classes="tbi" ToolTip.Tip="Save All (Ctrl+Shift+S)" Command="{Binding SaveAllCommand}"><v:VsIcon Kind="SaveAll" /></Button>
+        <Border Classes="tbsep" />
+        <Button Classes="tbi" ToolTip.Tip="Undo (Ctrl+Z)" Click="OnUndo"><v:VsIcon Kind="Undo" /></Button>
+        <Button Classes="tbi" ToolTip.Tip="Redo (Ctrl+Y)" Click="OnRedo"><v:VsIcon Kind="Redo" /></Button>
+        <Border Classes="tbsep" />
+        <ComboBox Classes="tb" Width="96" ItemsSource="{Binding Configurations}" SelectedItem="{Binding Configuration}" ToolTip.Tip="Solution Configurations" />
+        <ComboBox Classes="tb" Width="170" Margin="4,0,0,0" ItemsSource="{Binding StartupProjects}" SelectedItem="{Binding StartupProject}" ToolTip.Tip="Startup Project" />
+        <Border Classes="tbsep" />
+        <!-- VS's split Start button: run the startup project, ▾ picks the launch profile -->
+        <Button Classes="tb" Padding="6,0,5,0" Command="{Binding StartDebuggingCommand}" ToolTip.Tip="Start Debugging (F5)">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <v:VsIcon Kind="Start" Width="14" Height="14" />
+            <TextBlock Text="{Binding StartButtonText}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <ComboBox Classes="tb" Width="22" ItemsSource="{Binding LaunchProfiles}" SelectedItem="{Binding LaunchProfile}" ToolTip.Tip="Launch Profile" />
-        <Button Classes="tb" Command="{Binding StartWithoutDebuggingCommand}" ToolTip.Tip="Start Without Debugging (Ctrl+F5)">
-          <PathIcon Data="{StaticResource IconStartNoDebug}" Foreground="#89D185" Width="12" Height="12" />
-        </Button>
-        <Button Classes="tb" Command="{Binding StopCommand}" ToolTip.Tip="Stop (Shift+F5)">
-          <PathIcon Data="{StaticResource IconStop}" Foreground="#F48771" Width="11" Height="11" />
-        </Button>
-        <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding IsDebugging}">
-          <Button Classes="tb" Command="{Binding BreakAllCommand}" ToolTip.Tip="Break All (Ctrl+Alt+Break)">
-            <PathIcon Data="{StaticResource IconPause}" Foreground="#75BEFF" Width="11" Height="11" />
-          </Button>
-          <Button Classes="tb" Command="{Binding RestartCommand}" ToolTip.Tip="Restart (Ctrl+Shift+F5)">
-            <PathIcon Data="{StaticResource IconRestart}" Foreground="#89D185" Width="12" Height="12" />
-          </Button>
-          <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
-          <Button Classes="tb" Command="{Binding StepIntoCommand}" ToolTip.Tip="Step Into (F11)">
-            <PathIcon Data="{StaticResource IconStepInto}" Foreground="#75BEFF" Width="12" Height="12" />
-          </Button>
-          <Button Classes="tb" Command="{Binding StepOverCommand}" ToolTip.Tip="Step Over (F10)">
-            <PathIcon Data="{StaticResource IconStepOver}" Foreground="#75BEFF" Width="13" Height="12" />
-          </Button>
-          <Button Classes="tb" Command="{Binding StepOutCommand}" ToolTip.Tip="Step Out (Shift+F11)">
-            <PathIcon Data="{StaticResource IconStepOut}" Foreground="#75BEFF" Width="12" Height="12" />
-          </Button>
+        <Button Classes="tbi" Width="16" Padding="0" Click="OnLaunchProfilesClick" ToolTip.Tip="Launch profiles"><v:VsIcon Kind="Chevron" Width="12" Height="12" /></Button>
+        <Button Classes="tbi" Command="{Binding StartWithoutDebuggingCommand}" ToolTip.Tip="Start Without Debugging (Ctrl+F5)"><v:VsIcon Kind="StartNoDebug" /></Button>
+        <StackPanel Orientation="Horizontal" Spacing="1" IsVisible="{Binding IsDebugging}">
+          <Border Classes="tbsep" />
+          <Button Classes="tbi" Command="{Binding BreakAllCommand}" ToolTip.Tip="Break All (Ctrl+Alt+Break)"><v:VsIcon Kind="Pause" /></Button>
         </StackPanel>
-        <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
-        <Button Classes="tb" Command="{Binding BuildSolutionCommand}" ToolTip.Tip="Build Solution (Ctrl+Shift+B)">🔨 Build</Button>
+        <Button Classes="tbi" Command="{Binding StopCommand}" ToolTip.Tip="Stop (Shift+F5)"><v:VsIcon Kind="Stop" /></Button>
+        <StackPanel Orientation="Horizontal" Spacing="1" IsVisible="{Binding IsDebugging}">
+          <Button Classes="tbi" Command="{Binding RestartCommand}" ToolTip.Tip="Restart (Ctrl+Shift+F5)"><v:VsIcon Kind="Restart" /></Button>
+          <Border Classes="tbsep" />
+          <Button Classes="tbi" Command="{Binding StepIntoCommand}" ToolTip.Tip="Step Into (F11)"><v:VsIcon Kind="StepInto" /></Button>
+          <Button Classes="tbi" Command="{Binding StepOverCommand}" ToolTip.Tip="Step Over (F10)"><v:VsIcon Kind="StepOver" /></Button>
+          <Button Classes="tbi" Command="{Binding StepOutCommand}" ToolTip.Tip="Step Out (Shift+F11)"><v:VsIcon Kind="StepOut" /></Button>
+        </StackPanel>
+        <Border Classes="tbsep" />
+        <Button Classes="tbi" Command="{Binding BuildSolutionCommand}" ToolTip.Tip="Build Solution (Ctrl+Shift+B)"><v:VsIcon Kind="Build" /></Button>
       </StackPanel>
     </Border>
 
@@ -234,12 +225,16 @@
         <TextBlock Grid.Column="2" Text="{Binding CaretText}" VerticalAlignment="Center" Foreground="White" MinWidth="120" Margin="0,0,16,0" />
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" IsVisible="{Binding HasGit}">
           <Button Classes="tb" Padding="6,0" MinHeight="20" Command="{Binding ShowGitChangesCommand}" ToolTip.Tip="Pending changes">
-            <TextBlock Text="{Binding GitChangeCount, StringFormat=✎ {0}}" Foreground="White" />
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <v:VsIcon Kind="Pencil" Width="13" Height="13" Foreground="White" />
+              <TextBlock Text="{Binding GitChangeCount}" Foreground="White" VerticalAlignment="Center" />
+            </StackPanel>
           </Button>
           <Button Classes="tb" Padding="6,0" MinHeight="20" Click="OnBranchButtonClick" ToolTip.Tip="Branch">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="{Binding GitSyncText}" Foreground="White" />
-              <TextBlock Text="{Binding GitBranch, StringFormat=⎇ {0}}" Foreground="White" />
+              <v:VsIcon Kind="Branch" Width="13" Height="13" Foreground="White" />
+              <TextBlock Text="{Binding GitBranch}" Foreground="White" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
         </StackPanel>
@@ -260,11 +255,23 @@
                       IsVisible="{Binding !!Documents.Count}">
             <TabControl.ItemTemplate>
               <DataTemplate x:DataType="vm:DocumentViewModel">
-                <StackPanel Orientation="Horizontal" Spacing="4" ToolTip.Tip="{Binding FilePath}">
-                  <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
-                  <Button Classes="tb" Padding="3,0" MinHeight="16" FontSize="11"
-                          Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).CloseDocumentCommand}"
-                          CommandParameter="{Binding}">✕</Button>
+                <StackPanel Orientation="Horizontal" Spacing="2" Background="Transparent" ToolTip.Tip="{Binding FilePath}"
+                            ContextRequested="OnDocumentTabContextRequested" PointerReleased="OnDocumentTabPointerReleased">
+                  <TextBlock Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                  <Button Classes="tabbtn" IsVisible="{Binding IsPinned}" ToolTip.Tip="Unpin Tab"
+                          Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).TogglePinCommand}" CommandParameter="{Binding}">
+                    <v:VsIcon Kind="Pin" Width="12" Height="12" />
+                  </Button>
+                  <Button Classes="tabbtn" IsVisible="{Binding !IsPinned}" ToolTip.Tip="Close (Ctrl+F4)"
+                          Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).CloseDocumentCommand}" CommandParameter="{Binding}">
+                    <Button.Opacity>
+                      <MultiBinding Converter="{x:Static v:AnyTrueToOpacityConverter.Instance}">
+                        <Binding Path="$parent[TabItem].IsSelected" />
+                        <Binding Path="$parent[TabItem].IsPointerOver" />
+                      </MultiBinding>
+                    </Button.Opacity>
+                    <v:VsIcon Kind="Close" Width="12" Height="12" />
+                  </Button>
                 </StackPanel>
               </DataTemplate>
             </TabControl.ItemTemplate>
@@ -279,8 +286,10 @@
                                 ToolTip.Tip="Zoom (Ctrl+Wheel, Ctrl+Shift+. / Ctrl+Shift+, , Ctrl+0)">
                           <TextBlock Text="{Binding ZoomText, StringFormat={}{0} ▾}" FontSize="11" />
                         </Button>
-                        <TextBlock Text="{Binding IssuesText}" FontSize="11" VerticalAlignment="Center"
-                                   Foreground="{StaticResource VsGrayTextBrush}" />
+                        <StackPanel Orientation="Horizontal" Spacing="5" ToolTip.Tip="Errors and warnings in this document">
+                          <v:VsIcon Kind="{Binding IssuesIcon}" Width="13" Height="13" />
+                          <TextBlock Text="{Binding IssuesText}" FontSize="11" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
+                        </StackPanel>
                       </StackPanel>
                     </Border>
                     <ContentControl Content="{Binding Host.Editor}" />
@@ -329,20 +338,20 @@
                   <StackPanel Orientation="Horizontal" Spacing="4">
                     <ToggleButton Classes="tb" IsChecked="{Binding ShowErrors}">
                       <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="⨂" Foreground="#F14C4C" />
-                        <TextBlock Text="{Binding ErrorCount, StringFormat={}{0} Errors}" />
+                        <v:VsIcon Kind="Error" Width="14" Height="14" />
+                        <TextBlock Text="{Binding ErrorCountText}" />
                       </StackPanel>
                     </ToggleButton>
                     <ToggleButton Classes="tb" IsChecked="{Binding ShowWarnings}">
                       <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="⚠" Foreground="#CCA700" />
-                        <TextBlock Text="{Binding WarningCount, StringFormat={}{0} Warnings}" />
+                        <v:VsIcon Kind="Warning" Width="14" Height="14" />
+                        <TextBlock Text="{Binding WarningCountText}" />
                       </StackPanel>
                     </ToggleButton>
                     <ToggleButton Classes="tb" IsChecked="{Binding ShowMessages}">
                       <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="ⓘ" Foreground="#3794FF" />
-                        <TextBlock Text="{Binding MessageCount, StringFormat={}{0} Messages}" />
+                        <v:VsIcon Kind="Info" Width="14" Height="14" />
+                        <TextBlock Text="{Binding MessageCountText}" />
                       </StackPanel>
                     </ToggleButton>
                     <TextBlock Text="Build + IntelliSense" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
@@ -359,7 +368,7 @@
                   <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:ErrorItem">
                       <Grid ColumnDefinitions="24,90,*,130,200,60" ToolTip.Tip="{Binding Description}">
-                        <TextBlock Text="{Binding SeverityGlyph}" Foreground="{Binding SeverityColor, Converter={x:Static v:ColorStringConverter.Instance}}" HorizontalAlignment="Center" />
+                        <v:VsIcon Kind="{Binding SeverityIcon}" Width="14" Height="14" HorizontalAlignment="Center" />
                         <TextBlock Grid.Column="1" Text="{Binding Code}" Foreground="#3794FF" />
                         <TextBlock Grid.Column="2" Text="{Binding Description}" TextTrimming="CharacterEllipsis" />
                         <TextBlock Grid.Column="3" Text="{Binding Project}" TextTrimming="CharacterEllipsis" />
@@ -379,7 +388,7 @@
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <TextBlock Text="Show output from:" VerticalAlignment="Center" />
                     <ComboBox Classes="tb" Width="200" ItemsSource="{Binding OutputChannels}" SelectedItem="{Binding SelectedOutput}" />
-                    <Button Classes="tb" Click="OnClearOutput" ToolTip.Tip="Clear All">🧹</Button>
+                    <Button Classes="tbi" Click="OnClearOutput" ToolTip.Tip="Clear All"><v:VsIcon Kind="ClearAll" /></Button>
                   </StackPanel>
                 </Border>
                 <ae:TextEditor Name="OutputEditor"
@@ -451,7 +460,7 @@
                         <TextBlock Grid.Column="2" Text="{Binding Type}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" TextTrimming="CharacterEllipsis" />
                         <Button Grid.Column="3" Classes="tb" Padding="3,0" MinHeight="16" ToolTip.Tip="Delete Watch"
                                 Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RemoveWatchCommand}"
-                                CommandParameter="{Binding}">✕</Button>
+                                CommandParameter="{Binding}"><v:VsIcon Kind="Close" Width="12" Height="12" /></Button>
                       </Grid>
                     </DataTemplate>
                   </ListBox.ItemTemplate>
@@ -486,8 +495,8 @@
                 <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" Padding="6,2">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <TextBlock Text="{Binding TerminalTitle}" VerticalAlignment="Center" />
-                    <Button Classes="tb" Command="{Binding NewTerminalCommand}" ToolTip.Tip="New Terminal (starts in the solution folder)">＋</Button>
-                    <Button Classes="tb" Command="{Binding KillTerminalCommand}" ToolTip.Tip="Kill Terminal">✕</Button>
+                    <Button Classes="tb" Command="{Binding NewTerminalCommand}" ToolTip.Tip="New Terminal (starts in the solution folder)"><v:VsIcon Kind="Plus" Width="14" Height="14" /></Button>
+                    <Button Classes="tb" Command="{Binding KillTerminalCommand}" ToolTip.Tip="Kill Terminal"><v:VsIcon Kind="Trash" Width="14" Height="14" /></Button>
                   </StackPanel>
                 </Border>
                 <ContentControl Content="{Binding Terminal.Control}" />
@@ -511,9 +520,9 @@
               </Border>
               <Border DockPanel.Dock="Top" Padding="4,2" Background="{StaticResource VsToolWindowBrush}">
                 <StackPanel Orientation="Horizontal" Spacing="2">
-                  <Button Classes="tb" Click="OnSyncWithActiveDocument" ToolTip.Tip="Sync with Active Document">⇄</Button>
-                  <Button Classes="tb" Command="{Binding CollapseAllCommand}" ToolTip.Tip="Collapse All">⊟</Button>
-                  <Button Classes="tb" Command="{Binding RefreshExplorerCommand}" ToolTip.Tip="Refresh">⟳</Button>
+                  <Button Classes="tbi" Click="OnSyncWithActiveDocument" ToolTip.Tip="Sync with Active Document"><v:VsIcon Kind="Sync" /></Button>
+                  <Button Classes="tbi" Command="{Binding RefreshExplorerCommand}" ToolTip.Tip="Refresh"><v:VsIcon Kind="Refresh" /></Button>
+                  <Button Classes="tbi" Command="{Binding CollapseAllCommand}" ToolTip.Tip="Collapse All"><v:VsIcon Kind="CollapseAll" /></Button>
                 </StackPanel>
               </Border>
               <TextBox Name="ExplorerSearch" DockPanel.Dock="Top" Classes="search" Margin="4,0,4,4"
@@ -560,37 +569,24 @@
               </Border>
               <Border Grid.Row="1" Padding="4,2">
                 <WrapPanel Orientation="Horizontal">
-                  <Button Classes="tb" Command="{Binding RunAllTestsCommand}" ToolTip.Tip="Run All Tests (Ctrl+R, A)">
-                    <PathIcon Data="{StaticResource IconRunAll}" Foreground="#89D185" Width="13" Height="12" />
-                  </Button>
-                  <Button Classes="tb" Command="{Binding RunSelectedTestsCommand}" ToolTip.Tip="Run">
-                    <PathIcon Data="{StaticResource IconStart}" Foreground="#89D185" Width="12" Height="12" />
-                  </Button>
-                  <Button Classes="tb" Command="{Binding RunFailedTestsCommand}" ToolTip.Tip="Run Failed Tests">
-                    <StackPanel Orientation="Horizontal" Spacing="2">
-                      <PathIcon Data="{StaticResource IconStart}" Foreground="#89D185" Width="10" Height="10" />
-                      <PathIcon Data="{Binding Source={x:Static vm:TestStateIcons.Failed}, Converter={x:Static v:TestStateIconConverter.Instance}}" Foreground="#F14C4C" Width="9" Height="9" />
-                    </StackPanel>
-                  </Button>
-                  <Button Classes="tb" Command="{Binding RepeatLastTestRunCommand}" ToolTip.Tip="Repeat Last Run (Ctrl+R, L)">
-                    <PathIcon Data="{StaticResource IconRestart}" Foreground="#89D185" Width="12" Height="12" />
-                  </Button>
-                  <Button Classes="tb" Command="{Binding CancelTestRunCommand}" ToolTip.Tip="Cancel">
-                    <PathIcon Data="{StaticResource IconStop}" Foreground="#F48771" Width="10" Height="10" />
-                  </Button>
-                  <Button Classes="tb" Command="{Binding RefreshTestsCommand}" ToolTip.Tip="Build and discover tests">⟳</Button>
-                  <Border Width="1" Background="{StaticResource VsBorderBrush}" Margin="4,2" />
+                  <Button Classes="tbi" Command="{Binding RunAllTestsCommand}" ToolTip.Tip="Run All Tests (Ctrl+R, A)"><v:VsIcon Kind="RunAll" /></Button>
+                  <Button Classes="tbi" Command="{Binding RunSelectedTestsCommand}" ToolTip.Tip="Run"><v:VsIcon Kind="Start" /></Button>
+                  <Button Classes="tbi" Command="{Binding RunFailedTestsCommand}" ToolTip.Tip="Run Failed Tests"><v:VsIcon Kind="RunFailed" /></Button>
+                  <Button Classes="tbi" Command="{Binding RepeatLastTestRunCommand}" ToolTip.Tip="Repeat Last Run (Ctrl+R, L)"><v:VsIcon Kind="Restart" /></Button>
+                  <Button Classes="tbi" Command="{Binding CancelTestRunCommand}" ToolTip.Tip="Cancel"><v:VsIcon Kind="Stop" /></Button>
+                  <Button Classes="tbi" Command="{Binding RefreshTestsCommand}" ToolTip.Tip="Build and discover tests"><v:VsIcon Kind="Refresh" /></Button>
+                  <Border Classes="tbsep" />
                   <StackPanel Orientation="Horizontal" Spacing="4" Margin="4,0" VerticalAlignment="Center" ToolTip.Tip="Passed">
-                    <PathIcon Data="{Binding Source={x:Static vm:TestStateIcons.Passed}, Converter={x:Static v:TestStateIconConverter.Instance}}" Foreground="#89D185" Width="12" Height="12" />
-                    <TextBlock Text="{Binding PassedCount}" />
+                    <v:VsIcon Kind="Ok" Width="14" Height="14" />
+                    <TextBlock Text="{Binding PassedCount}" VerticalAlignment="Center" />
                   </StackPanel>
                   <StackPanel Orientation="Horizontal" Spacing="4" Margin="4,0" VerticalAlignment="Center" ToolTip.Tip="Failed">
-                    <PathIcon Data="{Binding Source={x:Static vm:TestStateIcons.Failed}, Converter={x:Static v:TestStateIconConverter.Instance}}" Foreground="#F14C4C" Width="12" Height="12" />
-                    <TextBlock Text="{Binding FailedCount}" />
+                    <v:VsIcon Kind="Error" Width="14" Height="14" />
+                    <TextBlock Text="{Binding FailedCount}" VerticalAlignment="Center" />
                   </StackPanel>
                   <StackPanel Orientation="Horizontal" Spacing="4" Margin="4,0" VerticalAlignment="Center" ToolTip.Tip="Skipped">
-                    <PathIcon Data="{Binding Source={x:Static vm:TestStateIcons.Skipped}, Converter={x:Static v:TestStateIconConverter.Instance}}" Foreground="#CCA700" Width="12" Height="12" />
-                    <TextBlock Text="{Binding SkippedCount}" />
+                    <v:VsIcon Kind="Warning" Width="14" Height="14" />
+                    <TextBlock Text="{Binding SkippedCount}" VerticalAlignment="Center" />
                   </StackPanel>
                 </WrapPanel>
               </Border>
@@ -605,9 +601,7 @@
                 <TreeView.ItemTemplate>
                   <TreeDataTemplate x:DataType="vm:TestNode" ItemsSource="{Binding Children}">
                     <Grid ColumnDefinitions="Auto,*,Auto" Height="20">
-                      <PathIcon Data="{Binding State, Converter={x:Static v:TestStateIconConverter.Instance}}"
-                                Foreground="{Binding StateColor, Converter={x:Static v:ColorStringConverter.Instance}}"
-                                Width="12" Height="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                      <v:VsIcon Kind="{Binding StateIcon}" Width="14" Height="14" Margin="0,0,6,0" />
                       <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                       <TextBlock Grid.Column="2" Text="{Binding DurationText}" Margin="12,0,4,0" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
                     </Grid>
@@ -620,8 +614,7 @@
                   <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
                   <TextBlock Text="{Binding Location}" Foreground="{StaticResource VsGrayTextBrush}" />
                   <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Data="{Binding State, Converter={x:Static v:TestStateIconConverter.Instance}}"
-                              Foreground="{Binding StateColor, Converter={x:Static v:ColorStringConverter.Instance}}" Width="12" Height="12" />
+                    <v:VsIcon Kind="{Binding StateIcon}" Width="14" Height="14" />
                     <TextBlock Text="{Binding State}" />
                     <TextBlock Text="{Binding DurationText}" Foreground="{StaticResource VsGrayTextBrush}" />
                   </StackPanel>
@@ -642,13 +635,17 @@
               <StackPanel DockPanel.Dock="Top" Margin="8,6" Spacing="6" IsVisible="{Binding HasGit}">
                 <Grid ColumnDefinitions="*,Auto">
                   <Button Classes="tb" Click="OnBranchButtonClick" HorizontalAlignment="Left" ToolTip.Tip="Switch or create a branch">
-                    <TextBlock Text="{Binding GitBranch, StringFormat=⎇ {0} ▾}" FontWeight="SemiBold" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <v:VsIcon Kind="Branch" />
+                      <TextBlock Text="{Binding GitBranch}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                      <v:VsIcon Kind="Chevron" Width="12" Height="12" />
+                    </StackPanel>
                   </Button>
                   <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
-                    <Button Classes="tb" Command="{Binding FetchCommand}" ToolTip.Tip="Fetch">⟳</Button>
-                    <Button Classes="tb" Command="{Binding PullCommand}" ToolTip.Tip="Pull">↓</Button>
-                    <Button Classes="tb" Command="{Binding PushCommand}" ToolTip.Tip="Push">↑</Button>
-                    <Button Classes="tb" Command="{Binding SyncCommand}" ToolTip.Tip="Sync (Pull then Push)">⇅</Button>
+                    <Button Classes="tbi" Command="{Binding FetchCommand}" ToolTip.Tip="Fetch"><v:VsIcon Kind="Fetch" /></Button>
+                    <Button Classes="tbi" Command="{Binding PullCommand}" ToolTip.Tip="Pull"><v:VsIcon Kind="Pull" /></Button>
+                    <Button Classes="tbi" Command="{Binding PushCommand}" ToolTip.Tip="Push"><v:VsIcon Kind="Push" /></Button>
+                    <Button Classes="tbi" Command="{Binding SyncCommand}" ToolTip.Tip="Sync (Pull then Push)"><v:VsIcon Kind="GitSync" /></Button>
                   </StackPanel>
                 </Grid>
                 <TextBlock Text="{Binding GitSyncText, StringFormat=Outgoing / incoming: {0}}" Foreground="{StaticResource VsGrayTextBrush}" IsVisible="{Binding !!GitSyncText.Length}" />
@@ -664,7 +661,7 @@
                 <StackPanel Margin="4,0" Spacing="2">
                   <Grid ColumnDefinitions="*,Auto" Margin="4,4,4,0">
                     <TextBlock Text="{Binding StagedChanges.Count, StringFormat=Staged Changes ({0})}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <Button Grid.Column="1" Classes="tb" Command="{Binding UnstageAllCommand}" ToolTip.Tip="Unstage All">−</Button>
+                    <Button Grid.Column="1" Classes="tb" Command="{Binding UnstageAllCommand}" ToolTip.Tip="Unstage All"><v:VsIcon Kind="Minus" Width="14" Height="14" /></Button>
                   </Grid>
                   <ListBox Classes="dense" ItemsSource="{Binding StagedChanges}" DoubleTapped="OnGitItemDoubleTapped">
                     <ListBox.ItemTemplate>
@@ -674,14 +671,14 @@
                           <TextBlock Grid.Column="1" Text="{Binding FileName}" />
                           <TextBlock Grid.Column="2" Text="{Binding Folder}" Margin="8,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" TextTrimming="CharacterEllipsis" />
                           <Button Grid.Column="3" Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Unstage"
-                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).UnstageCommand}" CommandParameter="{Binding}">−</Button>
+                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).UnstageCommand}" CommandParameter="{Binding}"><v:VsIcon Kind="Minus" Width="13" Height="13" /></Button>
                         </Grid>
                       </DataTemplate>
                     </ListBox.ItemTemplate>
                   </ListBox>
                   <Grid ColumnDefinitions="*,Auto" Margin="4,8,4,0">
                     <TextBlock Text="{Binding UnstagedChanges.Count, StringFormat=Changes ({0})}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <Button Grid.Column="1" Classes="tb" Command="{Binding StageAllCommand}" ToolTip.Tip="Stage All">+</Button>
+                    <Button Grid.Column="1" Classes="tb" Command="{Binding StageAllCommand}" ToolTip.Tip="Stage All"><v:VsIcon Kind="Plus" Width="14" Height="14" /></Button>
                   </Grid>
                   <ListBox Classes="dense" ItemsSource="{Binding UnstagedChanges}" DoubleTapped="OnGitItemDoubleTapped">
                     <ListBox.ItemTemplate>
@@ -691,9 +688,9 @@
                           <TextBlock Grid.Column="1" Text="{Binding FileName}" />
                           <TextBlock Grid.Column="2" Text="{Binding Folder}" Margin="8,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" TextTrimming="CharacterEllipsis" />
                           <Button Grid.Column="3" Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Undo Changes"
-                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).DiscardCommand}" CommandParameter="{Binding}">↶</Button>
+                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).DiscardCommand}" CommandParameter="{Binding}"><v:VsIcon Kind="Discard" Width="13" Height="13" /></Button>
                           <Button Grid.Column="4" Classes="tb" Padding="4,0" MinHeight="16" ToolTip.Tip="Stage"
-                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).StageCommand}" CommandParameter="{Binding}">+</Button>
+                                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).StageCommand}" CommandParameter="{Binding}"><v:VsIcon Kind="Plus" Width="13" Height="13" /></Button>
                         </Grid>
                       </DataTemplate>
                     </ListBox.ItemTemplate>
