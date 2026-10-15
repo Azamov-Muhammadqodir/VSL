@@ -160,6 +160,16 @@ public partial class MainWindow : Window, IDialogService
         RecentMenu.IsEnabled = RecentMenu.Items.Count > 0;
     }
 
+    // ---- Outlining (Edit > Outlining) ------------------------------------------------------------------
+
+    void OnToggleOutlining(object? sender, RoutedEventArgs e) => ActiveHost?.ToggleOutliningExpansion();
+
+    void OnToggleAllOutlining(object? sender, RoutedEventArgs e) => ActiveHost?.ToggleAllOutlining();
+
+    void OnCollapseToDefinitions(object? sender, RoutedEventArgs e) => ActiveHost?.CollapseToDefinitions();
+
+    void OnExpandAllOutlining(object? sender, RoutedEventArgs e) => ActiveHost?.ExpandAllOutlining();
+
     // ---- Start window --------------------------------------------------------------------------------------
 
     void OnStartWindow(object? sender, RoutedEventArgs e) => _ = ShowStartWindowAsync(StartPage.Home);

@@ -140,6 +140,7 @@ public sealed class RoslynClient : IAsyncDisposable
             references = new { },
             implementation = new { },
             formatting = new { },
+            foldingRange = new { lineFoldingOnly = false, foldingRange = new { collapsedText = true } },
             rename = new { prepareSupport = false },
             codeAction = new
             {
@@ -315,6 +316,19 @@ public sealed class RoslynClient : IAsyncDisposable
         return result.ValueKind == JsonValueKind.Object && result.TryGetProperty("items", out var items)
             ? LspParse.Diagnostics(items)
             : [];
+    }
+
+    public async Task<IReadOnlyList<LspFoldingRange>> FoldingRangesAsync(string path, CancellationToken ct)
+    {
+        var result = await _rpc.RequestAsync("textDocument/foldingRange", new { textDocument = new { uri = ToUri(path) } }, ct);
+        if (result.ValueKind != JsonValueKind.Array)
+            return [];
+        static int? Int(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : null;
+        static string? Str(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        return result.EnumerateArray()
+            .Select(r => new LspFoldingRange(Int(r, "startLine") ?? 0, Int(r, "startCharacter"), Int(r, "endLine") ?? 0, Int(r, "endCharacter"),
+                Str(r, "kind"), Str(r, "collapsedText")))
+            .ToList();
     }
 
     public async Task<IReadOnlyList<LspTextEdit>> FormatAsync(string path, int tabSize, bool insertSpaces, CancellationToken ct) =>

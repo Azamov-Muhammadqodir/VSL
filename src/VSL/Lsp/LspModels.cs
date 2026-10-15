@@ -6,6 +6,9 @@ public readonly record struct LspPosition(int Line, int Character);
 
 public readonly record struct LspRange(LspPosition Start, LspPosition End);
 
+/// <summary>textDocument/foldingRange: zero-based lines; columns only when the server gives them.</summary>
+public sealed record LspFoldingRange(int StartLine, int? StartCharacter, int EndLine, int? EndCharacter, string? Kind, string? CollapsedText);
+
 public sealed record LspLocation(string Uri, LspRange Range)
 {
     public string FilePath => new Uri(Uri).LocalPath;

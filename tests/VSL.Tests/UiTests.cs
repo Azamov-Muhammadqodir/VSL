@@ -5,6 +5,9 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VSL.Claude;
+using VSL.Lsp;
+using VSL.Editor;
+using AvaloniaEdit.Folding;
 using VSL.ViewModels;
 using VSL.Testing;
 using VSL.Views;
@@ -765,6 +768,94 @@ public class UiTests
         Assert.Single(vm.Attachments);
         window.Close();
         await vm.DisposeAsync();
+    }
+
+    [AvaloniaFact]
+    public async Task Code_blocks_collapse_and_expand_like_visual_studio()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var file = SampleSolution.PathOf(sln, "Components/Outlined.cs");
+        File.WriteAllText(file, """
+            namespace Components;
+
+            /// <summary>
+            /// Formats greetings.
+            /// </summary>
+            public class Outlined
+            {
+                #region Settings
+                public string Prefix { get; set; } = "Hi";
+                #endregion
+
+                public string Greet(string name)
+                {
+                    if (name.Length == 0)
+                    {
+                        return Prefix;
+                    }
+                    return Prefix + " " + name;
+                }
+
+                public int Count() => 1;
+            }
+            """);
+        try
+        {
+            var vm = NewViewModel();
+            var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
+            window.Show();
+            await vm.OpenSolutionAsync(sln);
+            var doc = vm.OpenDocument(file)!;
+            var host = doc.Host;
+            // Blocks are there at once (scanned), then come from Roslyn once it serves the file.
+            Assert.NotEmpty(host.Outlines);
+            await WaitUntil(() => vm.ServerStatus == "IntelliSense: ready", TimeSpan.FromMinutes(5));
+            host.ScheduleOutlining(0);
+            await WaitUntil(() => host.OutlinesFromServer, TimeSpan.FromSeconds(20));
+            Assert.True(host.OutlinesFromServer);
+            int LineOf(string text) => host.Document.Lines.First(l => host.Document.GetText(l).Trim() == text).LineNumber;
+            FoldingSection At(string text) => host.Outlines.First(f => host.Document.GetLineByOffset(f.StartOffset).LineNumber == LineOf(text));
+            Assert.Equal(OutlineKind.Definition, host.KindOf(At("public string Greet(string name)")));
+            Assert.Equal(OutlineKind.Region, host.KindOf(At("#region Settings")));
+            Assert.Equal("Settings", At("#region Settings").Title);
+
+            // Ctrl+M, Ctrl+O: member bodies and regions collapse; the class stays open.
+            host.Editor.TextArea.Focus();
+            void Chord(Avalonia.Input.Key second, Avalonia.Input.PhysicalKey physical)
+            {
+                window.KeyPress(Avalonia.Input.Key.M, Avalonia.Input.RawInputModifiers.Control, Avalonia.Input.PhysicalKey.M, "m");
+                window.KeyPress(second, Avalonia.Input.RawInputModifiers.Control, physical, null);
+            }
+            Chord(Avalonia.Input.Key.O, Avalonia.Input.PhysicalKey.O);
+            Assert.True(At("public string Greet(string name)").IsFolded);
+            Assert.True(At("#region Settings").IsFolded);
+            Assert.False(At("public class Outlined").IsFolded);
+            Assert.False(At("if (name.Length == 0)").IsFolded);
+            await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+            Snapshot(window, "outlining-definitions");
+
+            // Navigating into a collapsed block opens it.
+            host.NavigateTo(new LspRange(new LspPosition(LineOf("return Prefix;") - 1, 0), new LspPosition(LineOf("return Prefix;") - 1, 0)));
+            Assert.False(At("public string Greet(string name)").IsFolded);
+
+            // Ctrl+M, Ctrl+L: something is collapsed, so everything expands; again, everything collapses.
+            Chord(Avalonia.Input.Key.L, Avalonia.Input.PhysicalKey.L);
+            Assert.All(host.Outlines, f => Assert.False(f.IsFolded));
+            Chord(Avalonia.Input.Key.L, Avalonia.Input.PhysicalKey.L);
+            Assert.All(host.Outlines, f => Assert.True(f.IsFolded));
+
+            // Ctrl+M, Ctrl+M toggles the block on the caret's line.
+            Chord(Avalonia.Input.Key.X, Avalonia.Input.PhysicalKey.X);
+            host.Editor.CaretOffset = host.Document.GetLineByNumber(LineOf("public string Greet(string name)")).Offset;
+            Chord(Avalonia.Input.Key.M, Avalonia.Input.PhysicalKey.M);
+            Assert.True(At("public string Greet(string name)").IsFolded);
+            Assert.Equal(1, host.Outlines.Count(f => f.IsFolded));
+            Assert.True(await vm.CloseSolutionCoreAsync());
+        }
+        finally
+        {
+            File.Delete(file);
+        }
     }
 
     [AvaloniaFact]

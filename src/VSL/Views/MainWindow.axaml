@@ -66,6 +66,40 @@
             </MenuItem.Header>
           </MenuItem>
         </MenuItem>
+        <MenuItem Header="Out_lining">
+          <MenuItem Click="OnToggleOutlining">
+            <MenuItem.Header>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Toggle Outlining Expansion" />
+                <TextBlock Grid.Column="1" Text="Ctrl+M, Ctrl+M" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+              </Grid>
+            </MenuItem.Header>
+          </MenuItem>
+          <MenuItem Click="OnToggleAllOutlining">
+            <MenuItem.Header>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Toggle All Outlining" />
+                <TextBlock Grid.Column="1" Text="Ctrl+M, Ctrl+L" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+              </Grid>
+            </MenuItem.Header>
+          </MenuItem>
+          <MenuItem Click="OnCollapseToDefinitions">
+            <MenuItem.Header>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Collapse to Definitions" />
+                <TextBlock Grid.Column="1" Text="Ctrl+M, Ctrl+O" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+              </Grid>
+            </MenuItem.Header>
+          </MenuItem>
+          <MenuItem Click="OnExpandAllOutlining">
+            <MenuItem.Header>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Expand All Outlining" />
+                <TextBlock Grid.Column="1" Text="Ctrl+M, Ctrl+X" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+              </Grid>
+            </MenuItem.Header>
+          </MenuItem>
+        </MenuItem>
         <MenuItem Header="_Go To Definition" InputGesture="F12" Click="OnGoToDefinition" />
         <MenuItem Header="Go To _Implementation" InputGesture="Ctrl+F12" Click="OnGoToImplementation" />
         <MenuItem Header="Find All _References" InputGesture="Shift+F12" Click="OnFindReferences" />

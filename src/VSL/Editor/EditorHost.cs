@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using AvaloniaEdit;
 using AvaloniaEdit.CodeCompletion;
 using AvaloniaEdit.Document;
+using AvaloniaEdit.Folding;
 using AvaloniaEdit.Rendering;
 using AvaloniaEdit.TextMate;
 using VSL.Debugging;
@@ -21,7 +22,7 @@ namespace VSL.Editor;
 /// One open file: the AvaloniaEdit control plus its language-server session (sync, IntelliSense, squiggles,
 /// hover, navigation). Kept alive per document so undo history and scroll position survive tab switches.
 /// </summary>
-public sealed class EditorHost : IDisposable, IDebugLineSource
+public sealed partial class EditorHost : IDisposable, IDebugLineSource
 {
     static readonly IBrush EditorBackground = new SolidColorBrush(Color.Parse("#1E1E1E"));
     static readonly IBrush EditorForeground = new SolidColorBrush(Color.Parse("#DCDCDC"));
@@ -36,6 +37,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
     int _version = 1;
     bool _flushScheduled;
     bool _chordCtrlK;
+    bool _chordCtrlM;
     CompletionWindow? _completionWindow;
     OverloadInsightWindow? _insightWindow;
     CancellationTokenSource? _diagnosticsCts;
@@ -116,6 +118,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
         Editor.TextArea.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
         Editor.TextArea.RightClickMovesCaret = true;
         Editor.ContextMenu = BuildContextMenu();
+        InitializeOutlining();
     }
 
     public string FilePath { get; }
@@ -191,7 +194,12 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
     {
         _gitBaseline = headText is null ? null : headText.Length == 0 ? [] : Git.LineDiff.SplitLines(headText);
         if (_gitBaseline is not null && !Editor.TextArea.LeftMargins.OfType<GitChangeMargin>().Any())
-            Editor.TextArea.LeftMargins.Add(new GitChangeMargin(() => _gitChanges));
+        {
+            // Change bars sit between the line numbers and the outlining margin, as in VS.
+            var margins = Editor.TextArea.LeftMargins;
+            var folding = margins.OfType<FoldingMargin>().FirstOrDefault();
+            margins.Insert(folding is null ? margins.Count : margins.IndexOf(folding), new GitChangeMargin(() => _gitChanges));
+        }
         RecomputeGitChanges();
     }
 
@@ -250,6 +258,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
         RedrawDebugAdornments();
         if (line is { } l && l >= 1 && l <= Document.LineCount)
         {
+            RevealOffset(Document.GetLineByNumber(l).Offset);
             Editor.CaretOffset = Document.GetLineByNumber(l).Offset;
             Editor.ScrollToLine(l);
         }
@@ -323,6 +332,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
         _version = 1;
         _ = lsp.DidOpenAsync(FilePath, Document.Text);
         ScheduleDiagnostics(200);
+        ScheduleOutlining(300);
     }
 
     public void Detach()
@@ -622,6 +632,14 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
     {
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        if (_chordCtrlM)
+        {
+            _chordCtrlM = false;
+            e.Handled = true;
+            if (!ctrl || !HandleOutliningChord(e.Key))
+                StatusMessage?.Invoke("The key combination (Ctrl+M, " + e.Key + ") is not a command.");
+            return;
+        }
         if (_chordCtrlK)
         {
             _chordCtrlK = false;
@@ -638,6 +656,11 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
 
         switch (e.Key)
         {
+            case Key.M when ctrl && !shift:
+                _chordCtrlM = true;
+                StatusMessage?.Invoke("(Ctrl+M) was pressed. Waiting for second key of chord...");
+                e.Handled = true;
+                break;
             case Key.K when ctrl && !shift:
                 _chordCtrlK = true;
                 StatusMessage?.Invoke("(Ctrl+K) was pressed. Waiting for second key of chord...");
@@ -840,6 +863,17 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
                 new Separator(),
                 Item("Format Document", "Ctrl+K, Ctrl+D", () => _ = FormatDocumentAsync()),
                 Item("Toggle Breakpoint", "F9", () => ToggleBreakpoint(Editor.TextArea.Caret.Line)),
+                new MenuItem
+                {
+                    Header = "Outlining",
+                    ItemsSource = new object[]
+                    {
+                        Item("Toggle Outlining Expansion", "Ctrl+M, Ctrl+M", ToggleOutliningExpansion),
+                        Item("Toggle All Outlining", "Ctrl+M, Ctrl+L", ToggleAllOutlining),
+                        Item("Collapse to Definitions", "Ctrl+M, Ctrl+O", CollapseToDefinitions),
+                        Item("Expand All Outlining", "Ctrl+M, Ctrl+X", ExpandAllOutlining),
+                    },
+                },
                 new Separator(),
                 compare,
                 new Separator(),
@@ -1042,6 +1076,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
     {
         var start = TextPositions.ToOffset(Document, range.Start);
         var end = TextPositions.ToOffset(Document, range.End);
+        RevealOffset(start);
         Editor.Select(start, Math.Max(0, end - start));
         Editor.CaretOffset = start;
         var loc = Document.GetLocation(start);
@@ -1060,6 +1095,7 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
 
     public void Dispose()
     {
+        DisposeOutlining();
         _diagnosticsCts?.Cancel();
         _completionCts?.Cancel();
         _hoverCts?.Cancel();
