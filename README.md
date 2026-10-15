@@ -25,6 +25,7 @@ Requires the .NET 10 SDK (`~/.dotnet` or `DOTNET_ROOT`). On first solution open 
 | Debug | F5 with netcoredbg (MIT, installed on first use): breakpoints (F9 / margin click, kept per solution and moved with edits), current-statement arrow, Continue, Break All, Restart, Step Over/Into/Out (F10/F11/Shift+F11), Locals, Watch, Call Stack, hover data tips |
 | Test | Test Explorer on the SDK's vstest (xUnit, NUnit, MSTest): build + discover, Run All / Run / Run Failed / Repeat Last / Cancel, Project › Namespace › Class › Method tree with theory rows, live outcomes and durations, error message and stack trace, double-click to source; Ctrl+R A, Ctrl+R L, Ctrl+E T |
 | Git | Git Changes window (staged / unstaged lists, stage, unstage, undo, Commit All / Commit Staged, Fetch, Pull, Push, Sync, diff view), branch and pending-change count in the status bar with branch switch / new branch, M/A/D/U badges in Solution Explorer, live change bars in the editor margin against HEAD, Git menu |
+| Terminal | Integrated terminal (View > Terminal, Ctrl+`): your `$SHELL` in a real pty, started in the solution folder with VSL's dotnet on PATH; truecolor, scrollback, selection, search; New / Kill; keys go to the shell (Ctrl+R, Ctrl+E...) |
 | Session | Restores open documents, startup project, profile and configuration per solution |
 
 Not yet: conditional breakpoints, exception settings, Immediate window, debugging Blazor WebAssembly code
@@ -45,6 +46,7 @@ src/VSL/
   Build/       dotnet process runner and MSBuild output parser
   Debugging/   DAP client, netcoredbg installer, debug session, breakpoint store
   Testing/     vstest.console host (Microsoft.TestPlatform.TranslationLayer)
+  Terminal/    integrated terminal session (Exclr8.Terminal control + Porta.Pty)
   Git/         git CLI wrapper (porcelain v2 status, stage/commit/sync/branches) and line diff for the margin
   Editor/      AvaloniaEdit host: sync, completion, hover, squiggles, TextMate theme
   ViewModels/  main window state, documents, Error List, Output
@@ -72,4 +74,4 @@ VSL is released under the [MIT License](LICENSE).
 ## Third-party
 
 Cascadia Mono font (SIL OFL 1.1, `src/VSL/Assets/Fonts`), roslyn-language-server and netcoredbg (MIT, downloaded at runtime),
-Avalonia, AvaloniaEdit and TextMateSharp (MIT).
+Avalonia, AvaloniaEdit, TextMateSharp, Exclr8.Terminal and Porta.Pty (MIT).

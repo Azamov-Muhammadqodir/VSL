@@ -236,6 +236,9 @@ public partial class MainViewModel : ObservableObject
 
         SetStatus("Ready", StatusKind.Ready);
         await OpenGitAsync(solution);
+        // New shells start in the solution folder, like VS's Developer terminal.
+        if (_terminal is { } terminal)
+            terminal.WorkingDirectory = solution.Directory;
         await StartLanguageServerAsync();
     }
 

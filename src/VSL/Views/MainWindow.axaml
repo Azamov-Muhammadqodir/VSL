@@ -70,6 +70,14 @@
         <MenuItem Header="Solution _Explorer" Click="OnShowSolutionExplorer" />
         <MenuItem Header="E_rror List" Click="OnShowErrorList" />
         <MenuItem Header="_Output" Click="OnShowOutput" />
+        <MenuItem Command="{Binding ShowTerminalCommand}">
+          <MenuItem.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Terminal" />
+              <TextBlock Grid.Column="1" Text="Ctrl+`" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+            </Grid>
+          </MenuItem.Header>
+        </MenuItem>
         <Separator />
         <MenuItem Click="OnZoomIn">
           <MenuItem.Header>
@@ -469,6 +477,20 @@
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
+              </DockPanel>
+            </TabItem>
+
+            <!-- Terminal -->
+            <TabItem Header="Terminal">
+              <DockPanel>
+                <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" Padding="6,2">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding TerminalTitle}" VerticalAlignment="Center" />
+                    <Button Classes="tb" Command="{Binding NewTerminalCommand}" ToolTip.Tip="New Terminal (starts in the solution folder)">＋</Button>
+                    <Button Classes="tb" Command="{Binding KillTerminalCommand}" ToolTip.Tip="Kill Terminal">✕</Button>
+                  </StackPanel>
+                </Border>
+                <ContentControl Content="{Binding Terminal.Control}" />
               </DockPanel>
             </TabItem>
           </TabControl>

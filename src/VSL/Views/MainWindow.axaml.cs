@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using VSL.ViewModels;
 using VSL.Workspace;
 
@@ -61,6 +62,7 @@ public partial class MainWindow : Window, IDialogService
         vm.SaveSession();
         if (await vm.CloseSolutionCoreAsync())
         {
+            await vm.ShutdownTerminalAsync();
             _closingConfirmed = true;
             Close();
         }
@@ -70,6 +72,17 @@ public partial class MainWindow : Window, IDialogService
     {
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         if (e.Key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt)
+            return;
+        // Ctrl+` opens the terminal (VS's View.Terminal).
+        if (ctrl && e.Key == Key.OemTilde && Vm is { } terminalVm)
+        {
+            terminalVm.ShowTerminalCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+        // Inside the terminal every other key belongs to the shell (Ctrl+R is reverse search, Ctrl+E end of line...).
+        if (FocusManager?.GetFocusedElement() is Visual focused
+            && (focused is Exclr8.Terminal.TerminalControl || focused.FindAncestorOfType<Exclr8.Terminal.TerminalControl>() is not null))
             return;
         // Visual Studio chords: Ctrl+R, A / Ctrl+R, L / Ctrl+R, Ctrl+R / Ctrl+E, T.
         if (_chord is { } first && Vm is { } chordVm)
@@ -447,6 +460,7 @@ public partial class MainWindow : Window, IDialogService
             Ctrl+R, Ctrl+R    Rename
             Ctrl+E, T         Test Explorer
             Ctrl+Wheel        Zoom the editor (also Ctrl+Shift+. / Ctrl+Shift+, ; Ctrl+0 resets)
+            Ctrl+`            Terminal
             Ctrl+Space        IntelliSense completion
             Ctrl+Shift+Space  Parameter info
             F12 / Ctrl+Click  Go to definition

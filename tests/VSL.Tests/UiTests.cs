@@ -381,6 +381,52 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Terminal_runs_the_shell_in_the_solution_folder()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var vm = NewViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+
+        // Ctrl+` opens the Terminal tool window; the shell starts once it has a size.
+        window.KeyPress(Avalonia.Input.Key.OemTilde, Avalonia.Input.RawInputModifiers.Control, Avalonia.Input.PhysicalKey.Backquote, "`");
+        Assert.Equal(MainViewModel.TerminalTab, vm.BottomTabIndex);
+        await WaitUntil(() => vm.Terminal.IsAlive, TimeSpan.FromSeconds(15));
+        Assert.True(vm.Terminal.IsAlive);
+        await WaitUntil(() => vm.Terminal.Control.IsFocused, TimeSpan.FromSeconds(5));
+
+        // Typed through the real keyboard path; the shell evaluates it.
+        window.KeyTextInput("echo VSL_TERM_$((40+2)); pwd; dotnet --version");
+        window.KeyPress(Avalonia.Input.Key.Enter, Avalonia.Input.RawInputModifiers.None, Avalonia.Input.PhysicalKey.Enter, "\r");
+        await WaitUntil(() => vm.Terminal.ReadText().Contains("VSL_TERM_42") && vm.Terminal.ReadText().Contains("10.0."), TimeSpan.FromSeconds(30));
+        var text = vm.Terminal.ReadText();
+        Assert.Contains("VSL_TERM_42", text);
+        Assert.Contains(Path.GetDirectoryName(sln)!, text);
+        Assert.True(System.Text.RegularExpressions.Regex.IsMatch(text, @"(^|\n)10\.0\.\d+"), "terminal text:\n" + text);
+
+        // Ctrl+R inside the terminal is bash's reverse search, not VS's Ctrl+R, A "Run All Tests" chord.
+        window.KeyPress(Avalonia.Input.Key.R, Avalonia.Input.RawInputModifiers.Control, Avalonia.Input.PhysicalKey.R, "r");
+        window.KeyPress(Avalonia.Input.Key.A, Avalonia.Input.RawInputModifiers.None, Avalonia.Input.PhysicalKey.A, "a");
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(vm.IsTesting);
+        Assert.Empty(vm.TestRoots);
+        await WaitUntil(() => vm.Terminal.ReadText().Contains("reverse-i-search"), TimeSpan.FromSeconds(10));
+        Assert.Contains("reverse-i-search", vm.Terminal.ReadText());
+        window.KeyPress(Avalonia.Input.Key.C, Avalonia.Input.RawInputModifiers.Control, Avalonia.Input.PhysicalKey.C, "c");
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(400));
+        Snapshot(window, "terminal");
+
+        await vm.KillTerminalCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+        await WaitUntil(() => !vm.Terminal.IsAlive, TimeSpan.FromSeconds(10));
+        Assert.False(vm.Terminal.IsAlive);
+        Assert.Contains("[Terminal killed", vm.Terminal.ReadText());
+
+        Assert.True(await vm.CloseSolutionCoreAsync().WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+        await vm.ShutdownTerminalAsync().WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+    }
+
+    [AvaloniaFact]
     public async Task Start_window_renders_without_solution()
     {
         var vm = NewViewModel();
