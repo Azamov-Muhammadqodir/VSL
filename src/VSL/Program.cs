@@ -11,6 +11,7 @@ static class Program
         // Child tools that look up `dotnet` on PATH (vstest.console, MSBuild nodes) must find the same SDK VSL uses,
         // not a distro package that happens to be first on a desktop session's PATH.
         Build.DotnetCli.ApplyToCurrentProcess();
+        Build.DevCertificates.ApplyToCurrentProcess();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

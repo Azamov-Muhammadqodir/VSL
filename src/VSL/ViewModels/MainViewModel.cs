@@ -952,6 +952,7 @@ public partial class MainViewModel : ObservableObject
             return;
 
         var profile = project.LaunchProfiles.FirstOrDefault(p => p.Name == LaunchProfile);
+        await OfferDevCertificateTrustAsync(profile);
         var args = new List<string> { "run", "--project", project.FilePath, "-c", Configuration, "--no-build" };
         if (profile is not null)
             args.AddRange(["--launch-profile", profile.Name]);

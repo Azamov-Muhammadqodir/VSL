@@ -125,6 +125,7 @@ public partial class MainViewModel
         }
 
         var profile = project.LaunchProfiles.FirstOrDefault(p => p.Name == LaunchProfile);
+        await OfferDevCertificateTrustAsync(profile);
         var env = new Dictionary<string, string>(profile?.EnvironmentVariables ?? new Dictionary<string, string>());
         // dotnet run turns applicationUrl into ASPNETCORE_URLS; launching the dll directly must do the same.
         if (profile?.ApplicationUrl is { Length: > 0 } urls && !env.ContainsKey("ASPNETCORE_URLS"))
