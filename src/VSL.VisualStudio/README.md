@@ -3,6 +3,11 @@
 Claude Code in a Visual Studio tool window. It runs the Claude Code CLI you already use, in your solution folder, so
 your sign-in, settings, `CLAUDE.md`, permissions and MCP servers all apply, just as in a terminal.
 
+| | | |
+|:-:|:-:|:-:|
+| ![The Claude Code window, ready for a prompt](images/welcome.png) | ![An answer with tool calls, the context size and the plan limits](images/answer.png) | ![Claude asking before it edits a file](images/approval.png) |
+| **Start** from a suggestion or your own prompt | **Follow** every step, the context and your limits | **Approve** each edit and command |
+
 ## Requirements
 
 - Visual Studio 2022 (17.14 or later) or Visual Studio 2026.
