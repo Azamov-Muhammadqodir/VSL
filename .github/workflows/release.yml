@@ -5,6 +5,7 @@
 # workflow_dispatch builds the packages as artifacts only (version 0.0.<run number>) without releasing.
 # None of the packages needs a .NET runtime; working on solutions needs the .NET SDK, as in any .NET IDE.
 # Packaging is deploy/linux/package.sh (also runs locally).
+# No tests here: ci.yml has already run them on the tagged commit.
 name: release
 
 on:
@@ -16,23 +17,8 @@ permissions:
   contents: write
 
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-
-      # Includes the headless Avalonia UI tests of the IDE window.
-      - name: Test
-        run: dotnet test VSL.slnx -c Release
-
   package:
     name: Package — linux-x64
-    needs: test
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
