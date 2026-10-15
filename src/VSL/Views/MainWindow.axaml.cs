@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
@@ -22,6 +23,7 @@ public partial class MainWindow : Window, IDialogService
     {
         InitializeComponent();
         InitializeDocking();
+        ExplorerTree.AddHandler(DoubleTappedEvent, OnExplorerDoubleTapped, RoutingStrategies.Bubble, handledEventsToo: true);
         DataContextChanged += (_, _) =>
         {
             if (DataContext is MainViewModel vm)
@@ -378,13 +380,23 @@ public partial class MainWindow : Window, IDialogService
 
     // ---- Solution Explorer ---------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Double-click opens a file, also one with nested files under it (X.razor with X.razor.cs). The tree item's
+    /// header handles a double-click first by toggling expansion (and marks it handled), so this listens to
+    /// handled double-clicks too, opens the file and undoes that toggle: expanding a file is the chevron's job.
+    /// Folders and projects still expand on double-click, as in VS.
+    /// </summary>
     void OnExplorerDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (ExplorerTree.SelectedItem is ExplorerNode node && Vm is { } vm)
-        {
-            if (node.Kind is NodeKind.File)
-                vm.OpenNode(node);
-        }
+        if (Vm is not { } vm || e.Source is not Visual source || source.FindAncestorOfType<ToggleButton>(includeSelf: true) is not null)
+            return;
+        var item = source.FindAncestorOfType<TreeViewItem>(includeSelf: true);
+        if (item?.DataContext is not ExplorerNode { Kind: NodeKind.File } node)
+            return;
+        if (e.Handled && item.ItemCount > 0)
+            node.IsExpanded = !node.IsExpanded;
+        vm.OpenNode(node);
+        e.Handled = true;
     }
 
     /// <summary>Right-click in Solution Explorer: VS's context menu for solutions, projects, folders and files.</summary>

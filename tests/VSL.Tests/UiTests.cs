@@ -137,7 +137,8 @@ public class UiTests
         // F9 equivalent on "var app = builder.Build();", then F5.
         host.ToggleBreakpoint(2);
         await vm.StartDebuggingCommand.ExecuteAsync(null);
-        await WaitUntil(() => vm.Mode == DebugMode.Break, TimeSpan.FromMinutes(2));
+        // Break mode is entered before the call stack arrives, which takes longer on a slow machine.
+        await WaitUntil(() => vm.Mode == DebugMode.Break && vm.CallStack.Count > 0, TimeSpan.FromMinutes(2));
         Assert.True(vm.Mode == DebugMode.Break, "did not break; output:\n" + vm.DebugOutput.Document.Text);
         Assert.Equal(2, vm.CallStack[0].Line);
         Assert.Equal(vm.CallStack[0], vm.SelectedFrame);
@@ -980,6 +981,26 @@ public class UiTests
         await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
         Assert.Contains(window.GetVisualDescendants().OfType<Avalonia.Controls.Image>(), i => i.Source is Avalonia.Media.DrawingImage && i.IsEffectivelyVisible);
         Snapshot(window, "explorer-material-icons");
+
+        // A file with nested files (Greeting.razor > Greeting.razor.cs) opens on double-click; only its chevron expands it.
+        var greeting = components.Children.Single(n => n.Name == "Greeting.razor");
+        Assert.NotEmpty(greeting.Children);
+        var item = window.GetVisualDescendants().OfType<Avalonia.Controls.TreeViewItem>().Single(i => i.DataContext == greeting);
+        var label = item.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().First(t => t.Text == "Greeting.razor");
+        var center = label.TranslatePoint(new Point(label.Bounds.Width / 2, label.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(center, Avalonia.Input.MouseButton.Left);
+        window.MouseUp(center, Avalonia.Input.MouseButton.Left);
+        window.MouseDown(center, Avalonia.Input.MouseButton.Left);
+        window.MouseUp(center, Avalonia.Input.MouseButton.Left);
+        await WaitUntil(() => vm.ActiveEditor?.FileName == "Greeting.razor", TimeSpan.FromSeconds(5));
+        Assert.Equal("Greeting.razor", vm.ActiveEditor?.FileName);
+        Assert.False(greeting.IsExpanded);
+        var chevron = item.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>().First(t => t.IsEffectivelyVisible);
+        var chevronCenter = chevron.TranslatePoint(new Point(chevron.Bounds.Width / 2, chevron.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(chevronCenter, Avalonia.Input.MouseButton.Left);
+        window.MouseUp(chevronCenter, Avalonia.Input.MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(greeting.IsExpanded);
         Assert.True(await vm.CloseSolutionCoreAsync());
     }
 
