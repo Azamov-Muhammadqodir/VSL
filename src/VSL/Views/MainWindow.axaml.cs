@@ -92,6 +92,9 @@ public partial class MainWindow : Window, IDialogService
             e.Handled = true;
             switch (first, e.Key)
             {
+                case (Key.R, Key.A) when e.KeyModifiers.HasFlag(KeyModifiers.Control):
+                    chordVm.DebugAllTestsCommand.Execute(null);
+                    break;
                 case (Key.R, Key.A):
                     chordVm.RunAllTestsCommand.Execute(null);
                     break;
@@ -577,6 +580,31 @@ public partial class MainWindow : Window, IDialogService
 
     void OnTestDoubleTapped(object? sender, TappedEventArgs e) => Vm?.NavigateToTest(TestTree.SelectedItem as TestNode);
 
+    /// <summary>Right-click in Test Explorer: Run, Debug, Go To Test.</summary>
+    void OnTestContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (sender is not Control { DataContext: TestNode node } anchor || Vm is not { } vm)
+            return;
+        e.Handled = true;
+        vm.SelectedTest = node;
+        MenuItem Item(string header, Action action, bool enabled = true)
+        {
+            var item = new MenuItem { Header = header, IsEnabled = enabled };
+            item.Click += (_, _) => action();
+            return item;
+        }
+        new ContextMenu
+        {
+            ItemsSource = new object[]
+            {
+                Item("Run", () => vm.RunSelectedTestsCommand.Execute(null), vm.RunSelectedTestsCommand.CanExecute(null)),
+                Item("Debug", () => vm.DebugSelectedTestsCommand.Execute(null), vm.DebugSelectedTestsCommand.CanExecute(null)),
+                new Separator(),
+                Item("Go To Test", () => vm.NavigateToTest(node), node.SourcePath is not null),
+            },
+        }.Open(anchor);
+    }
+
     void OnShowWatch(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.WatchTab);
 
     void OnShowCallStack(object? sender, RoutedEventArgs e) => ShowBottomTab(MainViewModel.CallStackTab);
@@ -611,6 +639,7 @@ public partial class MainWindow : Window, IDialogService
             Ctrl+Alt+Break    Break all
             Ctrl+. / Alt+Enter Quick Actions and Refactorings
             Ctrl+R, A         Run all tests
+            Ctrl+R, Ctrl+A    Debug all tests
             Ctrl+R, L         Repeat last test run
             Ctrl+R, Ctrl+R    Rename
             Ctrl+E, T         Test Explorer

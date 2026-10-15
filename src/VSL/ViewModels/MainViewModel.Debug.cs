@@ -33,7 +33,7 @@ public partial class MainViewModel
     [NotifyPropertyChangedFor(nameof(IsDebugging), nameof(IsInBreakMode), nameof(StartButtonText))]
     [NotifyCanExecuteChangedFor(nameof(StartDebuggingCommand), nameof(StartWithoutDebuggingCommand), nameof(StopCommand),
         nameof(RestartCommand), nameof(StepOverCommand), nameof(StepIntoCommand), nameof(StepOutCommand), nameof(BreakAllCommand),
-        nameof(RunAllTestsCommand), nameof(RunFailedTestsCommand), nameof(RunSelectedTestsCommand), nameof(RepeatLastTestRunCommand), nameof(RefreshTestsCommand))]
+        nameof(RunAllTestsCommand), nameof(RunFailedTestsCommand), nameof(RunSelectedTestsCommand), nameof(RepeatLastTestRunCommand), nameof(RefreshTestsCommand), nameof(DebugAllTestsCommand), nameof(DebugSelectedTestsCommand))]
     public partial DebugMode Mode { get; set; }
 
     [ObservableProperty]
@@ -152,14 +152,9 @@ public partial class MainViewModel
                 (file, results) => Dispatcher.UIThread.Post(() => Breakpoints.SetVerification(file, breakpoints[file], results)),
                 session =>
                 {
-                    session.Stopped += (thread, reason, text) => Dispatcher.UIThread.Post(() => _ = OnStoppedAsync(thread, reason, text));
-                    session.Continued += () => Dispatcher.UIThread.Post(BeginRunning);
-                    session.Ended += code => Dispatcher.UIThread.Post(() => OnDebugEnded(session, code));
-                    session.BreakpointChanged += (file, line, verified) => Dispatcher.UIThread.Post(() =>
-                        Breakpoints.SetVerification(file, [line], [new BreakpointResult(verified, line, null)]));
+                    WireSession(session);
                     session.Output += (category, text) =>
                     {
-                        DebugOutput.AppendRaw(text);
                         if (!browserOpened && profile is { LaunchBrowser: true } && text.Contains("Now listening on:", StringComparison.Ordinal))
                         {
                             browserOpened = true;
@@ -177,6 +172,52 @@ public partial class MainViewModel
             _session = null;
             Mode = DebugMode.Design;
             SetStatus("Ready", StatusKind.Ready);
+        }
+    }
+
+    /// <summary>Routes a session's events into break mode, the Output window and breakpoint state.</summary>
+    void WireSession(DebugSession session)
+    {
+        session.Stopped += (thread, reason, text) => Dispatcher.UIThread.Post(() => _ = OnStoppedAsync(thread, reason, text));
+        session.Continued += () => Dispatcher.UIThread.Post(BeginRunning);
+        session.Ended += code => Dispatcher.UIThread.Post(() => OnDebugEnded(session, code));
+        session.BreakpointChanged += (file, line, verified) => Dispatcher.UIThread.Post(() =>
+            Breakpoints.SetVerification(file, [line], [new BreakpointResult(verified, line, null)]));
+        session.Output += (category, text) =>
+        {
+            if (category == "console")
+            {
+                // Adapter chatter: one message per line, minus the Just-My-Code notices about framework assemblies.
+                if (text.StartsWith("You are debugging a Release build of", StringComparison.Ordinal))
+                    return;
+                if (!text.EndsWith('\n'))
+                    text += "\n";
+            }
+            DebugOutput.AppendRaw(text);
+        };
+    }
+
+    /// <summary>Debug Tests: attach to the test host vstest started; returns once breakpoints are set.</summary>
+    async Task AttachTestDebuggerAsync(int processId)
+    {
+        var adapter = await NetcoredbgLocator.EnsureInstalledAsync(DebugOutput.Append, CancellationToken.None);
+        DebugOutput.Append($"Debugging tests (test host process {processId}) with netcoredbg {NetcoredbgLocator.Version}");
+        _debuggedProject = "testhost";
+        Mode = DebugMode.Running;
+        SetStatus("Debugging tests", StatusKind.Running);
+        var breakpoints = Breakpoints.All;
+        try
+        {
+            _session = await DebugSession.AttachAsync(adapter, processId, breakpoints,
+                (file, results) => Dispatcher.UIThread.Post(() => Breakpoints.SetVerification(file, breakpoints[file], results)),
+                WireSession, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            DebugOutput.Append("Failed to attach the debugger: " + ex.Message);
+            _session = null;
+            Mode = DebugMode.Design;
+            throw;
         }
     }
 

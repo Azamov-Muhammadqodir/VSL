@@ -60,7 +60,10 @@ public sealed class VsTestHost : IDisposable
     public static VsTestHost Start(string consolePath, string logDirectory)
     {
         Directory.CreateDirectory(logDirectory);
-        var parameters = new ConsoleParameters { LogFilePath = Path.Combine(logDirectory, "vstest.log") };
+        // vstest's diagnostic trace is large; only write it when asked to (VSL_VSTEST_LOG=1).
+        var parameters = new ConsoleParameters();
+        if (Environment.GetEnvironmentVariable("VSL_VSTEST_LOG") == "1")
+            parameters.LogFilePath = Path.Combine(logDirectory, "vstest.log");
         parameters.EnvironmentVariables = new Dictionary<string, string?>
         {
             ["DOTNET_ROOT"] = DotnetCli.Root,
@@ -96,6 +99,24 @@ public sealed class VsTestHost : IDisposable
             var handler = new RunHandler(onUpdate, m => Log?.Invoke(m));
             await using var reg = ct.Register(_wrapper.CancelTestRun);
             await Task.Run(() => _wrapper.RunTests(tests, RunSettings, new TestPlatformOptions { CollectMetrics = false }, handler), CancellationToken.None);
+            return handler.Elapsed;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Runs tests with a host launcher that starts testhost under the debugger.</summary>
+    public async Task<TimeSpan> DebugAsync(IReadOnlyList<TestCase> tests, Microsoft.VisualStudio.TestPlatform.ObjectModel.Client.Interfaces.ITestHostLauncher launcher,
+        Action<TestResultInfo> onUpdate, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            var handler = new RunHandler(onUpdate, m => Log?.Invoke(m));
+            await using var reg = ct.Register(_wrapper.CancelTestRun);
+            await Task.Run(() => _wrapper.RunTestsWithCustomTestHost(tests, RunSettings, new TestPlatformOptions { CollectMetrics = false }, handler, launcher), CancellationToken.None);
             return handler.Elapsed;
         }
         finally

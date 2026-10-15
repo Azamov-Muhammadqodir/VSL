@@ -53,9 +53,50 @@ public sealed class DebugSession : IAsyncDisposable
 
     int? _exitCode;
 
-    public static async Task<DebugSession> LaunchAsync(
+    public static Task<DebugSession> LaunchAsync(
         string adapterPath,
         LaunchRequest launch,
+        IReadOnlyDictionary<string, IReadOnlyList<int>> breakpoints,
+        Action<string, IReadOnlyList<BreakpointResult>> onBreakpointsVerified,
+        Action<DebugSession>? beforeConfigurationDone,
+        CancellationToken ct) =>
+        StartAsync(adapterPath, "launch", new
+        {
+            name = "VSL Launch",
+            type = "coreclr",
+            request = "launch",
+            program = launch.Program,
+            args = launch.Args,
+            cwd = launch.WorkingDirectory,
+            env = launch.Environment,
+            stopAtEntry = false,
+            justMyCode = true,
+            enableStepFiltering = true,
+            console = "internalConsole",
+        }, breakpoints, onBreakpointsVerified, beforeConfigurationDone, ct);
+
+    /// <summary>Attaches to a running .NET process (used to debug tests: vstest's testhost waits for us).</summary>
+    public static Task<DebugSession> AttachAsync(
+        string adapterPath,
+        int processId,
+        IReadOnlyDictionary<string, IReadOnlyList<int>> breakpoints,
+        Action<string, IReadOnlyList<BreakpointResult>> onBreakpointsVerified,
+        Action<DebugSession>? beforeConfigurationDone,
+        CancellationToken ct) =>
+        StartAsync(adapterPath, "attach", new
+        {
+            name = "VSL Attach",
+            type = "coreclr",
+            request = "attach",
+            processId,
+            justMyCode = true,
+            enableStepFiltering = true,
+        }, breakpoints, onBreakpointsVerified, beforeConfigurationDone, ct);
+
+    static async Task<DebugSession> StartAsync(
+        string adapterPath,
+        string request,
+        object requestArguments,
         IReadOnlyDictionary<string, IReadOnlyList<int>> breakpoints,
         Action<string, IReadOnlyList<BreakpointResult>> onBreakpointsVerified,
         Action<DebugSession>? beforeConfigurationDone,
@@ -103,30 +144,17 @@ public sealed class DebugSession : IAsyncDisposable
                 locale = "en-us",
             }, ct);
 
-            // Some adapters answer "launch" only after configurationDone, so do not await it yet.
-            var launchTask = dap.RequestAsync("launch", new
-            {
-                name = "VSL Launch",
-                type = "coreclr",
-                request = "launch",
-                program = launch.Program,
-                args = launch.Args,
-                cwd = launch.WorkingDirectory,
-                env = launch.Environment,
-                stopAtEntry = false,
-                justMyCode = true,
-                enableStepFiltering = true,
-                console = "internalConsole",
-            }, ct);
-            await Task.WhenAny(initialized.Task, launchTask).WaitAsync(TimeSpan.FromSeconds(30), ct);
-            if (launchTask.IsFaulted)
-                await launchTask;
+            // Some adapters answer launch/attach only after configurationDone, so do not await it yet.
+            var startTask = dap.RequestAsync(request, requestArguments, ct);
+            await Task.WhenAny(initialized.Task, startTask).WaitAsync(TimeSpan.FromSeconds(30), ct);
+            if (startTask.IsFaulted)
+                await startTask;
             await initialized.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
 
             foreach (var (file, lines) in breakpoints)
                 onBreakpointsVerified(file, await session.SetBreakpointsAsync(file, lines, ct));
             await dap.RequestAsync("configurationDone", null, ct);
-            await launchTask.WaitAsync(TimeSpan.FromSeconds(30), ct);
+            await startTask.WaitAsync(TimeSpan.FromSeconds(30), ct);
             return session;
         }
         catch

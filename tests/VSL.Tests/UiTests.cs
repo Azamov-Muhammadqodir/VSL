@@ -585,6 +585,42 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Debug_test_stops_at_breakpoint_in_test_code()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var vm = NewViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1600, Height = 1000 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+
+        await vm.RefreshTestsCommand.ExecuteAsync(null);
+        var test = vm.TestRoots.Single().Children.Single().Children.Single().Children.Single(n => n.Name == "Default_name_is_world");
+        var source = SampleSolution.PathOf(sln, "Tests/GreetingTests.cs");
+        var doc = vm.OpenDocument(source)!;
+        doc.Host.ToggleBreakpoint(9);
+
+        vm.SelectedTest = test;
+        var run = vm.DebugSelectedTestsCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.Mode == DebugMode.Break && vm.CallStack.Count > 0, TimeSpan.FromSeconds(90));
+        Assert.True(vm.Mode == DebugMode.Break, "did not break; debug output:\n" + vm.DebugOutput.Document.Text);
+        Assert.Equal(source, vm.CallStack[0].SourcePath);
+        Assert.Equal(9, vm.CallStack[0].Line);
+        await WaitUntil(() => doc.Host.ExecutionLine == 9, TimeSpan.FromSeconds(10));
+        Assert.Equal(9, doc.Host.ExecutionLine);
+        Snapshot(window, "debug-test");
+
+        // F5 continues; the test finishes green and debugging ends.
+        await vm.StartDebuggingCommand.ExecuteAsync(null);
+        await run.WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);
+        Assert.True(test.State == TestState.Passed, $"state {test.State}; summary: {vm.TestSummary}\nbuild/vstest:\n{vm.BuildOutput.Document.Text[^Math.Min(1500, vm.BuildOutput.Document.TextLength)..]}\ndebug:\n{vm.DebugOutput.Document.Text}");
+        await WaitUntil(() => vm.Mode == DebugMode.Design, TimeSpan.FromSeconds(30));
+        Assert.Equal(DebugMode.Design, vm.Mode);
+
+        doc.Host.ToggleBreakpoint(9);
+        Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
     public async Task Start_window_renders_without_solution()
     {
         var vm = NewViewModel();

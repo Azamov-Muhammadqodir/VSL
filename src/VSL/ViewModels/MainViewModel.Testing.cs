@@ -28,7 +28,8 @@ public partial class MainViewModel
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RunAllTestsCommand), nameof(RunFailedTestsCommand), nameof(RunSelectedTestsCommand),
-        nameof(RepeatLastTestRunCommand), nameof(RefreshTestsCommand), nameof(CancelTestRunCommand))]
+        nameof(RepeatLastTestRunCommand), nameof(RefreshTestsCommand), nameof(CancelTestRunCommand),
+        nameof(DebugAllTestsCommand), nameof(DebugSelectedTestsCommand))]
     public partial bool IsTesting { get; set; }
 
     [ObservableProperty]
@@ -59,6 +60,12 @@ public partial class MainViewModel
     Task RepeatLastTestRun() => RunTestsAsync(_lastRun.Count > 0 ? _lastRun : null);
 
     [RelayCommand(CanExecute = nameof(CanRunTests))]
+    Task DebugAllTests() => RunTestsAsync(null, debug: true);
+
+    [RelayCommand(CanExecute = nameof(CanRunTests))]
+    Task DebugSelectedTests() => RunTestsAsync(SelectedTest?.CaseIds().ToList() ?? [], debug: true);
+
+    [RelayCommand(CanExecute = nameof(CanRunTests))]
     async Task RefreshTests()
     {
         RightTabIndex = 1;
@@ -77,7 +84,7 @@ public partial class MainViewModel
     void CancelTestRun() => _testCts?.Cancel();
 
     /// <summary>Builds, (re)discovers and runs the given tests (null = all), streaming results into the tree.</summary>
-    async Task RunTestsAsync(IReadOnlyList<Guid>? ids)
+    async Task RunTestsAsync(IReadOnlyList<Guid>? ids, bool debug = false)
     {
         RightTabIndex = 1;
         IsTesting = true;
@@ -97,11 +104,24 @@ public partial class MainViewModel
             SetStatus($"Running {cases.Count} test(s)...", StatusKind.Busy);
             var cts = _testCts = new CancellationTokenSource();
             var sw = Stopwatch.StartNew();
-            await host.RunAsync(cases, r => Dispatcher.UIThread.Post(() =>
+            void OnResult(TestResultInfo r) => Dispatcher.UIThread.Post(() =>
             {
                 if (_testCases.TryGetValue(r.Id, out var node))
                     node.SetResult(r.State, r.Duration, r.ErrorMessage, r.StackTrace, r.Output);
-            }), cts.Token);
+            });
+            if (debug)
+            {
+                // vstest starts the test host and asks us to attach before any test runs, so breakpoints hit.
+                DebugOutput.Clear();
+                var launcher = new DebuggingTestHostLauncher(
+                    pid => Dispatcher.UIThread.InvokeAsync(() => AttachTestDebuggerAsync(pid)),
+                    DebugOutput.Append);
+                await host.DebugAsync(cases, launcher, OnResult, cts.Token);
+            }
+            else
+            {
+                await host.RunAsync(cases, OnResult, cts.Token);
+            }
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
             UpdateTestCounts();
             var ran = cases.Count(c => _testCases[c.Id].State is TestState.Passed or TestState.Failed or TestState.Skipped);
@@ -166,6 +186,16 @@ public partial class MainViewModel
 
     void BuildTestTree(IReadOnlyList<TestCase> cases)
     {
+        // Same tests as before: keep the tree, so expansion, selection and results survive a run.
+        if (_testCases.Count == cases.Count && cases.All(c => _testCases.ContainsKey(c.Id)))
+        {
+            foreach (var c in cases)
+            {
+                _testCases[c.Id].SourcePath = c.CodeFilePath;
+                _testCases[c.Id].Line = c.LineNumber;
+            }
+            return;
+        }
         var previous = _testCases.ToDictionary(kv => kv.Key, kv => kv.Value);
         _testCases.Clear();
         TestRoots.Clear();

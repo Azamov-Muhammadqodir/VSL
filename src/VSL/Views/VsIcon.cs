@@ -30,7 +30,7 @@ public sealed class VsIcon : Control
     public static IReadOnlyList<string> AllKinds { get; } =
     [
         "Open", "Save", "SaveAll", "Undo", "Redo", "Build", "Chevron", "Start", "StartNoDebug", "Stop", "Pause", "Restart",
-        "StepInto", "StepOver", "StepOut", "RunAll", "RunFailed", "Breakpoint", "Sync", "Refresh", "CollapseAll", "Search",
+        "StepInto", "StepOver", "StepOut", "RunAll", "DebugTests", "RunFailed", "Breakpoint", "Sync", "Refresh", "CollapseAll", "Search",
         "Close", "Pin", "Plus", "Minus", "Trash", "Discard", "Fetch", "Pull", "Push", "GitSync", "Branch", "Pencil",
         "Method", "Field", "Local", "Property", "Class", "Struct", "Interface", "Enum", "EnumMember", "Event", "Namespace",
         "Keyword", "Snippet", "Constant", "TypeParameter", "Operator", "ClearAll",
@@ -197,6 +197,10 @@ public sealed class VsIcon : Control
                 break;
             case "RunAll":
                 Fill(dc, "M1,2.5 L8,8 L1,13.5 Z M8,2.5 L15,8 L8,13.5 Z", Green);
+                break;
+            case "DebugTests":
+                Fill(dc, "M1,2 L10.5,8 L1,14 Z", Green);
+                Fill(dc, "M12,8.5 A3.5,3.5 0 1 0 12,15.5 A3.5,3.5 0 1 0 12,8.5 Z", Color.Parse("#E51400"));
                 break;
             case "RunFailed":
                 Fill(dc, "M1,2.5 L9,8 L1,13.5 Z", Green);

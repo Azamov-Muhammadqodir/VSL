@@ -146,6 +146,14 @@
             </Grid>
           </MenuItem.Header>
         </MenuItem>
+        <MenuItem Command="{Binding DebugAllTestsCommand}">
+          <MenuItem.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Debug All Tests" />
+              <TextBlock Grid.Column="1" Text="Ctrl+R, Ctrl+A" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+            </Grid>
+          </MenuItem.Header>
+        </MenuItem>
         <MenuItem Header="Run _Failed Tests" Command="{Binding RunFailedTestsCommand}" />
         <MenuItem Header="Re_fresh Tests" Command="{Binding RefreshTestsCommand}" />
         <MenuItem Header="_Cancel Test Run" Command="{Binding CancelTestRunCommand}" />
@@ -586,6 +594,7 @@
                 <WrapPanel Orientation="Horizontal">
                   <Button Classes="tbi" Command="{Binding RunAllTestsCommand}" ToolTip.Tip="Run All Tests (Ctrl+R, A)"><v:VsIcon Kind="RunAll" /></Button>
                   <Button Classes="tbi" Command="{Binding RunSelectedTestsCommand}" ToolTip.Tip="Run"><v:VsIcon Kind="Start" /></Button>
+                  <Button Classes="tbi" Command="{Binding DebugSelectedTestsCommand}" ToolTip.Tip="Debug"><v:VsIcon Kind="DebugTests" /></Button>
                   <Button Classes="tbi" Command="{Binding RunFailedTestsCommand}" ToolTip.Tip="Run Failed Tests"><v:VsIcon Kind="RunFailed" /></Button>
                   <Button Classes="tbi" Command="{Binding RepeatLastTestRunCommand}" ToolTip.Tip="Repeat Last Run (Ctrl+R, L)"><v:VsIcon Kind="Restart" /></Button>
                   <Button Classes="tbi" Command="{Binding CancelTestRunCommand}" ToolTip.Tip="Cancel"><v:VsIcon Kind="Stop" /></Button>
@@ -615,7 +624,7 @@
                 </TreeView.Styles>
                 <TreeView.ItemTemplate>
                   <TreeDataTemplate x:DataType="vm:TestNode" ItemsSource="{Binding Children}">
-                    <Grid ColumnDefinitions="Auto,*,Auto" Height="20">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Height="20" Background="Transparent" ContextRequested="OnTestContextRequested">
                       <v:VsIcon Kind="{Binding StateIcon}" Width="14" Height="14" Margin="0,0,6,0" />
                       <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                       <TextBlock Grid.Column="2" Text="{Binding DurationText}" Margin="12,0,4,0" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
