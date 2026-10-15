@@ -139,8 +139,25 @@ def subagent_step(parent, tool_id, name, tool_input, result_text):
          "parent_tool_use_id": parent, "session_id": SESSION})
 
 
+def command(text):
+    """Slash commands run locally and answer with a synthetic assistant message, as Claude Code 2.1.300 does."""
+    name, _, arg = text[1:].partition(" ")
+    replies = {
+        "effort": f"Set effort level to {arg} (this session only)" if arg else "Usage: /effort <low|medium|high|xhigh|max|auto>",
+        "model": f"Set model to {arg}" if arg else "Current model: `Fake`",
+        "context": "## Context Usage\n\n| Category | Tokens |\n|---|---|\n| Messages | 1.3k |",
+    }
+    reply = replies.get(name, f"Unknown command: /{name}")
+    out({"type": "assistant", "message": {"id": next_id(), "model": "<synthetic>", "role": "assistant", "content": [{"type": "text", "text": reply}]},
+         "parent_tool_use_id": None, "session_id": SESSION})
+    result(reply)
+
+
 def turn(prompt, content):
     out({"type": "system", "subtype": "init", "session_id": SESSION, "cwd": CWD, "model": "fake", "permissionMode": "default"})
+    if isinstance(content, str) and content.startswith("/"):
+        command(content)
+        return
     p = prompt.lower()
     images = [b for b in content if isinstance(b, dict) and b.get("type") == "image"] if isinstance(content, list) else []
     if images:
@@ -236,7 +253,11 @@ def turn(prompt, content):
         while True:
             message = read()
             if message.get("type") == "control_request" and handle_control(message) == "interrupt":
-                result(None, "error_during_execution", True)
+                # What Claude Code 2.1.300 sends after an interrupt.
+                out({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "[Request interrupted by user]"}]},
+                     "parent_tool_use_id": None, "session_id": SESSION})
+                out({"type": "result", "subtype": "error_during_execution", "is_error": True, "duration_ms": 900, "session_id": SESSION,
+                     "errors": ["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=null"]})
                 return
     else:
         think("Let me look at the file first.")

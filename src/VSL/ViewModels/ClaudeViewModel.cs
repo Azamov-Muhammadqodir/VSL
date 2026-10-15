@@ -41,6 +41,8 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
     DateTime _turnStarted;
     int _tokens;
     bool _thinking;
+    bool _interrupting;
+    string? _pendingModelCommand;
     bool _changingModeFromCli;
 
     public ClaudeViewModel(Settings settings, Func<string> workingDirectory, Func<ClaudeEditorContext?> editorContext,
@@ -295,15 +297,22 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         Suggestions.Clear();
         IsHistoryOpen = false;
         AttachmentError = null;
-        var images = Attachments.ToList();
-        Attachments.Clear();
-        var context = IncludeContext ? _editorContext() : null;
+        // A slash command goes on its own; attachments wait for the next prompt.
+        var isCommand = IsSlashCommand(text);
+        var images = isCommand ? [] : Attachments.ToList();
+        if (!isCommand)
+            Attachments.Clear();
+        var context = IncludeContext && !isCommand ? _editorContext() : null;
         Items.Add(new UserChatItem(text, context?.Label, images));
+        _pendingModelCommand = isCommand && text.StartsWith("/model ", StringComparison.Ordinal) ? text[7..].Trim() : null;
         BeginTurn();
         try
         {
             var session = await EnsureSessionAsync();
-            await session.SendUserMessageAsync(text, context is null ? null : [ContextBlock(context)], images.Select(i => i.ToImage()));
+            if (isCommand)
+                await session.SendCommandAsync(text);
+            else
+                await session.SendUserMessageAsync(text, context is null ? null : [ContextBlock(context)], images.Select(i => i.ToImage()));
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or OperationCanceledException or System.ComponentModel.Win32Exception)
         {
@@ -311,6 +320,10 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
             Items.Add(new NoticeChatItem("Claude Code could not be started: " + ex.Message, isError: true));
         }
     }
+
+    /// <summary>"/name args" with no line breaks, as Claude Code reads slash commands.</summary>
+    internal static bool IsSlashCommand(string text) =>
+        text.Length > 1 && text[0] == '/' && char.IsLetter(text[1]) && !text.Contains('\n');
 
     /// <summary>The editor context, appended to the prompt like the VS Code extension's selection context.</summary>
     internal static string ContextBlock(ClaudeEditorContext context)
@@ -334,6 +347,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         if (_session is not { } session || !IsRunning)
             return;
         CancelPendingCards("Cancelled");
+        _interrupting = true;
         try
         {
             await session.InterruptAsync();
@@ -406,6 +420,16 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
             case ClaudeInit init:
                 _resumeId = init.SessionId;
                 OnPropertyChanged(nameof(SessionId));
+                break;
+
+            case ClaudeUserText user when user.ParentToolUseId is null && user.Text.StartsWith("[Request interrupted", StringComparison.Ordinal):
+                // The CLI records an interrupt as a user turn; live, the result already says so.
+                if (!live)
+                    Items.Add(new NoticeChatItem("Interrupted.", isError: false));
+                break;
+
+            case ClaudeUserText when live:
+                // Prompts are shown as they are sent; anything else the CLI echoes as a user turn is bookkeeping.
                 break;
 
             case ClaudeUserText user when user.ParentToolUseId is null:
@@ -494,14 +518,28 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
                     Items.Remove(empty);
                 if (result.IsError || result.Subtype != "success")
                 {
+                    // The CLI appends internal diagnostics ("[ede_diagnostic] ...") to an execution error.
+                    var detail = string.Join("\n", (result.Text ?? "").Split('\n')
+                        .Where(l => l.Trim().Length > 0 && !l.TrimStart().StartsWith("[ede_diagnostic]", StringComparison.Ordinal)));
                     var message = result.Subtype switch
                     {
                         "error_max_turns" => "Claude stopped: the maximum number of turns was reached.",
-                        "error_during_execution" when result.Text is null => "Interrupted.",
-                        _ => result.Text ?? "Claude Code reported an error.",
+                        "error_during_execution" when _interrupting || detail.Length == 0 => "Interrupted.",
+                        _ => detail.Length > 0 ? detail : "Claude Code reported an error.",
                     };
                     Items.Add(new NoticeChatItem(message, isError: message != "Interrupted."));
                 }
+                else if (_pendingModelCommand is { } model && Models.FirstOrDefault(m => m.Value == model) is { } choice)
+                {
+                    // "/model sonnet" switched the CLI's model; keep the picker in step without sending it again.
+                    _changingModeFromCli = true;
+                    SelectedModel = choice;
+                    _changingModeFromCli = false;
+                    _settings.ClaudeModel = choice.Value;
+                    _settings.Save();
+                }
+                _interrupting = false;
+                _pendingModelCommand = null;
                 foreach (var tool in _tools.Values.Where(t => t.IsRunning))
                     tool.State = ToolState.Error;
                 EndTurn();

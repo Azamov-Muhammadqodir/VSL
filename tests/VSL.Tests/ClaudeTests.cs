@@ -191,6 +191,16 @@ public class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Slash_commands_are_recognized()
+    {
+        Assert.True(ClaudeViewModel.IsSlashCommand("/effort high"));
+        Assert.True(ClaudeViewModel.IsSlashCommand("/context"));
+        Assert.False(ClaudeViewModel.IsSlashCommand("/home/me/file.cs is broken"[..0] + "/ looks odd"));
+        Assert.False(ClaudeViewModel.IsSlashCommand("/review\nthis"));
+        Assert.False(ClaudeViewModel.IsSlashCommand("fix /effort"));
+    }
+
+    [Fact]
     public void Context_block_carries_the_selection()
     {
         Assert.Equal("<ide_context>\nThe user has /w/A.cs open in the editor and selected lines 3-4:\n```\nint x;\nint y;\n```\n</ide_context>",

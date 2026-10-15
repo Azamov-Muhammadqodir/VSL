@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -682,6 +683,23 @@ public class UiTests
         Assert.Equal("Edit automatically", vm.ModeLabel);
         await WaitUntil(() => FakeClaude.Log(log).Any(e => e.Kind == "in" && e.Data.ToString().Contains("\"set_permission_mode\"", StringComparison.Ordinal)), TimeSpan.FromSeconds(5));
 
+        // Slash commands go to the CLI as the bare command (no editor context, attachments wait) and run there.
+        Assert.Null(vm.AddImage("later.png", RedPng()));
+        vm.Prompt = "/effort high";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        var sentCommand = FakeClaude.Log(log).Last(e => e.Kind == "in" && e.Data.GetProperty("type").GetString() == "user").Data.GetProperty("message").GetProperty("content");
+        Assert.Equal(JsonValueKind.String, sentCommand.ValueKind);
+        Assert.Equal("/effort high", sentCommand.GetString());
+        Assert.Null(vm.Items.OfType<UserChatItem>().Last().Context);
+        Assert.Equal("Set effort level to high (this session only)", vm.Items.OfType<TextChatItem>().Last().Text);
+        Assert.Single(vm.Attachments);
+        vm.RemoveAttachmentCommand.Execute(vm.Attachments[0]);
+        vm.Prompt = "/model haiku";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        Assert.Equal("haiku", vm.SelectedModel!.Value);
+
         // Stop interrupts a running turn.
         vm.Prompt = "slow job";
         await vm.SendCommand.ExecuteAsync(null);
@@ -689,7 +707,11 @@ public class UiTests
         Assert.True(vm.IsRunning);
         await vm.StopCommand.ExecuteAsync(null);
         await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
-        Assert.Equal("Interrupted.", vm.Items.OfType<NoticeChatItem>().Last().Text);
+        var interrupted = vm.Items.OfType<NoticeChatItem>().Last();
+        Assert.Equal(("Interrupted.", false), (interrupted.Text, interrupted.IsError));
+        // The CLI's own bookkeeping (an interrupt marker as a user turn, internal diagnostics) is not shown.
+        Assert.DoesNotContain(vm.Items.OfType<UserChatItem>(), u => u.Text.StartsWith("[Request interrupted", StringComparison.Ordinal));
+        Assert.DoesNotContain(vm.Items.OfType<NoticeChatItem>(), n => n.Text.Contains("ede_diagnostic", StringComparison.Ordinal));
 
         // Past conversations of the folder can be reopened and continued (--resume).
         await vm.NewConversationCommand.ExecuteAsync(null);

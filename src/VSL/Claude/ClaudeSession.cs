@@ -130,6 +130,19 @@ public sealed class ClaudeSession : IAsyncDisposable
         });
     }
 
+    /// <summary>
+    /// Runs a slash command (/context, /effort high, /model sonnet...). The CLI only treats a message as a
+    /// command when its content is the plain command string, so nothing else may go with it.
+    /// </summary>
+    public Task SendCommandAsync(string command) =>
+        WriteAsync(new
+        {
+            type = "user",
+            message = new { role = "user", content = command },
+            parent_tool_use_id = (string?)null,
+            session_id = SessionId ?? "default",
+        });
+
     /// <summary>Answers a can_use_tool request: allow (optionally with changed input / remembered rules) or deny.</summary>
     public Task RespondToPermissionAsync(string requestId, ClaudePermissionDecision decision) =>
         WriteAsync(new
