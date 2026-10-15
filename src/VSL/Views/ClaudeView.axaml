@@ -146,7 +146,7 @@
     </Style>
   </UserControl.Styles>
 
-  <DockPanel Background="#1F1F1F">
+  <DockPanel Background="#1F1F1F" v:MarkdownView.LinkCommand="{Binding OpenLinkCommand}">
     <!-- ===== Header ===== -->
     <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" BorderBrush="#333336" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto" Margin="8,3">
@@ -179,11 +179,40 @@
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
+        <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="10,8,10,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ClaudeAttachment">
+              <Border Classes="chip" Margin="0,0,6,6" Padding="3" ToolTip.Tip="{Binding Name}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Image Source="{Binding Thumbnail}" Width="38" Height="38" Stretch="UniformToFill" />
+                  <StackPanel VerticalAlignment="Center" MaxWidth="120">
+                    <TextBlock Text="{Binding Name}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding SizeText}" FontSize="10" Classes="muted" />
+                  </StackPanel>
+                  <Button Classes="tbi" VerticalAlignment="Top" ToolTip.Tip="Remove"
+                          Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).RemoveAttachmentCommand}" CommandParameter="{Binding}">
+                    <v:VsIcon Kind="Close" Width="10" Height="10" />
+                  </Button>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Text="{Binding AttachmentError}" Classes="error" FontSize="11" Margin="12,6,12,0" TextWrapping="Wrap"
+                   IsVisible="{Binding AttachmentError, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <TextBox Name="PromptBox" Classes="prompt" Text="{Binding Prompt}" AcceptsReturn="True" TextWrapping="Wrap"
                  MinHeight="56" MaxHeight="240" Padding="12,10,12,4" FontSize="13"
                  PlaceholderText="Ask Claude to edit, fix or explain... (/ for commands, @ for files)" />
-        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="6,0,6,6">
-          <Button Name="ContextButton" Classes="pill" Command="{Binding ToggleContextCommand}" IsVisible="{Binding HasEditorContext}"
+        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="6,0,6,6">
+          <Button Name="AttachButton" Classes="pill" Click="OnAttachClick" ToolTip.Tip="Attach images or files (or paste / drop them here)">
+            <v:VsIcon Kind="Attach" Width="14" Height="14" />
+          </Button>
+          <Button Name="ContextButton" Grid.Column="1" Classes="pill" Command="{Binding ToggleContextCommand}" IsVisible="{Binding HasEditorContext}"
                   ToolTip.Tip="Send the current file and selection with the prompt (click to toggle)">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <v:VsIcon Kind="Eye" Width="13" Height="13" IsVisible="{Binding IncludeContext}" />
@@ -191,13 +220,13 @@
               <TextBlock Text="{Binding ContextLabel}" VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Button>
-          <Button Name="ModeButton" Grid.Column="1" Classes="pill" Command="{Binding CycleModeCommand}" ToolTip.Tip="Permission mode (Shift+Tab)">
+          <Button Name="ModeButton" Grid.Column="2" Classes="pill" Command="{Binding CycleModeCommand}" ToolTip.Tip="Permission mode (Shift+Tab)">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <v:VsIcon Kind="{Binding ModeIcon}" Width="13" Height="13" />
               <TextBlock Text="{Binding ModeLabel}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
-          <ComboBox Name="ModelPicker" Grid.Column="3" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" MinWidth="0" MinHeight="24"
+          <ComboBox Name="ModelPicker" Grid.Column="4" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" MinWidth="0" MinHeight="24"
                     MaxWidth="150" FontSize="12" Background="Transparent" BorderThickness="0" Margin="0,0,6,0" ToolTip.Tip="Model">
             <ComboBox.SelectionBoxItemTemplate>
               <DataTemplate x:DataType="vm:ClaudeModelChoice">
@@ -213,10 +242,10 @@
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
-          <Button Name="SendButton" Grid.Column="4" Classes="send" Command="{Binding SendCommand}" IsVisible="{Binding !IsRunning}" ToolTip.Tip="Send (Enter)">
+          <Button Name="SendButton" Grid.Column="5" Classes="send" Command="{Binding SendCommand}" IsVisible="{Binding !IsRunning}" ToolTip.Tip="Send (Enter)">
             <v:VsIcon Kind="Send" Width="14" Height="14" Foreground="#1F1F1F" />
           </Button>
-          <Button Name="StopButton" Grid.Column="4" Classes="send" Command="{Binding StopCommand}" IsVisible="{Binding IsRunning}" ToolTip.Tip="Stop (Esc)">
+          <Button Name="StopButton" Grid.Column="5" Classes="send" Command="{Binding StopCommand}" IsVisible="{Binding IsRunning}" ToolTip.Tip="Stop (Esc)">
             <Border Width="10" Height="10" Background="#1F1F1F" CornerRadius="2" />
           </Button>
         </Grid>
@@ -238,7 +267,21 @@
             <DataTemplate DataType="vm:UserChatItem" x:DataType="vm:UserChatItem">
               <Border Classes="user" Margin="0,12,0,4">
                 <StackPanel Spacing="6">
-                  <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="13" />
+                  <ItemsControl ItemsSource="{Binding Images}" IsVisible="{Binding HasImages}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ClaudeAttachment">
+                        <Border CornerRadius="4" ClipToBounds="True" Margin="0,0,6,4" BorderBrush="#444447" BorderThickness="1" ToolTip.Tip="{Binding Name}">
+                          <Image Source="{Binding Thumbnail}" MaxHeight="110" MaxWidth="160" Stretch="Uniform" />
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <SelectableTextBlock Text="{Binding Text}" IsVisible="{Binding HasText}" TextWrapping="Wrap" FontSize="13" />
                   <Border Classes="chip" IsVisible="{Binding HasContext}" HorizontalAlignment="Left">
                     <StackPanel Orientation="Horizontal" Spacing="4">
                       <v:VsIcon Kind="file" Width="11" Height="11" />
@@ -284,6 +327,26 @@
                   <Border Grid.Column="1" Width="9" Height="8" BorderBrush="#5A5A5A" BorderThickness="1,0,0,1" VerticalAlignment="Top" Margin="2,1,6,0" />
                   <TextBlock Grid.Column="2" Text="{Binding Summary}" Classes="muted" Classes.error="{Binding IsError}" FontSize="12" TextWrapping="Wrap" />
                 </Grid>
+                <StackPanel IsVisible="{Binding HasChildren}" Margin="16,3,0,0" Spacing="1">
+                  <TextBlock Text="{Binding MoreChildrenText}" IsVisible="{Binding HasMoreChildren}" Classes="muted" FontSize="11" Margin="12,0,0,1" />
+                  <ItemsControl ItemsSource="{Binding VisibleChildren}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ToolChatItem">
+                        <Grid ColumnDefinitions="12,*" Margin="0,1">
+                          <Ellipse Width="5" Height="5" Margin="1,6,0,0" VerticalAlignment="Top" HorizontalAlignment="Left"
+                                   Classes="dot" Classes.running="{Binding IsRunning}" Classes.error="{Binding IsError}" />
+                          <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis" FontSize="12">
+                            <Run Text="{Binding Title}" FontWeight="SemiBold" />
+                            <Run Text=" " />
+                            <Run Text="{Binding Target}" FontFamily="{StaticResource VsCodeFont}" FontSize="11" Foreground="#B8B8B8" />
+                            <Run Text="  " />
+                            <Run Text="{Binding Summary}" Foreground="#8B8B8B" />
+                          </TextBlock>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
                 <Border Classes="box" IsVisible="{Binding ShowDiff}" Margin="16,5,0,0">
                   <ItemsControl ItemsSource="{Binding Diff}" Margin="0,3">
                     <ItemsControl.ItemTemplate>
@@ -464,6 +527,14 @@
             <SelectableTextBlock Classes="mono" Text="curl -fsSL https://claude.ai/install.sh | bash" TextWrapping="Wrap" />
           </Border>
           <Button Classes="choice first" Content="Retry" HorizontalAlignment="Center" Command="{Binding CheckCliCommand}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ===== Drop target ===== -->
+      <Border Name="DropOverlay" IsVisible="False" Background="#C0202022" BorderBrush="#D97757" BorderThickness="2" CornerRadius="8" Margin="8" IsHitTestVisible="False">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+          <v:VsIcon Kind="Attach" Width="28" Height="28" HorizontalAlignment="Center" Foreground="#D97757" />
+          <TextBlock Text="Drop images or files to attach" FontSize="14" />
         </StackPanel>
       </Border>
 

@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using Avalonia.Controls.Documents;
+using Avalonia.Headless.XUnit;
 using VSL.Claude;
 using VSL.ViewModels;
 using VSL.Views;
@@ -112,6 +114,31 @@ public class ClaudeProtocolTests
     }
 
     [Fact]
+    public void Parses_images_subagent_prompts_and_subagent_permissions()
+    {
+        var user = Assert.IsType<ClaudeUserText>(Assert.Single(Parse(
+            """{"type":"user","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBO"}},{"type":"text","text":"What is this?"}]},"parent_tool_use_id":null}""")));
+        Assert.Equal(("What is this?", "image/png", null), (user.Text, Assert.Single(user.Images).MediaType, user.ParentToolUseId));
+        // Captured from Claude Code 2.1.300: a subagent's prompt is a user message under its Agent call.
+        var prompt = Assert.IsType<ClaudeUserText>(Assert.Single(Parse(
+            """{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Find the file named notes.txt"}]},"parent_tool_use_id":"toolu_011AJTS9"}""")));
+        Assert.Equal("toolu_011AJTS9", prompt.ParentToolUseId);
+        var request = Assert.IsType<ClaudePermissionRequest>(Assert.Single(Parse(
+            """{"type":"control_request","request_id":"r","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"ls"},"permission_suggestions":[],"tool_use_id":"t","agent_id":"a8915ce0b5241f575"}}""")));
+        Assert.Equal("a8915ce0b5241f575", request.AgentId);
+    }
+
+    [Fact]
+    public void Recognizes_images_by_their_signature()
+    {
+        Assert.Equal("image/png", ClaudeAttachment.ImageMediaType([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A]));
+        Assert.Equal("image/jpeg", ClaudeAttachment.ImageMediaType([0xFF, 0xD8, 0xFF, 0xE0]));
+        Assert.Equal("image/gif", ClaudeAttachment.ImageMediaType("GIF89a"u8));
+        Assert.Equal("image/webp", ClaudeAttachment.ImageMediaType("RIFF\0\0\0\0WEBPVP8 "u8));
+        Assert.Null(ClaudeAttachment.ImageMediaType("hello"u8));
+    }
+
+    [Fact]
     public void Starts_the_cli_like_the_agent_sdk_does()
     {
         var args = ClaudeSession.Arguments(new ClaudeStartOptions("claude", "/w", "opus", "plan", "abc"));
@@ -211,6 +238,54 @@ public class ClaudeProtocolTests
     }
 }
 
+public class ClaudeLinkTests
+{
+    static IEnumerable<string> Texts(IEnumerable<Inline> inlines) =>
+        inlines.SelectMany(i => i switch
+        {
+            Run run => [run.Text ?? ""],
+            Span span => Texts(span.Inlines),
+            _ => [],
+        });
+
+    [AvaloniaFact]
+    public void Markdown_links_know_where_they_are_in_the_text()
+    {
+        var links = new List<MdLink>();
+        var inlines = MarkdownView.Inlines("See **[docs](https://a.dev/x)** and `src/App.cs:12`, or https://b.dev/y. Not `System.Text`.", links);
+        var text = string.Concat(Texts(inlines));
+        Assert.Equal("See docs and src/App.cs:12, or https://b.dev/y. Not System.Text.", text);
+        Assert.Equal(["https://a.dev/x", "src/App.cs:12", "https://b.dev/y"], links.Select(l => l.Target));
+        Assert.Equal(["docs", "src/App.cs:12", "https://b.dev/y"], links.Select(l => text[l.Start..l.End]));
+    }
+
+    [AvaloniaFact]
+    public void File_links_resolve_against_the_folder()
+    {
+        var (dir, _) = FakeClaude.Workspace();
+        Directory.CreateDirectory(Path.Combine(dir, "src"));
+        var app = Path.Combine(dir, "src", "App.cs");
+        File.WriteAllText(app, "class App {}\n");
+        var program = Path.Combine(dir, "Program.cs");
+        var vm = new ClaudeViewModel(new VSL.Services.Settings(), () => dir, () => null,
+            () => Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories), () => null);
+        Assert.Equal((program, 12), vm.ResolveFileLink("Program.cs:12"));
+        Assert.Equal((app, 3), vm.ResolveFileLink("src/App.cs#L3-L9"));
+        Assert.Equal((app, (int?)null), vm.ResolveFileLink("App.cs"));
+        Assert.Equal((program, 2), vm.ResolveFileLink(new Uri(program).AbsoluteUri + "#L2"));
+        Assert.Null(vm.ResolveFileLink("Missing.cs"));
+
+        string? url = null;
+        (string, int?)? file = null;
+        vm.OpenUrlRequested += u => url = u;
+        vm.OpenFileRequested += (p, l) => file = (p, l);
+        vm.OpenLink("https://example.com/docs");
+        vm.OpenLink("src/App.cs:7");
+        Assert.Equal("https://example.com/docs", url);
+        Assert.Equal((app, 7), file);
+    }
+}
+
 public class ClaudeSessionTests
 {
     [Fact]
@@ -233,6 +308,13 @@ public class ClaudeSessionTests
         Assert.Equal("hi\nthere\n", File.ReadAllText(Path.Combine(dir, "hello.txt")));
         Assert.Equal("fake-session-1", session.SessionId);
         Assert.Equal("allow", FakeClaude.LastDecision(log).GetProperty("behavior").GetString());
+
+        // Images go first, then the prompt.
+        await session.SendUserMessageAsync("describe", images: [new ClaudeImage("image/png", "iVBORw0KGgo=")]);
+        await Eventually(() => events.OfType<ClaudeResult>().Count() == 2);
+        var content = FakeClaude.Log(log).Last(e => e.Kind == "in" && e.Data.GetProperty("type").GetString() == "user").Data.GetProperty("message").GetProperty("content");
+        Assert.Equal(("image", "image/png", "describe"),
+            (content[0].GetProperty("type").GetString(), content[0].GetProperty("source").GetProperty("media_type").GetString(), content[1].GetProperty("text").GetString()));
 
         await session.SetPermissionModeAsync("acceptEdits");
         Assert.Contains(FakeClaude.Log(log), e => e.Kind == "in" && e.Data.GetProperty("type").GetString() == "control_request"

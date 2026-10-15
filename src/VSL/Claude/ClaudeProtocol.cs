@@ -24,8 +24,20 @@ public sealed record ClaudeAssistant(string MessageId, IReadOnlyList<ClaudeBlock
 /// <summary>Results of tool calls, as the user turn that follows them.</summary>
 public sealed record ClaudeToolResults(IReadOnlyList<ClaudeToolResult> Results, string? ParentToolUseId) : ClaudeEvent;
 
-/// <summary>A prompt the user typed (only in saved transcripts; live prompts are shown when sent).</summary>
-public sealed record ClaudeUserText(string Text) : ClaudeEvent;
+/// <summary>
+/// A prompt: the user's (in saved transcripts; live prompts are shown when sent), or the prompt a subagent was
+/// given (<paramref name="ParentToolUseId"/> set).
+/// </summary>
+public sealed record ClaudeUserText(string Text, IReadOnlyList<ClaudeImage> Images, string? ParentToolUseId = null) : ClaudeEvent
+{
+    public ClaudeUserText(string text)
+        : this(text, [])
+    {
+    }
+}
+
+/// <summary>An image sent with a prompt (base64, as in the Messages API).</summary>
+public sealed record ClaudeImage(string MediaType, string Base64);
 
 /// <summary>control_request can_use_tool: Claude needs approval (or answers, for AskUserQuestion / ExitPlanMode).</summary>
 public sealed record ClaudePermissionRequest(
@@ -35,7 +47,8 @@ public sealed record ClaudePermissionRequest(
     JsonElement Input,
     string? Description,
     IReadOnlyList<JsonElement> Suggestions,
-    string? ToolUseId) : ClaudeEvent;
+    string? ToolUseId,
+    string? AgentId = null) : ClaudeEvent;
 
 /// <summary>The end of a turn.</summary>
 public sealed record ClaudeResult(string Subtype, bool IsError, long DurationMs, double? CostUsd, string? Text, string? SessionId) : ClaudeEvent;
@@ -123,12 +136,13 @@ public static class ClaudeProtocol
             case "user" when root.TryGetProperty("message", out var user) && user.TryGetProperty("content", out var userContent):
                 if (userContent.ValueKind == JsonValueKind.String)
                 {
-                    yield return new ClaudeUserText(userContent.GetString() ?? "");
+                    yield return new ClaudeUserText(userContent.GetString() ?? "", [], ParentToolUseId(root));
                     break;
                 }
                 if (userContent.ValueKind != JsonValueKind.Array)
                     break;
                 var results = new List<ClaudeToolResult>();
+                var images = new List<ClaudeImage>();
                 var text = new StringBuilder();
                 foreach (var b in userContent.EnumerateArray())
                 {
@@ -136,11 +150,14 @@ public static class ClaudeProtocol
                         results.Add(new ClaudeToolResult(Str(b, "tool_use_id") ?? "", ResultText(b), Bool(b, "is_error")));
                     else if (Str(b, "type") == "text")
                         text.Append(text.Length > 0 ? "\n" : "").Append(Str(b, "text"));
+                    else if (Str(b, "type") == "image" && b.TryGetProperty("source", out var source) && Str(source, "type") == "base64"
+                             && Str(source, "data") is { } data)
+                        images.Add(new ClaudeImage(Str(source, "media_type") ?? "image/png", data));
                 }
                 if (results.Count > 0)
                     yield return new ClaudeToolResults(results, ParentToolUseId(root));
-                else if (text.Length > 0)
-                    yield return new ClaudeUserText(text.ToString());
+                else if (text.Length > 0 || images.Count > 0)
+                    yield return new ClaudeUserText(text.ToString(), images, ParentToolUseId(root));
                 break;
 
             case "control_request" when root.TryGetProperty("request", out var request) && Str(request, "subtype") == "can_use_tool":
@@ -149,7 +166,7 @@ public static class ClaudeProtocol
                     : [];
                 yield return new ClaudePermissionRequest(Str(root, "request_id") ?? "", Str(request, "tool_name") ?? "", Str(request, "display_name"),
                     request.TryGetProperty("input", out var toolInput) ? toolInput.Clone() : default, Str(request, "description"), suggestions,
-                    Str(request, "tool_use_id"));
+                    Str(request, "tool_use_id"), Str(request, "agent_id"));
                 break;
 
             case "result":

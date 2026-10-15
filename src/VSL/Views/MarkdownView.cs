@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -13,9 +14,17 @@ namespace VSL.Views;
 /// tables, rules, and inline bold / italic / code / links. Text stays selectable. Re-renders are throttled so a
 /// streaming answer does not rebuild on every token.
 /// </summary>
-public sealed class MarkdownView : Decorator
+public sealed partial class MarkdownView : Decorator
 {
     public static readonly StyledProperty<string?> MarkdownProperty = AvaloniaProperty.Register<MarkdownView, string?>(nameof(Markdown));
+
+    /// <summary>Handles clicked links (inherited, so a panel sets it once for every answer inside it).</summary>
+    public static readonly AttachedProperty<System.Windows.Input.ICommand?> LinkCommandProperty =
+        AvaloniaProperty.RegisterAttached<MarkdownView, Control, System.Windows.Input.ICommand?>("LinkCommand", inherits: true);
+
+    public static System.Windows.Input.ICommand? GetLinkCommand(Control control) => control.GetValue(LinkCommandProperty);
+
+    public static void SetLinkCommand(Control control, System.Windows.Input.ICommand? value) => control.SetValue(LinkCommandProperty, value);
 
     static readonly FontFamily CodeFont = new("avares://VSL/Assets/Fonts#Cascadia Mono, DejaVu Sans Mono, monospace");
     static readonly IBrush CodeBackground = new SolidColorBrush(Color.Parse("#1A1A1A"));
@@ -90,70 +99,162 @@ public sealed class MarkdownView : Decorator
             block.FontWeight = w;
         if (foreground is not null)
             block.Foreground = foreground;
+        var links = new List<MdLink>();
         block.Inlines = new InlineCollection();
-        foreach (var inline in Inlines(text))
+        foreach (var inline in Inlines(text, links))
             block.Inlines.Add(inline);
+        if (links.Count > 0)
+            MakeLinksClickable(block, links);
         return block;
     }
 
-    /// <summary>`code`, **bold**, *italic* / _italic_, [text](url).</summary>
-    internal static IEnumerable<Inline> Inlines(string text)
+    /// <summary>
+    /// Links are runs, which cannot take clicks, so the block hit-tests the pointer against the link ranges:
+    /// a hand over a link, and a click (not a selection drag) opens it.
+    /// </summary>
+    static void MakeLinksClickable(SelectableTextBlock block, IReadOnlyList<MdLink> links)
     {
-        var plain = new System.Text.StringBuilder();
-        IEnumerable<Inline> Flush()
+        block.Tag = links;
+        var normal = block.Cursor;
+        block.PointerMoved += (_, e) => block.Cursor = LinkAt(block, e.GetPosition(block)) is null ? normal : HandCursor;
+        block.PointerReleased += (_, e) =>
         {
-            if (plain.Length > 0)
+            if (e.InitialPressMouseButton != MouseButton.Left || block.SelectionStart != block.SelectionEnd)
+                return;
+            if (LinkAt(block, e.GetPosition(block)) is { } link)
             {
-                yield return new Run(plain.ToString());
-                plain.Clear();
+                Activate(block, link.Target);
+                e.Handled = true;
             }
-        }
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            if (c == '`' && text.IndexOf('`', i + 1) is var close and > 0)
-            {
-                foreach (var run in Flush())
-                    yield return run;
-                yield return new Run(text[(i + 1)..close]) { FontFamily = CodeFont, Background = InlineCodeBackground, Foreground = InlineCodeForeground, FontSize = 12 };
-                i = close;
-                continue;
-            }
-            if (c == '*' && i + 1 < text.Length && text[i + 1] == '*' && text.IndexOf("**", i + 2, StringComparison.Ordinal) is var boldEnd and > 0)
-            {
-                foreach (var run in Flush())
-                    yield return run;
-                var bold = new Span { FontWeight = FontWeight.SemiBold };
-                foreach (var inner in Inlines(text[(i + 2)..boldEnd]))
-                    bold.Inlines.Add(inner);
-                yield return bold;
-                i = boldEnd + 1;
-                continue;
-            }
-            if (c is '*' or '_' && i + 1 < text.Length && !char.IsWhiteSpace(text[i + 1]) && (i == 0 || !char.IsLetterOrDigit(text[i - 1]))
-                && text.IndexOf(c, i + 1) is var italicEnd and > 0 && !char.IsWhiteSpace(text[italicEnd - 1])
-                && (italicEnd + 1 >= text.Length || !char.IsLetterOrDigit(text[italicEnd + 1])))
-            {
-                foreach (var run in Flush())
-                    yield return run;
-                yield return new Run(text[(i + 1)..italicEnd]) { FontStyle = FontStyle.Italic };
-                i = italicEnd;
-                continue;
-            }
-            if (c == '[' && text.IndexOf("](", i, StringComparison.Ordinal) is var mid and > 0 && text.IndexOf(')', mid) is var end and > 0
-                && !text[(i + 1)..mid].Contains('\n'))
-            {
-                foreach (var run in Flush())
-                    yield return run;
-                yield return new Run(text[(i + 1)..mid]) { Foreground = LinkBrush, TextDecorations = TextDecorations.Underline };
-                i = end;
-                continue;
-            }
-            plain.Append(c);
-        }
-        foreach (var run in Flush())
-            yield return run;
+        };
     }
+
+    static readonly Cursor HandCursor = new(StandardCursorType.Hand);
+
+    /// <summary>The link under a point of a rendered block, if any.</summary>
+    public static MdLink? LinkAt(SelectableTextBlock block, Point point)
+    {
+        if (block.Tag is not IReadOnlyList<MdLink> links)
+            return null;
+        var hit = block.TextLayout.HitTestPoint(point);
+        if (!hit.IsInside)
+            return null;
+        var index = hit.TextPosition;
+        return links.FirstOrDefault(l => index >= l.Start && index < l.End);
+    }
+
+    static void Activate(Control source, string target)
+    {
+        if (source.GetValue(LinkCommandProperty) is { } command && command.CanExecute(target))
+        {
+            command.Execute(target);
+            return;
+        }
+        if (Uri.TryCreate(target, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" or "mailto")
+            _ = TopLevel.GetTopLevel(source)?.Launcher.LaunchUriAsync(uri);
+    }
+
+    /// <summary>
+    /// Inline Markdown: `code`, **bold**, *italic* / _italic_, [text](url), bare URLs. Links (including inline code
+    /// that names a source file, like `src/App.cs:42`) are recorded with their character range in the block's text.
+    /// </summary>
+    internal static List<Inline> Inlines(string text, List<MdLink> links)
+    {
+        var offset = 0;
+        return Build(text);
+
+        List<Inline> Build(string part)
+        {
+            var result = new List<Inline>();
+            var plain = new System.Text.StringBuilder();
+            void Add(Inline inline, string runText, string? link)
+            {
+                if (link is not null)
+                    links.Add(new MdLink(offset, offset + runText.Length, link));
+                offset += runText.Length;
+                result.Add(inline);
+            }
+            void Flush()
+            {
+                if (plain.Length == 0)
+                    return;
+                var chunk = plain.ToString();
+                plain.Clear();
+                var last = 0;
+                foreach (System.Text.RegularExpressions.Match url in BareUrl().Matches(chunk))
+                {
+                    if (url.Index > last)
+                        Add(new Run(chunk[last..url.Index]), chunk[last..url.Index], null);
+                    var address = url.Value.TrimEnd('.', ',', ';', ':', '!', '?');
+                    Add(LinkRun(address), address, address);
+                    last = url.Index + address.Length;
+                }
+                if (last < chunk.Length)
+                    Add(new Run(chunk[last..]), chunk[last..], null);
+            }
+            for (var i = 0; i < part.Length; i++)
+            {
+                var c = part[i];
+                if (c == '`' && part.IndexOf('`', i + 1) is var close and > 0)
+                {
+                    Flush();
+                    var code = part[(i + 1)..close];
+                    var isFile = FileReference().IsMatch(code);
+                    Add(new Run(code)
+                    {
+                        FontFamily = CodeFont,
+                        Background = InlineCodeBackground,
+                        Foreground = isFile ? LinkBrush : InlineCodeForeground,
+                        FontSize = 12,
+                    }, code, isFile ? code : null);
+                    i = close;
+                    continue;
+                }
+                if (c == '*' && i + 1 < part.Length && part[i + 1] == '*' && part.IndexOf("**", i + 2, StringComparison.Ordinal) is var boldEnd and > 0)
+                {
+                    Flush();
+                    var bold = new Span { FontWeight = FontWeight.SemiBold };
+                    foreach (var inner in Build(part[(i + 2)..boldEnd]))
+                        bold.Inlines.Add(inner);
+                    result.Add(bold);
+                    i = boldEnd + 1;
+                    continue;
+                }
+                if (c is '*' or '_' && i + 1 < part.Length && !char.IsWhiteSpace(part[i + 1]) && (i == 0 || !char.IsLetterOrDigit(part[i - 1]))
+                    && part.IndexOf(c, i + 1) is var italicEnd and > 0 && !char.IsWhiteSpace(part[italicEnd - 1])
+                    && (italicEnd + 1 >= part.Length || !char.IsLetterOrDigit(part[italicEnd + 1])))
+                {
+                    Flush();
+                    var italic = part[(i + 1)..italicEnd];
+                    Add(new Run(italic) { FontStyle = FontStyle.Italic }, italic, null);
+                    i = italicEnd;
+                    continue;
+                }
+                if (c == '[' && part.IndexOf("](", i, StringComparison.Ordinal) is var mid and > 0 && part.IndexOf(')', mid) is var end and > 0
+                    && !part[(i + 1)..mid].Contains('\n'))
+                {
+                    Flush();
+                    var label = part[(i + 1)..mid];
+                    Add(LinkRun(label), label, part[(mid + 2)..end].Trim());
+                    i = end;
+                    continue;
+                }
+                plain.Append(c);
+            }
+            Flush();
+            return result;
+        }
+    }
+
+    static Run LinkRun(string text) => new(text) { Foreground = LinkBrush, TextDecorations = TextDecorations.Underline };
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"https?://[^\s<>()\[\]`]+")]
+    private static partial System.Text.RegularExpressions.Regex BareUrl();
+
+    /// <summary>Inline code that names a source file, optionally with a line: Program.cs, src/A.cs:42, A.razor#L3-L9.</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^[\w.\-/~]*\.(cs|razor|cshtml|csproj|fsproj|vbproj|sln|slnx|props|targets|json|xml|xaml|axaml|config|md|txt|js|ts|tsx|jsx|css|scss|html|htm|yml|yaml|toml|ini|py|sh|sql|proto|fs|vb|ps1|editorconfig|gitignore)((:|#L)\d+((-L?|:)\d+)?)?$")]
+    private static partial System.Text.RegularExpressions.Regex FileReference();
 
     Control CodeBlock(MdCode code)
     {
@@ -239,6 +340,9 @@ public sealed class MarkdownView : Decorator
         };
     }
 }
+
+/// <summary>A link inside a rendered paragraph: its character range and where it points.</summary>
+public sealed record MdLink(int Start, int End, string Target);
 
 public abstract record MdBlock;
 

@@ -108,10 +108,17 @@ public sealed class ClaudeSession : IAsyncDisposable
         return session;
     }
 
-    /// <summary>Sends a prompt; extra text blocks (e.g. the editor context) follow it in the same message.</summary>
-    public Task SendUserMessageAsync(string text, IEnumerable<string>? extraBlocks = null)
+    /// <summary>
+    /// Sends a prompt: images first (as the Messages API recommends), then the text, then extra text blocks such as
+    /// the editor context.
+    /// </summary>
+    public Task SendUserMessageAsync(string text, IEnumerable<string>? extraBlocks = null, IEnumerable<ClaudeImage>? images = null)
     {
-        var content = new List<object> { new { type = "text", text } };
+        var content = new List<object>();
+        foreach (var image in images ?? [])
+            content.Add(new { type = "image", source = new { type = "base64", media_type = image.MediaType, data = image.Base64 } });
+        if (text.Length > 0)
+            content.Add(new { type = "text", text });
         foreach (var block in extraBlocks ?? [])
             content.Add(new { type = "text", text = block });
         return WriteAsync(new

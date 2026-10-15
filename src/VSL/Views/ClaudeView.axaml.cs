@@ -2,7 +2,10 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using VSL.Claude;
 using VSL.ViewModels;
@@ -35,6 +38,88 @@ public partial class ClaudeView : UserControl
                 _vm?.WarmUp();
         };
         AttachedToVisualTree += (_, _) => _vm?.WarmUp();
+
+        // Images and files can be dropped anywhere on the panel.
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DragLeaveEvent, (_, _) => DropOverlay.IsVisible = false);
+        AddHandler(DragDrop.DropEvent, OnDrop);
+    }
+
+    static bool CanAttach(IDataTransfer data) =>
+        data.Contains(DataFormat.File) || data.Contains(DataFormat.Bitmap);
+
+    void OnDragOver(object? sender, DragEventArgs e)
+    {
+        var ok = _vm is not null && CanAttach(e.DataTransfer);
+        e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
+        DropOverlay.IsVisible = ok;
+        e.Handled = true;
+    }
+
+    void OnDrop(object? sender, DragEventArgs e)
+    {
+        DropOverlay.IsVisible = false;
+        if (_vm is not { } vm)
+            return;
+        e.Handled = true;
+        if (e.DataTransfer.TryGetFiles() is { Length: > 0 } files)
+        {
+            vm.AddFiles(files.Select(f => f.TryGetLocalPath()).OfType<string>());
+            return;
+        }
+        if (e.DataTransfer.TryGetBitmap() is { } bitmap)
+            vm.AddImage("dropped image.png", ToPng(bitmap));
+    }
+
+    static byte[] ToPng(Bitmap bitmap)
+    {
+        using var stream = new MemoryStream();
+        bitmap.Save(stream, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        return stream.ToArray();
+    }
+
+    /// <summary>Ctrl+V: an image or files on the clipboard are attached; text is pasted as usual.</summary>
+    async Task PasteAsync()
+    {
+        if (_vm is not { } vm || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+            return;
+        try
+        {
+            if (await clipboard.TryGetFilesAsync() is { Length: > 0 } files)
+            {
+                vm.AddFiles(files.Select(f => f.TryGetLocalPath()).OfType<string>());
+                return;
+            }
+            if (await clipboard.TryGetBitmapAsync() is { } bitmap)
+            {
+                vm.AddImage($"pasted image {vm.Attachments.Count + 1}.png", ToPng(bitmap));
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            vm.AttachmentError = "Could not paste: " + ex.Message;
+            return;
+        }
+        PromptBox.Paste();
+    }
+
+    async void OnAttachClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is not { } vm || TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+            return;
+        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Attach to the prompt",
+            AllowMultiple = true,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Images") { Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp"] },
+                new FilePickerFileType("All files") { Patterns = ["*"] },
+            ],
+        });
+        vm.AddFiles(files.Select(f => f.TryGetLocalPath()).OfType<string>());
     }
 
     bool IsAttachedToVisualTree() => TopLevel.GetTopLevel(this) is not null;
@@ -45,12 +130,20 @@ public partial class ClaudeView : UserControl
         {
             _vm.Items.CollectionChanged -= OnItemsChanged;
             _vm.FocusInputRequested -= FocusPrompt;
+            _vm.OpenUrlRequested -= OpenUrl;
         }
         _vm = vm;
         if (vm is null)
             return;
         vm.Items.CollectionChanged += OnItemsChanged;
         vm.FocusInputRequested += FocusPrompt;
+        vm.OpenUrlRequested += OpenUrl;
+    }
+
+    void OpenUrl(string url)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            _ = TopLevel.GetTopLevel(this)?.Launcher.LaunchUriAsync(uri);
     }
 
     /// <summary>Puts the caret in the prompt (Ctrl+Esc, Ask Claude, new conversation).</summary>
@@ -86,6 +179,10 @@ public partial class ClaudeView : UserControl
         var suggesting = vm.Suggestions.Count > 0;
         switch (e.Key)
         {
+            case Key.V when e.KeyModifiers == KeyModifiers.Control:
+                e.Handled = true;
+                _ = PasteAsync();
+                return;
             case Key.Enter when e.KeyModifiers.HasFlag(KeyModifiers.Shift):
                 // Shift+Enter: a new line (the TextBox inserts it).
                 return;

@@ -16,7 +16,13 @@ public partial class MainViewModel
     ClaudeViewModel CreateClaude()
     {
         var claude = new ClaudeViewModel(Settings, ClaudeWorkingDirectory, ClaudeEditorContextNow, ClaudeFiles);
-        claude.OpenFileRequested += (path, _) => OpenDocument(path);
+        claude.OpenFileRequested += (path, line) =>
+        {
+            if (line is { } l && l > 0)
+                NavigateTo(path, new Lsp.LspRange(new Lsp.LspPosition(l - 1, 0), new Lsp.LspPosition(l - 1, 0)));
+            else
+                OpenDocument(path);
+        };
         claude.DiffRequested += (path, before, after) => ShowDiff(new DiffViewModel(path, before, after, "Current", "Proposed by Claude", "claude"));
         claude.FilesChanged += () =>
         {

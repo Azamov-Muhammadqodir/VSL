@@ -58,6 +58,11 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         SelectedModel = Models.FirstOrDefault(m => m.Value == settings.ClaudeModel) ?? Models[0];
         PermissionMode = settings.ClaudePermissionMode is "acceptEdits" or "plan" ? settings.ClaudePermissionMode : "default";
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsEmpty));
+        Attachments.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasAttachments));
+            SendCommand.NotifyCanExecuteChanged();
+        };
         CheckCli();
     }
 
@@ -70,6 +75,13 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
     public ObservableCollection<ClaudeCommand> Commands { get; } = [];
 
     public ObservableCollection<ClaudeSuggestion> Suggestions { get; } = [];
+
+    /// <summary>Images waiting to go with the next prompt.</summary>
+    public ObservableCollection<ClaudeAttachment> Attachments { get; } = [];
+
+    /// <summary>Why the last file could not be attached.</summary>
+    [ObservableProperty]
+    public partial string? AttachmentError { get; set; }
 
     public bool IsEmpty => Items.Count == 0;
 
@@ -86,6 +98,9 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
     public event Action? AttentionRequested;
 
     public event Action? FocusInputRequested;
+
+    /// <summary>A web link in an answer was clicked.</summary>
+    public event Action<string>? OpenUrlRequested;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsCliMissing))]
@@ -257,13 +272,15 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
 
     // ---- Sending -------------------------------------------------------------------------------------------
 
-    bool CanSend => Prompt.Trim().Length > 0;
+    bool CanSend => Prompt.Trim().Length > 0 || Attachments.Count > 0;
+
+    public bool HasAttachments => Attachments.Count > 0;
 
     [RelayCommand(CanExecute = nameof(CanSend))]
     public async Task Send()
     {
         var text = Prompt.Trim();
-        if (text.Length == 0)
+        if (text.Length == 0 && Attachments.Count == 0)
             return;
         if (text is "/clear" or "/new")
         {
@@ -277,13 +294,16 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         Prompt = "";
         Suggestions.Clear();
         IsHistoryOpen = false;
+        AttachmentError = null;
+        var images = Attachments.ToList();
+        Attachments.Clear();
         var context = IncludeContext ? _editorContext() : null;
-        Items.Add(new UserChatItem(text, context?.Label));
+        Items.Add(new UserChatItem(text, context?.Label, images));
         BeginTurn();
         try
         {
             var session = await EnsureSessionAsync();
-            await session.SendUserMessageAsync(text, context is null ? null : [ContextBlock(context)]);
+            await session.SendUserMessageAsync(text, context is null ? null : [ContextBlock(context)], images.Select(i => i.ToImage()));
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or OperationCanceledException or System.ComponentModel.Win32Exception)
         {
@@ -388,10 +408,22 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
                 OnPropertyChanged(nameof(SessionId));
                 break;
 
-            case ClaudeUserText user:
+            case ClaudeUserText user when user.ParentToolUseId is null:
                 var text = ClaudeHistory.StripContext(user.Text);
-                if (text.Length > 0)
-                    Items.Add(new UserChatItem(text, user.Text.Contains("<ide_context>", StringComparison.Ordinal) ? "editor context" : null));
+                var images = user.Images.Select((image, i) => new ClaudeAttachment($"image {i + 1}", image.MediaType, SafeBase64(image.Base64))).ToList();
+                if (text.Length > 0 || images.Count > 0)
+                    Items.Add(new UserChatItem(text, user.Text.Contains("<ide_context>", StringComparison.Ordinal) ? "editor context" : null, images));
+                break;
+
+            case ClaudeAssistant subagent when subagent.ParentToolUseId is { } parentId:
+                // A subagent's own steps go under its Agent / Task call.
+                if (_tools.TryGetValue(parentId, out var agent))
+                    foreach (var block in subagent.Blocks.OfType<ClaudeToolUseBlock>())
+                    {
+                        var step = BuildTool(block, live);
+                        _tools[block.Id] = step;
+                        agent.AddChild(step);
+                    }
                 break;
 
             case ClaudeBlockStart start:
@@ -427,7 +459,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
                 _thinking = false;
                 break;
 
-            case ClaudeToolResults results when results.ParentToolUseId is null:
+            case ClaudeToolResults results:
                 var changed = false;
                 foreach (var result in results.Results)
                 {
@@ -436,6 +468,8 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
                     tool.State = result.IsError ? ToolState.Error : ToolState.Done;
                     tool.Result = result.Content;
                     tool.Summary = tool.WasDenied ? "Denied by you" : Summarize(tool, result.Content, result.IsError);
+                    foreach (var step in tool.Children.Where(c => c.IsRunning))
+                        step.State = ToolState.Done;
                     changed |= !result.IsError && FileChangingTools.Contains(tool.Name);
                 }
                 if (changed && live)
@@ -595,7 +629,10 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
             case "WebSearch":
                 return new ToolChatItem(tool.Id, tool.Name, "Web Search", Str("query"), null);
             case "Task" or "Agent":
-                return new ToolChatItem(tool.Id, tool.Name, "Task", Str("description"), null) { Code = Str("prompt") };
+            {
+                var kind = Str("subagent_type") is { Length: > 0 } type && type != "general-purpose" ? $" ({type})" : "";
+                return new ToolChatItem(tool.Id, tool.Name, tool.Name, Str("description") + kind, null) { Code = Str("prompt") };
+            }
             case "TodoWrite":
             {
                 var todos = input.TryGetProperty("todos", out var list) && list.ValueKind == JsonValueKind.Array
@@ -630,6 +667,7 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
             "Grep" => lines == 0 || content.StartsWith("No ", StringComparison.Ordinal) ? "No matches" : $"Found {lines} line{(lines == 1 ? "" : "s")}",
             "TodoWrite" => "",
             "Bash" => lines == 0 ? "(No output)" : FirstLine(content, 140),
+            "Task" or "Agent" => $"Done ({tool.Children.Count} tool use{(tool.Children.Count == 1 ? "" : "s")})",
             _ => FirstLine(content, 140),
         };
     }
@@ -702,7 +740,14 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         }
         if (request.ToolUseId is { } id && _tools.TryGetValue(id, out var tool))
             tool.State = ToolState.WaitingForApproval;
-        Items.Add(BuildPermission(request));
+        var card = BuildPermission(request);
+        Items.Add(request.AgentId is null ? card : new PermissionChatItem(request, "A subagent asks: " + card.Question, card.SessionLabel)
+        {
+            Description = card.Description,
+            Code = card.Code,
+            Diff = card.Diff,
+            Proposal = card.Proposal,
+        });
     }
 
     PermissionChatItem BuildPermission(ClaudePermissionRequest request)
@@ -1031,6 +1076,128 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         IsHistoryOpen = false;
         FocusInputRequested?.Invoke();
     }
+
+    // ---- Attachments ---------------------------------------------------------------------------------------
+
+    static byte[] SafeBase64(string data)
+    {
+        try
+        {
+            return Convert.FromBase64String(data);
+        }
+        catch (FormatException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>Attaches an image (PNG, JPEG, GIF or WebP up to 5 MB); returns why not otherwise.</summary>
+    public string? AddImage(string name, byte[] data)
+    {
+        var mediaType = ClaudeAttachment.ImageMediaType(data);
+        AttachmentError = mediaType is null ? $"{name} is not a PNG, JPEG, GIF or WebP image."
+            : data.Length > ClaudeAttachment.MaxBytes ? $"{name} is larger than 5 MB."
+            : null;
+        if (AttachmentError is null)
+            Attachments.Add(new ClaudeAttachment(name, mediaType!, data));
+        return AttachmentError;
+    }
+
+    /// <summary>Dropped or picked files: images are attached, other files are mentioned (@path) so Claude reads them.</summary>
+    public void AddFiles(IEnumerable<string> paths)
+    {
+        var cwd = _workingDirectory();
+        foreach (var path in paths)
+        {
+            if (Directory.Exists(path) || !File.Exists(path))
+            {
+                Mention(path);
+                continue;
+            }
+            var info = new FileInfo(path);
+            if (info.Length <= ClaudeAttachment.MaxBytes * 2)
+            {
+                var head = new byte[12];
+                using (var stream = File.OpenRead(path))
+                    _ = stream.Read(head, 0, head.Length);
+                if (ClaudeAttachment.ImageMediaType(head) is not null)
+                {
+                    AddImage(info.Name, File.ReadAllBytes(path));
+                    continue;
+                }
+            }
+            Mention(path);
+        }
+        FocusInputRequested?.Invoke();
+
+        void Mention(string path)
+        {
+            var shown = path.StartsWith(cwd + "/", StringComparison.Ordinal) ? path[(cwd.Length + 1)..] : path;
+            var mention = "@" + (shown.Contains(' ') ? $"\"{shown}\"" : shown) + " ";
+            Prompt = Prompt.Length == 0 || Prompt.EndsWith(' ') || Prompt.EndsWith('\n') ? Prompt + mention : Prompt + " " + mention;
+        }
+    }
+
+    [RelayCommand]
+    void RemoveAttachment(ClaudeAttachment? attachment)
+    {
+        if (attachment is not null)
+            Attachments.Remove(attachment);
+        AttachmentError = null;
+    }
+
+    // ---- Links in answers ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A link in an answer: web links open in the browser; file references (Program.cs, src/A.cs:42,
+    /// A.cs#L10-L20, file:///...) open in the editor at that line.
+    /// </summary>
+    [RelayCommand]
+    public void OpenLink(string? target)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+            return;
+        target = target.Trim();
+        if (target.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || target.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            || target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+        {
+            OpenUrlRequested?.Invoke(target);
+            return;
+        }
+        if (ResolveFileLink(target) is { } file)
+            OpenFileRequested?.Invoke(file.Path, file.Line);
+    }
+
+    /// <summary>The file and line a link points at, if it names a file that exists.</summary>
+    public (string Path, int? Line)? ResolveFileLink(string target)
+    {
+        if (target.StartsWith("file://", StringComparison.OrdinalIgnoreCase) && Uri.TryCreate(target, UriKind.Absolute, out var uri))
+            target = uri.LocalPath + uri.Fragment;
+        int? line = null;
+        var match = FileLinkLine().Match(target);
+        if (match.Success)
+        {
+            line = int.Parse(match.Groups[1].Value);
+            target = target[..match.Index];
+        }
+        if (target.Length == 0)
+            return null;
+        var cwd = _sessionCwd ?? _workingDirectory();
+        var path = Path.IsPathRooted(target) ? target : Path.GetFullPath(Path.Combine(cwd, target));
+        if (File.Exists(path))
+            return (path, line);
+        // A bare file name ("Program.cs:12"): open it when exactly one project file has that name.
+        if (!target.Contains('/'))
+        {
+            var candidates = _projectFiles().Where(f => Path.GetFileName(f).Equals(target, StringComparison.Ordinal)).Take(2).ToList();
+            if (candidates.Count == 1)
+                return (candidates[0], line);
+        }
+        return null;
+    }
+
+    [GeneratedRegex(@"(?::|#L)(\d+)(?:(?:-L?|:)\d+)?$")]
+    private static partial Regex FileLinkLine();
 
     // ---- Completion ----------------------------------------------------------------------------------------
 

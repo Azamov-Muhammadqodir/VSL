@@ -553,6 +553,59 @@ public class UiTests
         await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
         Snapshot(window, "claude-answer");
 
+        // Links in answers are clickable: a file reference opens the file at its line.
+        (string Path, int? Line)? opened = null;
+        vm.OpenFileRequested += (path, line) => opened = (path, line);
+        var answerBlock = window.GetVisualDescendants().OfType<Avalonia.Controls.SelectableTextBlock>()
+            .Single(b => b.Tag is IReadOnlyList<MdLink> l && l.Any(x => x.Target == "Program.cs#L1"));
+        var fileLink = ((IReadOnlyList<MdLink>)answerBlock.Tag!).First(x => x.Target == "Program.cs#L1");
+        var at = answerBlock.TextLayout.HitTestTextPosition(fileLink.Start + 1);
+        var click = answerBlock.TranslatePoint(new Point(at.X + 2, at.Y + at.Height / 2), window)!.Value;
+        Assert.Equal(fileLink, MarkdownView.LinkAt(answerBlock, new Point(at.X + 2, at.Y + at.Height / 2)));
+        window.MouseDown(click, Avalonia.Input.MouseButton.Left);
+        window.MouseUp(click, Avalonia.Input.MouseButton.Left);
+        Assert.Equal((Path.Combine(dir, "Program.cs"), 1), opened);
+
+        // Images can be attached (and pasted or dropped); other files are mentioned so Claude reads them.
+        Assert.NotNull(vm.AddImage("notes.bin", [1, 2, 3]));
+        Assert.Contains("not a PNG", vm.AttachmentError);
+        Assert.Null(vm.AddImage("red.png", RedPng()));
+        File.WriteAllText(Path.Combine(dir, "notes.txt"), "the secret word is pineapple\n");
+        vm.AddFiles([Path.Combine(dir, "notes.txt")]);
+        Assert.Equal("@notes.txt ", vm.Prompt);
+        Assert.Single(vm.Attachments);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Snapshot(window, "claude-attachment");
+        vm.Prompt = "describe this";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        Assert.Empty(vm.Attachments);
+        var withImage = vm.Items.OfType<UserChatItem>().Last();
+        Assert.NotNull(Assert.Single(withImage.Images).Thumbnail);
+        Assert.Equal("I see 1 image (image/png).", vm.Items.OfType<TextChatItem>().Last().Text);
+
+        // A subagent's steps show under its Agent call; its approvals say they come from the subagent.
+        var userBubbles = vm.Items.OfType<UserChatItem>().Count();
+        vm.Prompt = "use an agent";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.Items.OfType<PermissionChatItem>().Any(), TimeSpan.FromSeconds(10));
+        var agent = vm.Items.OfType<ToolChatItem>().Single(t => t.Name == "Agent");
+        Assert.Equal(("Agent", "Find the secret word"), (agent.Title, agent.Target));
+        Assert.Equal(["Search", "Read", "Bash"], agent.Children.Select(c => c.Title));
+        Assert.True(agent.Children[2].IsRunning);
+        Assert.Equal("3 tool uses", agent.Summary);
+        var subagentCard = vm.Items.OfType<PermissionChatItem>().Single();
+        Assert.Equal("A subagent asks: Allow Claude to run this command?", subagentCard.Question);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Snapshot(window, "claude-agent");
+        await vm.AllowCommand.ExecuteAsync(subagentCard);
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        Assert.Equal("Done (3 tool uses)", agent.Summary);
+        Assert.All(agent.Children, c => Assert.True(c.IsDone));
+        Assert.Equal(userBubbles + 1, vm.Items.OfType<UserChatItem>().Count());
+        Assert.Equal("The subagent found **pineapple**.", vm.Items.OfType<TextChatItem>().Last().Text);
+        vm.Items.Clear();
+
         // An edit needs approval: the card shows the diff; allowing it for the session switches to auto-accept.
         var filesChanged = 0;
         vm.FilesChanged += () => filesChanged++;
@@ -660,6 +713,53 @@ public class UiTests
         Assert.Equal("acceptEdits", argv[argv.IndexOf("--permission-mode") + 1]);
         window.Close();
         await vm.DisposeAsync();
+    }
+
+    [AvaloniaFact]
+    public async Task Claude_prompt_pastes_images_and_text()
+    {
+        var (dir, _) = FakeClaude.Workspace();
+        var vm = new ClaudeViewModel(new VSL.Services.Settings(), () => dir, () => null, () => [], () => FakeClaude.Executable);
+        var view = new ClaudeView { DataContext = vm };
+        var window = new Avalonia.Controls.Window { Width = 480, Height = 700, Content = view };
+        window.Show();
+        var prompt = view.GetVisualDescendants().OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "PromptBox");
+        prompt.Focus();
+
+        // An image on the clipboard becomes an attachment...
+        // The headless clipboard hands back this very bitmap, so it stays alive until the paste is done.
+        using var image = new Avalonia.Media.Imaging.Bitmap(new MemoryStream(RedPng()));
+        await Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(window.Clipboard!, image);
+        Assert.True(prompt.IsFocused);
+        window.KeyPress(Avalonia.Input.Key.V, Avalonia.Input.RawInputModifiers.Control, Avalonia.Input.PhysicalKey.V, "v");
+        await WaitUntil(() => vm.Attachments.Count == 1, TimeSpan.FromSeconds(5));
+        Assert.Equal(("pasted image 1.png", "image/png"), (vm.Attachments[0].Name, vm.Attachments[0].MediaType));
+
+        // ...and text is pasted as text.
+        await Avalonia.Input.Platform.ClipboardExtensions.SetTextAsync(window.Clipboard!, "explain this");
+        window.KeyPress(Avalonia.Input.Key.V, Avalonia.Input.RawInputModifiers.Control, Avalonia.Input.PhysicalKey.V, "v");
+        await WaitUntil(() => vm.Prompt == "explain this", TimeSpan.FromSeconds(5));
+        Assert.Equal("explain this", vm.Prompt);
+        Assert.Single(vm.Attachments);
+        window.Close();
+        await vm.DisposeAsync();
+    }
+
+    /// <summary>A small red PNG, encoded by Avalonia.</summary>
+    static byte[] RedPng()
+    {
+        using var bitmap = new Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(24, 16), new Vector(96, 96),
+            Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Premul);
+        using (var buffer = bitmap.Lock())
+        {
+            var pixels = new byte[24 * 16 * 4];
+            for (var i = 0; i < pixels.Length; i += 4)
+                (pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]) = ((byte)30, (byte)30, (byte)220, (byte)255);
+            System.Runtime.InteropServices.Marshal.Copy(pixels, 0, buffer.Address, pixels.Length);
+        }
+        using var stream = new MemoryStream();
+        bitmap.Save(stream, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        return stream.ToArray();
     }
 
     [AvaloniaFact]

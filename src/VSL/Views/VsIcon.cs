@@ -37,7 +37,7 @@ public sealed class VsIcon : Control
         "Error", "Warning", "Info", "Ok", "Pending", "Running", "Solution", "Folder", "FolderOpen", "PropertiesFolder", "WebFolder", "Project",
         "Dependencies", "Package", "Framework", "cs", "razor", "css", "js", "json", "xml", "html", "sql", "md", "proto",
         "yaml", "image", "binary", "file", "CloneRepository", "OpenProject", "NewProject", "FsProject", "VbProject", "ArrowRight",
-        "Claude", "History", "Send", "Copy", "Eye", "EyeOff",
+        "Claude", "History", "Send", "Copy", "Eye", "EyeOff", "Attach",
     ];
 
     public string? Kind
@@ -436,6 +436,10 @@ public sealed class VsIcon : Control
                 break;
             case "EyeOff":
                 Stroke(dc, "M1,8 C3,4.3 13,4.3 15,8 C13,11.7 3,11.7 1,8 Z M2.5,13.5 L13.5,2.5", fg, 1.1);
+                break;
+            case "Attach":
+                // A paper clip.
+                Stroke(dc, "M11.5,5.5 L6,11 C5,12 3.6,12 2.8,11.2 C2,10.4 2,9 3,8 L9,2 C9.8,1.2 11.2,1.2 12,2 C12.8,2.8 12.8,4.2 12,5 L6.3,10.7 C5.9,11.1 5.3,11.1 4.9,10.7 C4.5,10.3 4.5,9.7 4.9,9.3 L9.5,4.7", fg, 1.1);
                 break;
             case "ArrowRight":
                 Stroke(dc, "M2.5,8 L13,8 M9,4 L13,8 L9,12", fg, 1.3);
