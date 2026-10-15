@@ -117,7 +117,7 @@ public partial class MainWindow
         columns[1].Width = new GridLength(left ? 4 : 0);
         LeftDock.IsVisible = LeftSplitter.IsVisible = left;
 
-        columns[4].Width = right ? (columns[4].Width.Value > 0 ? columns[4].Width : new GridLength(340)) : new GridLength(0);
+        columns[4].Width = right ? (columns[4].Width.Value > 0 ? columns[4].Width : new GridLength(400)) : new GridLength(0);
         columns[3].Width = new GridLength(right ? 4 : 0);
         RightDock.IsVisible = RightSplitter.IsVisible = right;
 
@@ -225,7 +225,7 @@ public partial class MainWindow
     /// <summary>Window > Reset Window Layout: every tool window back to its default group.</summary>
     public void ResetWindowLayout()
     {
-        foreach (var id in new[] { ToolWindows.SolutionExplorer, ToolWindows.TestExplorer, ToolWindows.GitChanges })
+        foreach (var id in new[] { ToolWindows.SolutionExplorer, ToolWindows.TestExplorer, ToolWindows.GitChanges, ToolWindows.Claude })
             MoveToolWindow(id, DockSide.Right);
         foreach (var id in new[] { ToolWindows.ErrorList, ToolWindows.Output, ToolWindows.FindResults, ToolWindows.Locals, ToolWindows.Watch, ToolWindows.CallStack, ToolWindows.Terminal })
             MoveToolWindow(id, DockSide.Bottom);

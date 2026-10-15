@@ -37,6 +37,7 @@ public sealed class VsIcon : Control
         "Error", "Warning", "Info", "Ok", "Pending", "Running", "Solution", "Folder", "FolderOpen", "PropertiesFolder", "WebFolder", "Project",
         "Dependencies", "Package", "Framework", "cs", "razor", "css", "js", "json", "xml", "html", "sql", "md", "proto",
         "yaml", "image", "binary", "file", "CloneRepository", "OpenProject", "NewProject", "FsProject", "VbProject", "ArrowRight",
+        "Claude", "History", "Send", "Copy", "Eye", "EyeOff",
     ];
 
     public string? Kind
@@ -412,6 +413,29 @@ public sealed class VsIcon : Control
                 Fill(dc, "M2,0.5 L8.5,0.5 L12.5,4.5 L12.5,9 L11.5,9 L11.5,5.5 L7.5,5.5 L7.5,1.5 L3,1.5 L3,14.5 L8,14.5 L8,15.5 L2,15.5 Z", Page);
                 Fill(dc, "M8.5,1.9 L11.1,4.5 L8.5,4.5 Z", Page);
                 Stroke(dc, "M12.5,10 L12.5,15.5 M9.75,12.75 L15.25,12.75", Blue, 1.6);
+                break;
+            // ---- Claude Code panel ---------------------------------------------------------------------------
+            case "Claude":
+                // A warm eight-ray spark.
+                Stroke(dc, "M8,1.5 L8,14.5 M1.5,8 L14.5,8 M3.4,3.4 L12.6,12.6 M12.6,3.4 L3.4,12.6", Color.Parse("#D97757"), 2.1);
+                Fill(dc, "M8,5.6 A2.4,2.4 0 1 0 8,10.4 A2.4,2.4 0 1 0 8,5.6 Z", Color.Parse("#D97757"));
+                break;
+            case "History":
+                Stroke(dc, "M2.6,8 A5.4,5.4 0 1 0 4.2,4.2 M8,4.8 L8,8.3 L10.4,9.8", fg, 1.3);
+                Fill(dc, "M1.4,2.6 L4.9,2.9 L4.4,6.3 Z", fg);
+                break;
+            case "Send":
+                Stroke(dc, "M8,13 L8,3.5 M3.8,7.6 L8,3.4 L12.2,7.6", fg, 1.8);
+                break;
+            case "Copy":
+                Stroke(dc, "M5.5,5.5 L13.5,5.5 L13.5,14.5 L5.5,14.5 Z M3.5,11 L2.5,11 L2.5,1.5 L10.5,1.5 L10.5,2.5", fg, 1.1);
+                break;
+            case "Eye":
+                Stroke(dc, "M1,8 C3,4.3 13,4.3 15,8 C13,11.7 3,11.7 1,8 Z", fg, 1.1);
+                Fill(dc, "M8,5.9 A2.1,2.1 0 1 0 8,10.1 A2.1,2.1 0 1 0 8,5.9 Z", fg);
+                break;
+            case "EyeOff":
+                Stroke(dc, "M1,8 C3,4.3 13,4.3 15,8 C13,11.7 3,11.7 1,8 Z M2.5,13.5 L13.5,2.5", fg, 1.1);
                 break;
             case "ArrowRight":
                 Stroke(dc, "M2.5,8 L13,8 M9,4 L13,8 L9,12", fg, 1.3);

@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using VSL.Claude;
 using VSL.ViewModels;
 using VSL.Testing;
 using VSL.Views;
@@ -41,8 +42,12 @@ public class UiTests
     /// <summary>A view model with no remembered per-solution state, so tests do not depend on each other's order.</summary>
     static MainViewModel NewViewModel()
     {
+        // The Claude Code window must never start the user's real CLI from a test.
+        FakeClaude.Ensure();
         var vm = new MainViewModel();
         vm.Settings.Solutions.Clear();
+        vm.Settings.ClaudePermissionMode = null;
+        vm.Settings.ClaudeModel = null;
         vm.Settings.EditorZoom = 1.0;
         VSL.Editor.EditorHost.DefaultZoom = 1.0;
         return vm;
@@ -504,6 +509,174 @@ public class UiTests
         while (host.Editor.CanUndo)
             host.Editor.Undo();
         Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
+    public async Task Claude_panel_runs_conversations_with_tools_and_approvals()
+    {
+        var (dir, log) = FakeClaude.Workspace();
+        var settings = new VSL.Services.Settings();
+        var context = new ClaudeEditorContext(Path.Combine(dir, "Program.cs"), 1, 1, "Console.WriteLine(\"Hello\");");
+        var vm = new ClaudeViewModel(settings, () => dir, () => context, () => Directory.EnumerateFiles(dir), () => FakeClaude.Executable);
+        var window = new Avalonia.Controls.Window { Width = 560, Height = 980, Content = new ClaudeView { DataContext = vm } };
+        window.Show();
+
+        // Showing the panel starts the CLI: commands and models arrive before the first prompt.
+        await WaitUntil(() => vm.Commands.Count > 0, TimeSpan.FromSeconds(10));
+        Assert.Equal(["Default (recommended)", "Haiku"], vm.Models.Select(m => m.Label));
+        Assert.Equal("Claude Pro · tests@example.invalid", vm.Account);
+        Snapshot(window, "claude-empty");
+        vm.Prompt = "/co";
+        Assert.Equal("/compact", Assert.Single(vm.Suggestions).Label);
+        vm.ApplySuggestionCommand.Execute(vm.Suggestions[0]);
+        Assert.Equal("/compact ", vm.Prompt);
+        vm.Prompt = "look at @Prog";
+        vm.ApplySuggestionCommand.Execute(Assert.Single(vm.Suggestions, s => s.Label == "Program.cs"));
+        Assert.Equal("look at @Program.cs ", vm.Prompt);
+
+        // A question: thinking, tool calls with their outcome, a todo list and a Markdown answer.
+        vm.RefreshContext();
+        Assert.Equal("Program.cs:1", vm.ContextLabel);
+        vm.Prompt = "Explain this program";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        Assert.Equal("Program.cs:1", Assert.IsType<UserChatItem>(vm.Items[0]).Context);
+        Assert.Contains("look at the file", vm.Items.OfType<ThinkingChatItem>().Single().Text);
+        var read = vm.Items.OfType<ToolChatItem>().Single(t => t.Name == "Read");
+        Assert.Equal(("Program.cs", "Read 2 lines", true), (read.Target, read.Summary, read.IsDone));
+        Assert.Equal(["Read Program.cs", "Explain it"], vm.Items.OfType<ToolChatItem>().Single(t => t.Name == "TodoWrite").Todos.Select(t => t.Content));
+        Assert.StartsWith("## Answer", vm.Items.OfType<TextChatItem>().Last().Text);
+        var prompt = FakeClaude.Log(log).Last(e => e.Kind == "in" && e.Data.GetProperty("type").GetString() == "user").Data;
+        var content = prompt.GetProperty("message").GetProperty("content");
+        Assert.Equal("Explain this program", content[0].GetProperty("text").GetString());
+        Assert.Contains("selected lines 1-1", content[1].GetProperty("text").GetString());
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        Snapshot(window, "claude-answer");
+
+        // An edit needs approval: the card shows the diff; allowing it for the session switches to auto-accept.
+        var filesChanged = 0;
+        vm.FilesChanged += () => filesChanged++;
+        vm.Prompt = "write a hello file";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.Items.OfType<PermissionChatItem>().Any(), TimeSpan.FromSeconds(10));
+        var card = vm.Items.OfType<PermissionChatItem>().Single();
+        Assert.Equal("Allow Claude to create hello.txt?", card.Question);
+        Assert.Equal("Yes, allow all edits during this session", card.SessionLabel);
+        Assert.Equal(["hi", "there"], card.Diff.Select(d => d.Text));
+        var write = vm.Items.OfType<ToolChatItem>().Single(t => t.Name == "Write");
+        Assert.True(write.IsRunning);
+        Assert.False(write.ShowDiff);
+        Assert.StartsWith("Waiting for you", vm.StatusText);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        Snapshot(window, "claude-permission");
+        await vm.AllowForSessionCommand.ExecuteAsync(card);
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        Assert.Equal("hi\nthere\n", File.ReadAllText(Path.Combine(dir, "hello.txt")));
+        Assert.Equal("acceptEdits", vm.PermissionMode);
+        Assert.Equal("acceptEdits", settings.ClaudePermissionMode);
+        Assert.Equal(1, filesChanged);
+        var decision = FakeClaude.LastDecision(log);
+        Assert.Equal("allow", decision.GetProperty("behavior").GetString());
+        Assert.Equal("acceptEdits", decision.GetProperty("updatedPermissions")[0].GetProperty("mode").GetString());
+
+        // Saying no with a reason passes the reason to Claude.
+        vm.Prompt = "run bash";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.Items.OfType<PermissionChatItem>().Count() == 2, TimeSpan.FromSeconds(10));
+        var bash = vm.Items.OfType<PermissionChatItem>().Last();
+        Assert.Equal(("Allow Claude to run this command?", "echo hi"), (bash.Question, bash.Code));
+        Assert.Equal("Yes, and don't ask again for Bash(echo:*) in this project", bash.SessionLabel);
+        bash.Feedback = "use dotnet build instead";
+        await vm.DenyCommand.ExecuteAsync(bash);
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        decision = FakeClaude.LastDecision(log);
+        Assert.Equal("deny", decision.GetProperty("behavior").GetString());
+        Assert.Contains("use dotnet build instead", decision.GetProperty("message").GetString());
+        var bashTool = vm.Items.OfType<ToolChatItem>().Single(t => t.Name == "Bash");
+        Assert.Equal((true, "Denied by you"), (bashTool.IsError, bashTool.Summary));
+        Assert.True(write.ShowDiff);
+
+        // Clarifying questions come back as answers keyed by question.
+        vm.Prompt = "ask me something";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.Items.OfType<QuestionChatItem>().Any(), TimeSpan.FromSeconds(10));
+        var question = vm.Items.OfType<QuestionChatItem>().Single();
+        await vm.SubmitAnswersCommand.ExecuteAsync(question);
+        Assert.Equal("Answer each question first.", question.Outcome);
+        question.Questions[0].Options[0].IsSelected = true;
+        question.Questions[0].Options[1].IsSelected = true;
+        Assert.False(question.Questions[0].Options[0].IsSelected);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Snapshot(window, "claude-question");
+        await vm.SubmitAnswersCommand.ExecuteAsync(question);
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        Assert.Equal("You picked SQLite.", vm.Items.OfType<TextChatItem>().Last().Text);
+
+        // A plan is approved with the edit mode chosen on the card.
+        vm.Prompt = "plan it";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.Items.OfType<PlanChatItem>().Any(), TimeSpan.FromSeconds(10));
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Snapshot(window, "claude-plan");
+        await vm.ApprovePlanManuallyCommand.ExecuteAsync(vm.Items.OfType<PlanChatItem>().Single());
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        Assert.Equal("default", vm.PermissionMode);
+        Assert.Equal("default", FakeClaude.LastDecision(log).GetProperty("updatedPermissions")[0].GetProperty("mode").GetString());
+        Assert.Equal("Plan approved.", vm.Items.OfType<TextChatItem>().Last().Text);
+
+        // Changing the mode while the CLI runs is sent to it.
+        vm.CycleModeCommand.Execute(null);
+        Assert.Equal("Edit automatically", vm.ModeLabel);
+        await WaitUntil(() => FakeClaude.Log(log).Any(e => e.Kind == "in" && e.Data.ToString().Contains("\"set_permission_mode\"", StringComparison.Ordinal)), TimeSpan.FromSeconds(5));
+
+        // Stop interrupts a running turn.
+        vm.Prompt = "slow job";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => vm.Items.OfType<TextChatItem>().LastOrDefault()?.Text == "Working on it", TimeSpan.FromSeconds(10));
+        Assert.True(vm.IsRunning);
+        await vm.StopCommand.ExecuteAsync(null);
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        Assert.Equal("Interrupted.", vm.Items.OfType<NoticeChatItem>().Last().Text);
+
+        // Past conversations of the folder can be reopened and continued (--resume).
+        await vm.NewConversationCommand.ExecuteAsync(null);
+        Assert.Empty(vm.Items);
+        FakeClaude.WriteTranscript(dir, "old-session");
+        vm.ToggleHistoryCommand.Execute(null);
+        Assert.True(vm.IsHistoryOpen);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(200));
+        Snapshot(window, "claude-history");
+        var past = Assert.Single(vm.History);
+        Assert.Equal("Fix the build", past.Title);
+        await vm.ResumeConversationCommand.ExecuteAsync(past);
+        Assert.Equal("Fix the build", Assert.IsType<UserChatItem>(vm.Items[0]).Text);
+        Assert.Equal("Fixed.", vm.Items.OfType<TextChatItem>().Last().Text);
+        Assert.True(vm.Items.OfType<ToolChatItem>().Single().IsDone);
+        vm.Prompt = "thanks";
+        await vm.SendCommand.ExecuteAsync(null);
+        await WaitUntil(() => !vm.IsRunning, TimeSpan.FromSeconds(10));
+        var argv = FakeClaude.Log(log).Last(e => e.Kind == "argv").Data.EnumerateArray().Select(a => a.GetString()).ToList();
+        Assert.Equal("old-session", argv[argv.IndexOf("--resume") + 1]);
+        Assert.Equal("acceptEdits", argv[argv.IndexOf("--permission-mode") + 1]);
+        window.Close();
+        await vm.DisposeAsync();
+    }
+
+    [AvaloniaFact]
+    public async Task Claude_window_opens_from_the_ide_with_ctrl_esc()
+    {
+        var vm = NewViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1500, Height = 900 };
+        window.Show();
+        window.KeyPress(Avalonia.Input.Key.Escape, Avalonia.Input.RawInputModifiers.Control, Avalonia.Input.PhysicalKey.Escape, null);
+        Assert.True(window.IsToolWindowShowing(ToolWindows.Claude));
+        // The panel starts the CLI (the fake here) as soon as it is shown.
+        await WaitUntil(() => vm.Claude.Commands.Count > 0, TimeSpan.FromSeconds(10));
+        Assert.Contains(vm.Claude.Commands, c => c.Name == "compact");
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        Snapshot(window, "claude-in-ide");
+        await vm.ShutdownClaudeAsync();
+        window.Close();
     }
 
     [AvaloniaFact]

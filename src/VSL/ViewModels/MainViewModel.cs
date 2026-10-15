@@ -25,6 +25,7 @@ public static class ToolWindows
     public const string Watch = "Watch";
     public const string CallStack = "CallStack";
     public const string Terminal = "Terminal";
+    public const string Claude = "Claude";
 }
 
 public enum StatusKind
@@ -189,6 +190,7 @@ public partial class MainViewModel : ObservableObject
     partial void OnActiveDocumentChanged(DocumentTab? value)
     {
         UpdateCaretText();
+        _claude?.RefreshContext();
         if (value is not DocumentViewModel editor)
             return;
         // Like VS, refresh squiggles for the document the user switches to.
@@ -280,6 +282,7 @@ public partial class MainViewModel : ObservableObject
         // New shells start in the solution folder, like VS's Developer terminal.
         if (_terminal is { } terminal)
             terminal.WorkingDirectory = solution.Directory;
+        await OnClaudeSolutionChangedAsync();
         await StartLanguageServerAsync();
     }
 
@@ -328,6 +331,7 @@ public partial class MainViewModel : ObservableObject
         ResetTesting();
         CloseGit();
         Solution = null;
+        await OnClaudeSolutionChangedAsync();
         SetStatus("Ready", StatusKind.NoSolution);
         return true;
     }
@@ -507,6 +511,7 @@ public partial class MainViewModel : ObservableObject
         host.WorkspaceOperationsRequested += ApplyWorkspaceOperationsAsync;
         host.Saved += () => _ = RefreshGitAsync();
         host.CompareRequested += () => _ = CompareWithUnmodifiedAsync(doc);
+        host.AskClaudeRequested += ShowClaude;
         host.ZoomChanged += () => Settings.EditorZoom = host.Zoom;
         host.PromptRequested += initial => Dialogs?.PromptAsync("Rename", "New name:", initial) ?? Task.FromResult<string?>(null);
     }

@@ -132,6 +132,9 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
     /// <summary>Git > Compare with Unmodified for this document.</summary>
     public event Action? CompareRequested;
 
+    /// <summary>Ask Claude about this file or selection (opens the Claude Code window).</summary>
+    public event Action? AskClaudeRequested;
+
     public bool HasGitBaseline => _gitBaseline is not null;
     public event Action? CaretMoved;
     public event Action? DiagnosticsChanged;
@@ -826,6 +829,8 @@ public sealed class EditorHost : IDisposable, IDebugLineSource
         {
             ItemsSource = new object[]
             {
+                Item("Ask Claude", "Ctrl+Esc", () => AskClaudeRequested?.Invoke()),
+                new Separator(),
                 Item("Quick Actions and Refactorings...", "Ctrl+.", ShowQuickActions),
                 Item("Rename...", "F2", () => _ = RenameAsync()),
                 new Separator(),

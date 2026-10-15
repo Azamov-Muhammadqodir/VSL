@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""A stand-in for the Claude Code CLI in stream-json mode, for VSL's tests.
+
+It speaks the same JSON lines as `claude --input-format stream-json --output-format stream-json`: it answers
+control requests, streams text, asks for permission with can_use_tool, and ends turns with a result. Every line
+it receives (and its arguments) is appended to <workspace>.fake-claude.log so tests can check what VSL sent. What it does
+for a prompt depends on a keyword in it: write, edit, bash, ask, plan, slow; anything else gets a Markdown answer.
+"""
+import json
+import os
+import sys
+import uuid
+
+ARGS = sys.argv[1:]
+SESSION = ARGS[ARGS.index("--resume") + 1] if "--resume" in ARGS else "fake-session-1"
+CWD = os.getcwd()
+# Test workspaces are named vsl-claude-*; their log sits next to them so parallel tests never share one.
+LOG = os.path.join(os.path.dirname(CWD), os.path.basename(CWD) + ".fake-claude.log") if os.path.basename(CWD).startswith("vsl-claude-") else None
+counter = [0]
+
+
+def log(kind, data):
+    if not LOG:
+        return
+    try:
+        with open(LOG, "a") as f:
+            f.write(json.dumps({"kind": kind, "data": data}) + "\n")
+    except OSError:
+        pass
+
+
+def out(obj):
+    sys.stdout.write(json.dumps(obj) + "\n")
+    sys.stdout.flush()
+
+
+def read():
+    line = sys.stdin.readline()
+    if not line:
+        sys.exit(0)
+    message = json.loads(line)
+    log("in", message)
+    return message
+
+
+def handle_control(message):
+    request = message["request"]
+    subtype = request.get("subtype")
+    response = {}
+    if subtype == "initialize":
+        response = {
+            "commands": [
+                {"name": "compact", "description": "Clear history but keep a summary", "argumentHint": ""},
+                {"name": "review", "description": "Review a pull request", "argumentHint": ""},
+            ],
+            "models": [
+                {"value": "default", "displayName": "Default (recommended)", "description": "Fake default"},
+                {"value": "haiku", "displayName": "Haiku", "description": "Fast"},
+            ],
+            "account": {"email": "tests@example.invalid", "subscriptionType": "Claude Pro"},
+            "current_permission_mode": "default",
+        }
+    elif subtype == "set_permission_mode":
+        response = {"mode": request.get("mode")}
+    out({"type": "control_response", "response": {"subtype": "success", "request_id": message["request_id"], "response": response}})
+    return subtype
+
+
+def next_id():
+    counter[0] += 1
+    return f"msg_{counter[0]}"
+
+
+def event(mid, ev):
+    out({"type": "stream_event", "event": ev, "api_message_id": mid, "parent_tool_use_id": None, "session_id": SESSION})
+
+
+def stream_text(text):
+    mid = next_id()
+    event(mid, {"type": "message_start", "message": {"id": mid}})
+    event(mid, {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}})
+    for i in range(0, len(text), 7):
+        event(mid, {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": text[i:i + 7]}})
+    event(mid, {"type": "content_block_stop", "index": 0})
+    event(mid, {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 42}})
+    out({"type": "assistant", "message": {"id": mid, "role": "assistant", "content": [{"type": "text", "text": text}]},
+         "parent_tool_use_id": None, "session_id": SESSION})
+
+
+def think(text):
+    mid = next_id()
+    event(mid, {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}})
+    event(mid, {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": text}})
+    out({"type": "assistant", "message": {"id": mid, "role": "assistant", "content": [{"type": "thinking", "thinking": text}]},
+         "parent_tool_use_id": None, "session_id": SESSION})
+
+
+def tool_use(tool_id, name, tool_input):
+    out({"type": "assistant", "message": {"id": next_id(), "role": "assistant",
+         "content": [{"type": "tool_use", "id": tool_id, "name": name, "input": tool_input}]},
+         "parent_tool_use_id": None, "session_id": SESSION})
+
+
+def tool_result(tool_id, content, is_error=False):
+    out({"type": "user", "message": {"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": tool_id, "content": content, "is_error": is_error}]},
+        "parent_tool_use_id": None, "session_id": SESSION})
+
+
+def result(text, subtype="success", is_error=False):
+    out({"type": "result", "subtype": subtype, "is_error": is_error, "duration_ms": 1200, "total_cost_usd": 0.01,
+         "result": text, "session_id": SESSION})
+
+
+def permission(tool, tool_input, suggestions, tool_id):
+    request_id = str(uuid.uuid4())
+    out({"type": "control_request", "request_id": request_id, "request": {
+        "subtype": "can_use_tool", "tool_name": tool, "display_name": tool, "input": tool_input,
+        "permission_suggestions": suggestions, "tool_use_id": tool_id}})
+    while True:
+        message = read()
+        if message.get("type") == "control_response" and message["response"]["request_id"] == request_id:
+            decision = message["response"]["response"]
+            log("decision", decision)
+            return decision
+        if message.get("type") == "control_request":
+            handle_control(message)
+
+
+def allowed(decision):
+    return decision.get("behavior") == "allow"
+
+
+def turn(prompt):
+    out({"type": "system", "subtype": "init", "session_id": SESSION, "cwd": CWD, "model": "fake", "permissionMode": "default"})
+    p = prompt.lower()
+    if "write" in p:
+        path = os.path.join(CWD, "hello.txt")
+        stream_text("I'll create the file.")
+        tool_input = {"file_path": path, "content": "hi\nthere\n"}
+        tool_use("toolu_write", "Write", tool_input)
+        decision = permission("Write", tool_input, [{"type": "setMode", "mode": "acceptEdits", "destination": "session"}], "toolu_write")
+        if allowed(decision):
+            with open(path, "w") as f:
+                f.write("hi\nthere\n")
+            tool_result("toolu_write", f"File created successfully at: {path}")
+            stream_text("Created **hello.txt**.")
+            result("Created hello.txt.")
+        else:
+            tool_result("toolu_write", "The user doesn't want to proceed with this tool use.", True)
+            if decision.get("interrupt"):
+                result(None, "error_during_execution", True)
+            else:
+                stream_text("OK, I won't.")
+                result("OK")
+    elif "edit" in p:
+        path = os.path.join(CWD, "Program.cs")
+        old, new = 'Console.WriteLine("Hello");', 'Console.WriteLine("Hello, VSL");'
+        tool_input = {"file_path": path, "old_string": old, "new_string": new}
+        tool_use("toolu_edit", "Edit", tool_input)
+        decision = permission("Edit", tool_input, [{"type": "setMode", "mode": "acceptEdits", "destination": "session"}], "toolu_edit")
+        if allowed(decision):
+            with open(path) as f:
+                text = f.read()
+            with open(path, "w") as f:
+                f.write(text.replace(old, new, 1))
+            tool_result("toolu_edit", f"The file {path} has been updated.")
+        else:
+            tool_result("toolu_edit", "The user doesn't want to proceed with this tool use.", True)
+        stream_text("Done.")
+        result("Done.")
+    elif "bash" in p:
+        tool_input = {"command": "echo hi", "description": "Print hi"}
+        tool_use("toolu_bash", "Bash", tool_input)
+        decision = permission("Bash", tool_input, [{"type": "addRules", "rules": [{"toolName": "Bash", "ruleContent": "echo:*"}],
+                                                    "behavior": "allow", "destination": "localSettings"}], "toolu_bash")
+        tool_result("toolu_bash", "hi" if allowed(decision) else decision.get("message", "denied"), not allowed(decision))
+        stream_text("Ran it." if allowed(decision) else "Understood.")
+        result("ok")
+    elif "ask" in p:
+        questions = {"questions": [{"question": "Which database?", "header": "Database", "multiSelect": False, "options": [
+            {"label": "PostgreSQL", "description": "Relational server"}, {"label": "SQLite", "description": "A single file"}]}]}
+        tool_use("toolu_ask", "AskUserQuestion", questions)
+        decision = permission("AskUserQuestion", questions, [], "toolu_ask")
+        answers = decision.get("updatedInput", {}).get("answers", {})
+        tool_result("toolu_ask", json.dumps(answers))
+        stream_text("You picked " + ", ".join(str(v) for v in answers.values()) + ".")
+        result("ok")
+    elif "plan" in p:
+        plan = "## Plan\n\n1. Add a `Greeter` class\n2. Call it from `Program.cs`"
+        tool_use("toolu_plan", "ExitPlanMode", {"plan": plan})
+        decision = permission("ExitPlanMode", {"plan": plan}, [], "toolu_plan")
+        tool_result("toolu_plan", "approved" if allowed(decision) else "rejected", not allowed(decision))
+        stream_text("Plan approved." if allowed(decision) else "Back to planning.")
+        result("ok")
+    elif "slow" in p:
+        stream_text("Working on it")
+        while True:
+            message = read()
+            if message.get("type") == "control_request" and handle_control(message) == "interrupt":
+                result(None, "error_during_execution", True)
+                return
+    else:
+        think("Let me look at the file first.")
+        tool_use("toolu_read", "Read", {"file_path": os.path.join(CWD, "Program.cs")})
+        tool_result("toolu_read", "     1\tConsole.WriteLine(1);\n     2\t// end")
+        tool_use("toolu_todo", "TodoWrite", {"todos": [
+            {"content": "Read Program.cs", "status": "completed", "activeForm": "Reading Program.cs"},
+            {"content": "Explain it", "status": "in_progress", "activeForm": "Explaining it"}]})
+        tool_result("toolu_todo", "Todos have been modified successfully")
+        stream_text("## Answer\n\nThe program prints **one** line:\n\n- uses `Console.WriteLine`\n- has *no* arguments\n\n"
+                    "```csharp\nConsole.WriteLine(1);\n```\n\n| Part | Value |\n|---|---|\n| Output | 1 |")
+        result("answer")
+
+
+log("argv", ARGS)
+while True:
+    message = read()
+    if message.get("type") == "control_request":
+        handle_control(message)
+    elif message.get("type") == "user":
+        content = message["message"]["content"]
+        turn(content if isinstance(content, str) else content[0].get("text", ""))

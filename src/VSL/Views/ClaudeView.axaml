@@ -1,0 +1,489 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VSL.ViewModels"
+             xmlns:c="using:VSL.Claude"
+             xmlns:v="using:VSL.Views"
+             x:Class="VSL.Views.ClaudeView"
+             x:DataType="vm:ClaudeViewModel">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.muted, SelectableTextBlock.muted">
+      <Setter Property="Foreground" Value="#9D9D9D" />
+    </Style>
+    <Style Selector="TextBlock.mono, SelectableTextBlock.mono">
+      <Setter Property="FontFamily" Value="{StaticResource VsCodeFont}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Border.user">
+      <Setter Property="Background" Value="#2C2C2E" />
+      <Setter Property="BorderBrush" Value="#3A3A3D" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12,9" />
+    </Style>
+    <Style Selector="Border.chip">
+      <Setter Property="Background" Value="#38383B" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="6,1" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#262628" />
+      <Setter Property="BorderBrush" Value="#D97757" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12,10" />
+    </Style>
+    <Style Selector="Border.box">
+      <Setter Property="Background" Value="#1A1A1A" />
+      <Setter Property="BorderBrush" Value="#333336" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.diffLine.added">
+      <Setter Property="Background" Value="#203A26" />
+    </Style>
+    <Style Selector="Border.diffLine.removed">
+      <Setter Property="Background" Value="#46262A" />
+    </Style>
+    <Style Selector="Border.diffLine.added > TextBlock">
+      <Setter Property="Foreground" Value="#B5E3BE" />
+    </Style>
+    <Style Selector="Border.diffLine.removed > TextBlock">
+      <Setter Property="Foreground" Value="#F2B8BE" />
+    </Style>
+    <Style Selector="Border.diffLine.gap > TextBlock">
+      <Setter Property="Foreground" Value="#7A7A7A" />
+    </Style>
+    <Style Selector="Ellipse.dot">
+      <Setter Property="Fill" Value="#3FB950" />
+    </Style>
+    <Style Selector="Ellipse.dot.running">
+      <Setter Property="Fill" Value="#8B8B8B" />
+    </Style>
+    <Style Selector="Ellipse.dot.error">
+      <Setter Property="Fill" Value="#F85149" />
+    </Style>
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="#F85149" />
+    </Style>
+    <Style Selector="Button.row">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.row:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.choice">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Background" Value="#333336" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="CornerRadius" Value="5" />
+    </Style>
+    <Style Selector="Button.choice.first">
+      <Setter Property="Background" Value="#3A2A24" />
+      <Setter Property="BorderBrush" Value="#D97757" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button.pill">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="6,3" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#B8B8B8" />
+    </Style>
+    <Style Selector="Button.pill.link">
+      <Setter Property="Foreground" Value="#4DAAFC" />
+      <Setter Property="Padding" Value="0,2" />
+    </Style>
+    <Style Selector="Button.send">
+      <Setter Property="Background" Value="#D97757" />
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.send:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#E48A6C" />
+    </Style>
+    <Style Selector="Button.send:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#4A3A34" />
+    </Style>
+    <Style Selector="Border.input">
+      <Setter Property="Background" Value="#2A2A2C" />
+      <Setter Property="BorderBrush" Value="#444447" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style Selector="Border.input:focus-within">
+      <Setter Property="BorderBrush" Value="#D97757" />
+    </Style>
+    <Style Selector="TextBox.prompt, TextBox.prompt:focus, TextBox.prompt:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBox.prompt:focus /template/ Border#PART_BorderElement, TextBox.prompt:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBox.feedback">
+      <Setter Property="Background" Value="#1E1E1E" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="TextBlock.done">
+      <Setter Property="TextDecorations" Value="Strikethrough" />
+      <Setter Property="Foreground" Value="#8B8B8B" />
+    </Style>
+    <Style Selector="TextBlock.active">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel Background="#1F1F1F">
+    <!-- ===== Header ===== -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource VsEnvironmentBrush}" BorderBrush="#333336" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="8,3">
+        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+          <v:VsIcon Kind="Claude" Width="15" Height="15" />
+          <TextBlock Text="Claude Code" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+          <Button Name="HistoryButton" Classes="tbi" Command="{Binding ToggleHistoryCommand}" ToolTip.Tip="Past conversations">
+            <v:VsIcon Kind="History" />
+          </Button>
+          <Button Name="NewButton" Classes="tbi" Command="{Binding NewConversationCommand}" ToolTip.Tip="New conversation">
+            <v:VsIcon Kind="Plus" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- ===== Prompt ===== -->
+    <Border DockPanel.Dock="Bottom" Classes="input" Margin="10,2,10,10" IsVisible="{Binding !IsCliMissing}">
+      <StackPanel>
+        <ListBox Name="SuggestionList" ItemsSource="{Binding Suggestions}" IsVisible="{Binding Suggestions.Count}" MaxHeight="220"
+                 Background="Transparent" Margin="4,4,4,0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ClaudeSuggestion">
+              <Grid ColumnDefinitions="Auto,*">
+                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" Classes.mono="{Binding IsFile}" />
+                <TextBlock Grid.Column="1" Text="{Binding Detail}" Classes="muted" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" FontSize="12" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <TextBox Name="PromptBox" Classes="prompt" Text="{Binding Prompt}" AcceptsReturn="True" TextWrapping="Wrap"
+                 MinHeight="56" MaxHeight="240" Padding="12,10,12,4" FontSize="13"
+                 PlaceholderText="Ask Claude to edit, fix or explain... (/ for commands, @ for files)" />
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="6,0,6,6">
+          <Button Name="ContextButton" Classes="pill" Command="{Binding ToggleContextCommand}" IsVisible="{Binding HasEditorContext}"
+                  ToolTip.Tip="Send the current file and selection with the prompt (click to toggle)">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <v:VsIcon Kind="Eye" Width="13" Height="13" IsVisible="{Binding IncludeContext}" />
+              <v:VsIcon Kind="EyeOff" Width="13" Height="13" IsVisible="{Binding !IncludeContext}" />
+              <TextBlock Text="{Binding ContextLabel}" VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+          </Button>
+          <Button Name="ModeButton" Grid.Column="1" Classes="pill" Command="{Binding CycleModeCommand}" ToolTip.Tip="Permission mode (Shift+Tab)">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <v:VsIcon Kind="{Binding ModeIcon}" Width="13" Height="13" />
+              <TextBlock Text="{Binding ModeLabel}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <ComboBox Name="ModelPicker" Grid.Column="3" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" MinWidth="0" MinHeight="24"
+                    MaxWidth="150" FontSize="12" Background="Transparent" BorderThickness="0" Margin="0,0,6,0" ToolTip.Tip="Model">
+            <ComboBox.SelectionBoxItemTemplate>
+              <DataTemplate x:DataType="vm:ClaudeModelChoice">
+                <TextBlock Text="{Binding ShortLabel}" TextTrimming="CharacterEllipsis" />
+              </DataTemplate>
+            </ComboBox.SelectionBoxItemTemplate>
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ClaudeModelChoice">
+                <StackPanel Margin="0,2">
+                  <TextBlock Text="{Binding Label}" />
+                  <TextBlock Text="{Binding Description}" IsVisible="{Binding HasDescription}" Classes="muted" FontSize="11" />
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <Button Name="SendButton" Grid.Column="4" Classes="send" Command="{Binding SendCommand}" IsVisible="{Binding !IsRunning}" ToolTip.Tip="Send (Enter)">
+            <v:VsIcon Kind="Send" Width="14" Height="14" Foreground="#1F1F1F" />
+          </Button>
+          <Button Name="StopButton" Grid.Column="4" Classes="send" Command="{Binding StopCommand}" IsVisible="{Binding IsRunning}" ToolTip.Tip="Stop (Esc)">
+            <Border Width="10" Height="10" Background="#1F1F1F" CornerRadius="2" />
+          </Button>
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <!-- ===== Status ===== -->
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="7" Margin="14,4,10,2" IsVisible="{Binding IsRunning}">
+      <v:VsIcon Kind="Claude" Width="13" Height="13" />
+      <TextBlock Text="{Binding StatusText}" Foreground="#D97757" FontSize="12" VerticalAlignment="Center" />
+      <TextBlock Text="esc to interrupt" Classes="muted" FontSize="11" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <Panel>
+      <!-- ===== Conversation ===== -->
+      <ScrollViewer Name="ChatScroll" HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl Name="ChatItems" ItemsSource="{Binding Items}" Margin="14,6,14,10">
+          <ItemsControl.DataTemplates>
+            <DataTemplate DataType="vm:UserChatItem" x:DataType="vm:UserChatItem">
+              <Border Classes="user" Margin="0,12,0,4">
+                <StackPanel Spacing="6">
+                  <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="13" />
+                  <Border Classes="chip" IsVisible="{Binding HasContext}" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <v:VsIcon Kind="file" Width="11" Height="11" />
+                      <TextBlock Text="{Binding Context}" FontSize="11" Classes="muted" />
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:TextChatItem" x:DataType="vm:TextChatItem">
+              <v:MarkdownView Markdown="{Binding Text}" Margin="0,8,0,2" />
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:ThinkingChatItem" x:DataType="vm:ThinkingChatItem">
+              <StackPanel Margin="0,6,0,0">
+                <Button Classes="row" Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).ToggleExpandCommand}" CommandParameter="{Binding}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <v:VsIcon Kind="Chevron" Width="10" Height="10" />
+                    <TextBlock Text="Thinking" FontStyle="Italic" Classes="muted" />
+                  </StackPanel>
+                </Button>
+                <SelectableTextBlock Text="{Binding Text}" IsVisible="{Binding IsExpanded}" TextWrapping="Wrap" FontStyle="Italic" Classes="muted"
+                                     Margin="15,4,0,0" FontSize="12" />
+              </StackPanel>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:ToolChatItem" x:DataType="vm:ToolChatItem">
+              <StackPanel Margin="0,6,0,0">
+                <Grid ColumnDefinitions="16,*">
+                  <Ellipse Width="7" Height="7" Margin="0,6,0,0" VerticalAlignment="Top" HorizontalAlignment="Left"
+                           Classes="dot" Classes.running="{Binding IsRunning}" Classes.error="{Binding IsError}" />
+                  <Button Grid.Column="1" Classes="row" Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).ToggleExpandCommand}"
+                          CommandParameter="{Binding}" ToolTip.Tip="Show details">
+                    <TextBlock TextWrapping="Wrap">
+                      <Run Text="{Binding Title}" FontWeight="SemiBold" />
+                      <Run Text=" " />
+                      <Run Text="{Binding Target}" FontFamily="{StaticResource VsCodeFont}" FontSize="12" Foreground="#C8C8C8" />
+                    </TextBlock>
+                  </Button>
+                </Grid>
+                <Grid ColumnDefinitions="16,Auto,*" IsVisible="{Binding HasSummary}" Margin="0,2,0,0">
+                  <Border Grid.Column="1" Width="9" Height="8" BorderBrush="#5A5A5A" BorderThickness="1,0,0,1" VerticalAlignment="Top" Margin="2,1,6,0" />
+                  <TextBlock Grid.Column="2" Text="{Binding Summary}" Classes="muted" Classes.error="{Binding IsError}" FontSize="12" TextWrapping="Wrap" />
+                </Grid>
+                <Border Classes="box" IsVisible="{Binding ShowDiff}" Margin="16,5,0,0">
+                  <ItemsControl ItemsSource="{Binding Diff}" Margin="0,3">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="c:DiffLine">
+                        <Border Classes="diffLine" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Classes.gap="{Binding IsGap}" Padding="8,0">
+                          <TextBlock Classes="mono" TextWrapping="Wrap">
+                            <Run Text="{Binding Prefix}" />
+                            <Run Text=" " />
+                            <Run Text="{Binding Text}" />
+                          </TextBlock>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Border>
+                <ItemsControl ItemsSource="{Binding Todos}" IsVisible="{Binding HasTodos}" Margin="16,4,0,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TodoEntry">
+                      <StackPanel Orientation="Horizontal" Spacing="7" Margin="0,1">
+                        <Border Width="12" Height="12" CornerRadius="2" BorderBrush="#8B8B8B" BorderThickness="1" VerticalAlignment="Center">
+                          <v:VsIcon Kind="Ok" Width="12" Height="12" IsVisible="{Binding IsDone}" />
+                        </Border>
+                        <TextBlock Text="{Binding Content}" Classes.done="{Binding IsDone}" Classes.active="{Binding IsActive}" TextWrapping="Wrap" FontSize="12" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel IsVisible="{Binding IsExpanded}" Margin="16,5,0,0" Spacing="5">
+                  <Button Classes="pill" Content="Open file" IsVisible="{Binding FilePath, Converter={x:Static ObjectConverters.IsNotNull}}"
+                          Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).OpenFileCommand}" CommandParameter="{Binding}" />
+                  <Border Classes="box" IsVisible="{Binding HasCode}">
+                    <SelectableTextBlock Text="{Binding Code}" Classes="mono" TextWrapping="Wrap" Margin="8,6" />
+                  </Border>
+                  <Border Classes="box" IsVisible="{Binding HasMoreResult}">
+                    <ScrollViewer MaxHeight="320" HorizontalScrollBarVisibility="Disabled">
+                      <SelectableTextBlock Text="{Binding Result}" Classes="mono muted" TextWrapping="Wrap" Margin="8,6" />
+                    </ScrollViewer>
+                  </Border>
+                </StackPanel>
+              </StackPanel>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:PermissionChatItem" x:DataType="vm:PermissionChatItem">
+              <Border Classes="card" Margin="0,10,0,4">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="{Binding Question}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Description}" IsVisible="{Binding HasDescription}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
+                  <Border Classes="box" IsVisible="{Binding HasCode}">
+                    <ScrollViewer MaxHeight="220" HorizontalScrollBarVisibility="Disabled">
+                      <SelectableTextBlock Text="{Binding Code}" Classes="mono" TextWrapping="Wrap" Margin="8,6" />
+                    </ScrollViewer>
+                  </Border>
+                  <Border Classes="box" IsVisible="{Binding HasDiff}">
+                    <ScrollViewer MaxHeight="260" HorizontalScrollBarVisibility="Disabled">
+                      <ItemsControl ItemsSource="{Binding Diff}" Margin="0,3">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="c:DiffLine">
+                            <Border Classes="diffLine" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Classes.gap="{Binding IsGap}" Padding="8,0">
+                              <TextBlock Classes="mono" TextWrapping="Wrap">
+                                <Run Text="{Binding Prefix}" />
+                                <Run Text=" " />
+                                <Run Text="{Binding Text}" />
+                              </TextBlock>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </ScrollViewer>
+                  </Border>
+                  <StackPanel IsVisible="{Binding IsPending}" Spacing="5">
+                    <Button Classes="pill link" HorizontalAlignment="Left" Content="Open side-by-side diff" IsVisible="{Binding CanOpenDiff}"
+                            Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).OpenDiffCommand}" CommandParameter="{Binding}" />
+                    <Button Classes="choice first" Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).AllowCommand}" CommandParameter="{Binding}">
+                      <TextBlock Text="Yes" />
+                    </Button>
+                    <Button Classes="choice" IsVisible="{Binding HasSessionOption}"
+                            Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).AllowForSessionCommand}" CommandParameter="{Binding}">
+                      <TextBlock Text="{Binding SessionLabel}" TextWrapping="Wrap" />
+                    </Button>
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBox Classes="feedback" Text="{Binding Feedback}" PlaceholderText="No, and tell Claude what to do differently" />
+                      <Button Grid.Column="1" Classes="choice" Content="No" Margin="6,0,0,0" HorizontalAlignment="Right"
+                              Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).DenyCommand}" CommandParameter="{Binding}" />
+                    </Grid>
+                  </StackPanel>
+                  <TextBlock Text="{Binding Outcome}" IsVisible="{Binding IsResolved}" Classes="muted" FontStyle="Italic" FontSize="12" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:QuestionChatItem" x:DataType="vm:QuestionChatItem">
+              <Border Classes="card" Margin="0,10,0,4">
+                <StackPanel Spacing="12">
+                  <ItemsControl ItemsSource="{Binding Questions}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:QuestionEntry">
+                        <StackPanel Spacing="5" Margin="0,0,0,10">
+                          <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Border Classes="chip" IsVisible="{Binding HasHeader}" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Header}" FontSize="11" />
+                            </Border>
+                            <TextBlock Text="{Binding Question}" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+                          </StackPanel>
+                          <ItemsControl ItemsSource="{Binding Options}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="vm:QuestionOption">
+                                <CheckBox IsChecked="{Binding IsSelected}" Margin="0,1">
+                                  <StackPanel>
+                                    <TextBlock Text="{Binding Label}" />
+                                    <TextBlock Text="{Binding Description}" IsVisible="{Binding HasDescription}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                                  </StackPanel>
+                                </CheckBox>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                          <TextBox Classes="feedback" Text="{Binding Other}" PlaceholderText="Other (type your own answer)" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsPending}">
+                    <Button Classes="choice first" Content="Submit answers" HorizontalAlignment="Left"
+                            Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).SubmitAnswersCommand}" CommandParameter="{Binding}" />
+                    <TextBlock Text="{Binding Outcome}" Classes="muted" VerticalAlignment="Center" FontSize="12" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding Outcome}" IsVisible="{Binding IsResolved}" Classes="muted" FontStyle="Italic" FontSize="12" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:PlanChatItem" x:DataType="vm:PlanChatItem">
+              <Border Classes="card" Margin="0,10,0,4">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="Here is Claude's plan:" FontWeight="SemiBold" />
+                  <Border Classes="box" Padding="12,8">
+                    <v:MarkdownView Markdown="{Binding Plan}" />
+                  </Border>
+                  <StackPanel IsVisible="{Binding IsPending}" Spacing="5">
+                    <TextBlock Text="Would you like to proceed?" />
+                    <Button Classes="choice first" Content="Yes, and auto-accept edits"
+                            Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).ApprovePlanCommand}" CommandParameter="{Binding}" />
+                    <Button Classes="choice" Content="Yes, and manually approve edits"
+                            Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).ApprovePlanManuallyCommand}" CommandParameter="{Binding}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBox Classes="feedback" Text="{Binding Feedback}" PlaceholderText="No, keep planning (tell Claude what to change)" />
+                      <Button Grid.Column="1" Classes="choice" Content="Keep planning" Margin="6,0,0,0"
+                              Command="{Binding $parent[UserControl].((vm:ClaudeViewModel)DataContext).KeepPlanningCommand}" CommandParameter="{Binding}" />
+                    </Grid>
+                  </StackPanel>
+                  <TextBlock Text="{Binding Outcome}" IsVisible="{Binding IsResolved}" Classes="muted" FontStyle="Italic" FontSize="12" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:NoticeChatItem" x:DataType="vm:NoticeChatItem">
+              <TextBlock Text="{Binding Text}" Classes="muted" Classes.error="{Binding IsError}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
+            </DataTemplate>
+          </ItemsControl.DataTemplates>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- ===== Empty conversation ===== -->
+      <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" Margin="24" MaxWidth="320" IsHitTestVisible="False">
+        <v:VsIcon Kind="Claude" Width="44" Height="44" HorizontalAlignment="Center" />
+        <TextBlock Text="What can I help you build?" FontSize="16" HorizontalAlignment="Center" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" FontSize="12"
+                   Text="Claude Code works in your solution folder: it can read and edit files, run commands and explain code. You approve each edit unless you choose to edit automatically." />
+      </StackPanel>
+
+      <!-- ===== Claude Code not installed ===== -->
+      <Border IsVisible="{Binding IsCliMissing}" Background="#1F1F1F" Padding="20">
+        <StackPanel Spacing="10" VerticalAlignment="Center" MaxWidth="360">
+          <v:VsIcon Kind="Claude" Width="36" Height="36" HorizontalAlignment="Center" />
+          <TextBlock Text="Claude Code is not installed" FontSize="15" HorizontalAlignment="Center" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                     Text="Install the Claude Code CLI, sign in once by running claude in a terminal, then retry." />
+          <Border Classes="box" Padding="10,6">
+            <SelectableTextBlock Classes="mono" Text="curl -fsSL https://claude.ai/install.sh | bash" TextWrapping="Wrap" />
+          </Border>
+          <Button Classes="choice first" Content="Retry" HorizontalAlignment="Center" Command="{Binding CheckCliCommand}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ===== Past conversations ===== -->
+      <Border IsVisible="{Binding IsHistoryOpen}" Background="#252526">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Text="Past conversations" FontWeight="SemiBold" Margin="12,8,12,4" />
+          <TextBlock DockPanel.Dock="Top" Text="No conversations in this folder yet." Classes="muted" Margin="12,0,12,10" IsVisible="{Binding !History.Count}" />
+          <ListBox Name="HistoryList" ItemsSource="{Binding History}" Background="Transparent" Margin="4,0,4,6" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="c:ClaudeConversation">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="1" Text="{Binding Modified, StringFormat='{}{0:dd.MM HH:mm}'}" Classes="muted" FontSize="11" Margin="10,0,0,0" VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+    </Panel>
+  </DockPanel>
+</UserControl>

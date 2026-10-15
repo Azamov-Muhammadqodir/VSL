@@ -77,6 +77,14 @@
         <MenuItem Header="_Output" Click="OnShowOutput" />
         <MenuItem Header="_Test Explorer" Click="OnShowTestExplorer" />
         <MenuItem Header="_Git Changes" Command="{Binding ShowGitChangesCommand}" />
+        <MenuItem Command="{Binding ShowClaudeCommand}">
+          <MenuItem.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Claude Code" />
+              <TextBlock Grid.Column="1" Text="Ctrl+Esc" Margin="32,0,0,0" Foreground="{StaticResource VsGrayTextBrush}" />
+            </Grid>
+          </MenuItem.Header>
+        </MenuItem>
         <MenuItem Command="{Binding ShowTerminalCommand}">
           <MenuItem.Header>
             <Grid ColumnDefinitions="*,Auto">
@@ -236,6 +244,8 @@
         </StackPanel>
         <Border Classes="tbsep" />
         <Button Classes="tbi" Command="{Binding BuildSolutionCommand}" ToolTip.Tip="Build Solution (Ctrl+Shift+B)"><v:VsIcon Kind="Build" /></Button>
+        <Border Classes="tbsep" />
+        <Button Classes="tbi" Command="{Binding ShowClaudeCommand}" ToolTip.Tip="Claude Code (Ctrl+Esc)"><v:VsIcon Kind="Claude" /></Button>
       </StackPanel>
     </Border>
 
@@ -264,7 +274,7 @@
     </Border>
 
     <!-- ===== Main area: [documents / bottom tool windows] | Solution Explorer ===== -->
-    <Grid Name="MainGrid" ColumnDefinitions="0,0,*,4,340">
+    <Grid Name="MainGrid" ColumnDefinitions="0,0,*,4,400">
       <!-- Left dock group: empty until a tool window is docked there -->
       <Border Name="LeftDock" Grid.Column="0" Background="{StaticResource VsToolWindowBrush}" BorderBrush="{StaticResource VsBorderBrush}" BorderThickness="0,0,1,0">
         <TabControl Name="LeftTabs" TabStripPlacement="Bottom" Padding="0" ItemContainerTheme="{StaticResource VsToolTab}" />
@@ -757,6 +767,9 @@
                 </StackPanel>
               </ScrollViewer>
             </DockPanel>
+          </TabItem>
+          <TabItem Header="Claude Code" Tag="Claude">
+            <v:ClaudeView Name="ClaudePanel" DataContext="{Binding Claude}" />
           </TabItem>
         </TabControl>
       </Border>

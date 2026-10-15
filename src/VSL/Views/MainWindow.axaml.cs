@@ -67,6 +67,7 @@ public partial class MainWindow : Window, IDialogService
         if (await vm.CloseSolutionCoreAsync())
         {
             await vm.ShutdownTerminalAsync();
+            await vm.ShutdownClaudeAsync();
             _closingConfirmed = true;
             Close();
         }
@@ -77,6 +78,13 @@ public partial class MainWindow : Window, IDialogService
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         if (e.Key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt)
             return;
+        // Ctrl+Esc opens Claude Code, as in the VS Code extension.
+        if (ctrl && e.Key == Key.Escape && Vm is { } claudeVm)
+        {
+            claudeVm.ShowClaude();
+            e.Handled = true;
+            return;
+        }
         // Ctrl+` opens the terminal (VS's View.Terminal).
         if (ctrl && e.Key == Key.OemTilde && Vm is { } terminalVm)
         {

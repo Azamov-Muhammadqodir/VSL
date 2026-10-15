@@ -22,6 +22,11 @@ public sealed class Settings
     public List<string> RecentTemplates { get; set; } = [];
 
     public string? NewProjectLocation { get; set; }
+
+    /// <summary>Claude Code panel: model alias ("default", "opus"...) and permission mode.</summary>
+    public string? ClaudeModel { get; set; }
+
+    public string? ClaudePermissionMode { get; set; }
     public Dictionary<string, SolutionState> Solutions { get; set; } = [];
 
     public sealed class SolutionState
