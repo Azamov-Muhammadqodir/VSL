@@ -6,6 +6,7 @@ using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using VSL.Services;
+using VSL.VisualStudio.Git;
 using VSL.ViewModels;
 using SolutionEvents = Microsoft.VisualStudio.Shell.Events.SolutionEvents;
 
@@ -22,6 +23,7 @@ public sealed class VisualStudioHost : IAsyncDisposable
     readonly AsyncPackage _package;
     readonly Settings _settings = Settings.Load();
     ClaudeViewModel? _claude;
+    GitViewModel? _git;
     List<string>? _files;
 
     public VisualStudioHost(AsyncPackage package)
@@ -49,6 +51,16 @@ public sealed class VisualStudioHost : IAsyncDisposable
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             return _claude ??= CreateClaude();
+        }
+    }
+
+    /// <summary>The commit panel, for the repository the solution is in.</summary>
+    public GitViewModel Git
+    {
+        get
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            return _git ??= new GitViewModel(WorkingDirectory, () => Claude);
         }
     }
 
@@ -248,6 +260,8 @@ public sealed class VisualStudioHost : IAsyncDisposable
         _files = null;
         if (_claude is { } claude)
             _ = _package.JoinableTaskFactory.RunAsync(claude.OnWorkingDirectoryChangedAsync);
+        if (_git is { IsOpen: true } git)
+            _ = _package.JoinableTaskFactory.RunAsync(git.RefreshAsync);
     }
 
     public async ValueTask DisposeAsync()

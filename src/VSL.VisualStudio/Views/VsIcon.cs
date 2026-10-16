@@ -66,6 +66,14 @@ public sealed class VsIcon : FrameworkElement
     static void Stroke(DrawingContext dc, string data, Color color, double width = 1.3) =>
         dc.DrawGeometry(null, new Pen(new SolidColorBrush(color), width) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round }, G(data));
 
+    /// <summary>A drawing on a 24x24 grid (outline icons in the Lucide style), scaled onto the 16x16 one.</summary>
+    static void Line(DrawingContext dc, string data, Color color, double width = 2)
+    {
+        dc.PushTransform(new ScaleTransform(16 / 24.0, 16 / 24.0));
+        Stroke(dc, data, color, width);
+        dc.Pop();
+    }
+
     static void Draw(DrawingContext dc, string kind, Color fg)
     {
         switch (kind)
@@ -91,8 +99,35 @@ public sealed class VsIcon : FrameworkElement
                 Stroke(dc, "M2.6,8 A5.4,5.4 0 1 0 4.2,4.2 M8,4.8 L8,8.3 L10.4,9.8", fg, 1.3);
                 Fill(dc, "M1.4,2.6 L4.9,2.9 L4.4,6.3 Z", fg);
                 break;
+            case "ChevronUp":
+                Stroke(dc, "M4.5,9.5 L8,6 L11.5,9.5", fg, 1.3);
+                break;
             case "Send":
-                Stroke(dc, "M8,13 L8,3.5 M3.8,7.6 L8,3.4 L12.2,7.6", fg, 1.8);
+                // An arrow up.
+                Line(dc, "M12 19V5 M5 12l7-7 7 7", fg, 2.6);
+                break;
+            case "Sparkle":
+                // A four-pointed star with a small one beside it: the model.
+                Line(dc, "M12 3C12.6 8.4 15.6 11.4 21 12C15.6 12.6 12.6 15.6 12 21C11.4 15.6 8.4 12.6 3 12C8.4 11.4 11.4 8.4 12 3Z M19.5 2v4 M17.5 4h4", fg, 1.8);
+                break;
+            case "GitBranch":
+                Line(dc, "M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 9a9 9 0 0 1-9 9", fg, 1.9);
+                break;
+            case "GitCommit":
+                Line(dc, "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z M3 12h6 M15 12h6", fg, 1.9);
+                break;
+            case "ArrowDown":
+                Line(dc, "M12 5v14 M19 12l-7 7-7-7", fg, 2.2);
+                break;
+            case "ArrowUp":
+                Line(dc, "M12 19V5 M5 12l7-7 7 7", fg, 2.2);
+                break;
+            case "Refresh":
+                Line(dc, "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5", fg, 1.9);
+                break;
+            case "FileCode":
+                // A page with code brackets: the open file.
+                Line(dc, "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M10 12.5l-2.5 3 2.5 3 M14 12.5l2.5 3-2.5 3", fg, 1.8);
                 break;
             case "Copy":
                 Stroke(dc, "M5.5,5.5 L13.5,5.5 L13.5,14.5 L5.5,14.5 Z M3.5,11 L2.5,11 L2.5,1.5 L10.5,1.5 L10.5,2.5", fg, 1.1);
@@ -118,7 +153,7 @@ public sealed class VsIcon : FrameworkElement
                 Stroke(dc, "M3.5,1.5 L12.5,1.5 L12.5,14.5 L3.5,14.5 Z M5.5,5 L10.5,5 M5.5,8 L10.5,8 M5.5,11 L8.5,11", fg, 1.1);
                 break;
             case "Bolt":
-                Stroke(dc, "M9,1.5 L3.5,9 L8,9 L7,14.5 L12.5,7 L8,7 Z", fg, 1.1);
+                Line(dc, "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z", fg, 1.8);
                 break;
             case "Gauge":
                 Stroke(dc, "M2,11.5 A6,6 0 1 1 14,11.5 M8,11 L11,6.5", fg, 1.3);
@@ -140,7 +175,7 @@ public sealed class VsIcon : FrameworkElement
                 break;
             case "Attach":
                 // A paper clip.
-                Stroke(dc, "M11.5,5.5 L6,11 C5,12 3.6,12 2.8,11.2 C2,10.4 2,9 3,8 L9,2 C9.8,1.2 11.2,1.2 12,2 C12.8,2.8 12.8,4.2 12,5 L6.3,10.7 C5.9,11.1 5.3,11.1 4.9,10.7 C4.5,10.3 4.5,9.7 4.9,9.3 L9.5,4.7", fg, 1.1);
+                Line(dc, "m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48", fg, 1.9);
                 break;
             default:
                 // A page with a folded corner.
