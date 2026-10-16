@@ -54,13 +54,13 @@ public sealed class VisualStudioHost : IAsyncDisposable
         }
     }
 
-    /// <summary>The commit panel, for the repository the solution is in.</summary>
+    /// <summary>The commit panel, for the repositories of the solution and its projects.</summary>
     public GitViewModel Git
     {
         get
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            return _git ??= new GitViewModel(WorkingDirectory, () => Claude);
+            return _git ??= new GitViewModel(WorkingDirectory, ProjectDirectories, () => Claude);
         }
     }
 
@@ -180,6 +180,43 @@ public sealed class VisualStudioHost : IAsyncDisposable
             // A node without a file (References, a solution folder).
         }
         return paths;
+    }
+
+    /// <summary>
+    /// The folders of the solution's projects, loaded or not: a solution may live in a folder of its own and link
+    /// projects from other folders, each in its own repository (Git Changes lists all of them).
+    /// </summary>
+    IReadOnlyList<string> ProjectDirectories()
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        var directories = new List<string>();
+        if (Package.GetGlobalService(typeof(SVsSolution)) is not IVsSolution solution)
+            return directories;
+        var kind = Guid.Empty;
+        if (solution.GetProjectEnum((uint)__VSENUMPROJFLAGS.EPF_ALLINSOLUTION, ref kind, out var projects) != VSConstants.S_OK)
+            return directories;
+        var one = new IVsHierarchy[1];
+        while (projects.Next(1, one, out var fetched) == VSConstants.S_OK && fetched == 1)
+        {
+            string? path = null;
+            try
+            {
+                if (one[0].GetCanonicalName((uint)VSConstants.VSITEMID.Root, out var name) == VSConstants.S_OK)
+                    path = name;
+                if ((path is null || !Path.IsPathRooted(path)) && solution.GetUniqueNameOfProject(one[0], out var unique) == VSConstants.S_OK
+                    && WorkingDirectory() is var root)
+                    path = Path.Combine(root, unique);
+            }
+            catch (Exception ex) when (ex is COMException or ArgumentException or NotImplementedException)
+            {
+            }
+            if (path is not { Length: > 0 } || !Path.IsPathRooted(path))
+                continue;
+            var directory = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+            if (directory is { Length: > 0 } && Directory.Exists(directory))
+                directories.Add(directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        }
+        return directories.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>Files offered for @-mentions: the solution folder without build output and VCS folders.</summary>

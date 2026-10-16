@@ -86,11 +86,13 @@ public sealed partial class GitViewModel : ObservableObject
     static readonly HashSet<string> SkippedFolders = new(StringComparer.OrdinalIgnoreCase) { "bin", "obj", ".git", ".vs", ".idea", "node_modules", "packages" };
 
     readonly Func<string> _workingDirectory;
+    readonly Func<IReadOnlyList<string>> _projectDirectories;
     readonly Func<ClaudeViewModel> _claude;
 
-    public GitViewModel(Func<string> workingDirectory, Func<ClaudeViewModel> claude)
+    public GitViewModel(Func<string> workingDirectory, Func<IReadOnlyList<string>> projectDirectories, Func<ClaudeViewModel> claude)
     {
         _workingDirectory = workingDirectory;
+        _projectDirectories = projectDirectories;
         _claude = claude;
     }
 
@@ -221,7 +223,7 @@ public sealed partial class GitViewModel : ObservableObject
     public async Task RefreshAsync()
     {
         var directory = _workingDirectory();
-        var roots = await FindRepositoriesAsync(directory);
+        var roots = await FindRepositoriesAsync(directory, _projectDirectories());
         if (roots.Count == 0)
         {
             var top = await GitProcess.RunGitAsync(directory, "rev-parse --show-toplevel");
@@ -255,24 +257,37 @@ public sealed partial class GitViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The repository the folder is in, and those inside it (a solution of several repositories, as in Git Changes).
+    /// Every repository of the solution, as in Git Changes: the one its folder is in, those inside that folder, and
+    /// the ones its projects are in (projects linked from folders outside the solution's).
     /// </summary>
-    static async Task<List<string>> FindRepositoriesAsync(string directory)
+    static async Task<List<string>> FindRepositoriesAsync(string directory, IReadOnlyList<string> projectDirectories)
     {
         var roots = new List<string>();
-        var top = await GitProcess.RunGitAsync(directory, "rev-parse --show-toplevel");
-        if (top.Ok)
-            roots.Add(Path.GetFullPath(top.Output.Trim().Replace('/', Path.DirectorySeparatorChar)).TrimEnd(Path.DirectorySeparatorChar));
+        if (await TopLevelAsync(directory) is { } own)
+            roots.Add(own);
+        var others = new List<string>();
         var nested = await Task.Run(() =>
         {
             var found = new List<string>();
             Search(directory, 0, found);
             return found;
         });
-        foreach (var root in nested.OrderBy(r => r, StringComparer.OrdinalIgnoreCase))
+        others.AddRange(nested);
+        var projectRoots = await Task.WhenAll(projectDirectories.Select(TopLevelAsync));
+        others.AddRange(projectRoots.OfType<string>());
+        foreach (var root in others.OrderBy(r => Path.GetFileName(r), StringComparer.OrdinalIgnoreCase))
             if (!roots.Contains(root, StringComparer.OrdinalIgnoreCase))
                 roots.Add(root);
         return roots;
+    }
+
+    /// <summary>The root of the repository the folder is in, or null.</summary>
+    static async Task<string?> TopLevelAsync(string directory)
+    {
+        var top = await GitProcess.RunGitAsync(directory, "rev-parse --show-toplevel");
+        return top.Ok && top.Output.Trim() is { Length: > 0 } path
+            ? Path.GetFullPath(path.Replace('/', Path.DirectorySeparatorChar)).TrimEnd(Path.DirectorySeparatorChar)
+            : null;
     }
 
     static void Search(string directory, int depth, List<string> found)
