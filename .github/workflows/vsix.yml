@@ -1,0 +1,81 @@
+# Claude Code for Visual Studio (src/VSL.VisualStudio) → VSL.ClaudeCode.VisualStudio.vsix as a build artifact.
+# The VSIX targets (VSCT, pkgdef, the .vsix container) need Visual Studio's .NET Framework MSBuild, so this runs on Windows.
+# It also catches shared Claude code (src/VSL/Claude, the Claude view model) that no longer builds for .NET Framework.
+# Run it by hand with "publish" ticked to upload the .vsix to the Visual Studio Marketplace: that needs the
+# VS_MARKETPLACE_TOKEN secret (an Azure DevOps token with Marketplace > Manage) and the VS_MARKETPLACE_PUBLISHER variable
+# (the Marketplace publisher ID). Raise the Version in source.extension.vsixmanifest before each upload.
+name: vsix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/VSL.VisualStudio/**'
+      - 'src/VSL/Claude/**'
+      - 'src/VSL/ViewModels/Claude*'
+      - 'src/VSL/Views/MarkdownParser.cs'
+      - '.github/workflows/vsix.yml'
+      - '!src/VSL.VisualStudio/**/*.md'
+      - '!src/VSL.VisualStudio/images/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/VSL.VisualStudio/**'
+      - 'src/VSL/Claude/**'
+      - 'src/VSL/ViewModels/Claude*'
+      - 'src/VSL/Views/MarkdownParser.cs'
+      - '.github/workflows/vsix.yml'
+      - '!src/VSL.VisualStudio/**/*.md'
+      - '!src/VSL.VisualStudio/images/**'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish to the Visual Studio Marketplace
+        type: boolean
+        default: false
+
+jobs:
+  vsix:
+    name: Build VSIX
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build
+        run: msbuild src/VSL.VisualStudio/VSL.VisualStudio.csproj -restore -p:Configuration=Release -v:minimal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VSL.ClaudeCode.VisualStudio
+          path: src/VSL.VisualStudio/bin/Release/net48/*.vsix
+          if-no-files-found: error
+
+      - name: Publish to the Visual Studio Marketplace
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        shell: pwsh
+        env:
+          VS_MARKETPLACE_TOKEN: ${{ secrets.VS_MARKETPLACE_TOKEN }}
+          VS_MARKETPLACE_PUBLISHER: ${{ vars.VS_MARKETPLACE_PUBLISHER }}
+        run: |
+          if (-not $env:VS_MARKETPLACE_TOKEN) { throw 'Add the VS_MARKETPLACE_TOKEN secret.' }
+          if (-not $env:VS_MARKETPLACE_PUBLISHER) { throw 'Add the VS_MARKETPLACE_PUBLISHER variable (the Marketplace publisher ID).' }
+          $manifestPath = 'src/VSL.VisualStudio/publishManifest.json'
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $manifest.publisher = $env:VS_MARKETPLACE_PUBLISHER
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content $manifestPath
+          # Visual Studio's own VsixPublisher (the copy in the VSSDK build tools package fails to load its telemetry
+          # dependencies when started from the NuGet cache).
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $publisherPath = & $vswhere -latest -products * -find 'VSSDK\VisualStudioIntegration\Tools\Bin\VsixPublisher.exe' | Select-Object -First 1
+          if (-not $publisherPath) {
+            $publisherPath = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.vssdk.buildtools" -Recurse -Filter VsixPublisher.exe | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $publisherPath) { throw 'VsixPublisher.exe not found.' }
+          Write-Host "Using $publisherPath"
+          $publisher = Get-Item $publisherPath
+          $vsix = Get-Item src/VSL.VisualStudio/bin/Release/net48/*.vsix | Select-Object -First 1
+          & $publisher.FullName publish -payload $vsix.FullName -publishManifest (Resolve-Path $manifestPath) -personalAccessToken $env:VS_MARKETPLACE_TOKEN
+          if ($LASTEXITCODE -ne 0) { throw "VsixPublisher failed with exit code $LASTEXITCODE." }

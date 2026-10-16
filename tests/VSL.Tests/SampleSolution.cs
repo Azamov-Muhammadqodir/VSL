@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using VSL.Build;
 
 namespace VSL.Tests;
@@ -56,14 +57,63 @@ public static class SampleSolution
         }
 
         var sln = Path.Combine(target, "BlazorSample.sln");
-        var psi = new ProcessStartInfo(DotnetCli.Executable, ["restore", sln]) { RedirectStandardOutput = true, RedirectStandardError = true };
-        DotnetCli.ApplyEnvironment(psi);
-        using var p = Process.Start(psi)!;
-        var output = await p.StandardOutput.ReadToEndAsync();
-        await p.WaitForExitAsync();
-        if (p.ExitCode != 0)
-            throw new InvalidOperationException("Restoring the sample solution failed:\n" + output);
+        await RunDotnetAsync("Restoring the sample solution", "restore", sln);
         return sln;
+    }
+
+    /// <summary>
+    /// Runs a dotnet command to the end, failing with its output if it fails or takes over 5 minutes. Without build
+    /// servers: an MSBuild node left running keeps the output pipes open, and on a fresh CI machine waiting for them to
+    /// close waited for the node's idle timeout, longer than the whole test run may take.
+    /// </summary>
+    internal static async Task RunDotnetAsync(string what, params string[] args)
+    {
+        var psi = new ProcessStartInfo(DotnetCli.Executable, [.. args, "--disable-build-servers"]) { RedirectStandardOutput = true, RedirectStandardError = true };
+        DotnetCli.ApplyEnvironment(psi);
+        var output = new StringBuilder();
+        void Collect(object sender, DataReceivedEventArgs e)
+        {
+            if (e.Data is not null)
+                lock (output)
+                    output.AppendLine(e.Data);
+        }
+        using var process = new Process { StartInfo = psi };
+        process.OutputDataReceived += Collect;
+        process.ErrorDataReceived += Collect;
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // What was still running tells where it stuck (a restore, an MSBuild node, a NuGet credential provider...).
+            var processes = DotnetProcesses();
+            process.Kill(entireProcessTree: true);
+            lock (output)
+                throw new TimeoutException($"{what} took over 5 minutes:\n{output}\nRunning dotnet processes:\n{processes}");
+        }
+        if (process.ExitCode != 0)
+            lock (output)
+                throw new InvalidOperationException($"{what} failed:\n{output}");
+    }
+
+    static string DotnetProcesses()
+    {
+        try
+        {
+            using var ps = Process.Start(new ProcessStartInfo("ps", ["-eo", "pid,ppid,etime,args"]) { RedirectStandardOutput = true })!;
+            var lines = ps.StandardOutput.ReadToEnd().Split('\n');
+            ps.WaitForExit();
+            return string.Join('\n', lines.Take(1).Concat(lines.Where(l => l.Contains("dotnet", StringComparison.Ordinal) || l.Contains("MSBuild", StringComparison.Ordinal))));
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return "(ps unavailable)";
+        }
     }
 
     public static string PathOf(string sln, string relative) => Path.Combine(Path.GetDirectoryName(sln)!, relative);

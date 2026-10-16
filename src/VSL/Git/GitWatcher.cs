@@ -1,15 +1,15 @@
 namespace VSL.Git;
 
 /// <summary>
-/// Notices repository changes made outside VSL's own git commands (a commit or checkout in the terminal,
-/// another tool, files written on disk) so Git Changes, the change margin and open editors follow them.
-/// Watches the working folder and the git directory; bursts (builds, checkouts) are coalesced.
+/// Notices changes made outside VSL (a commit or checkout in the terminal, another tool, files written on disk) so
+/// Solution Explorer, Git Changes, the change margin and open editors follow them. Watches the solution folder and,
+/// in a repository, the git directory; bursts (builds, checkouts) are coalesced.
 /// </summary>
 public sealed class GitWatcher : IDisposable
 {
     static readonly TimeSpan MaxDelay = TimeSpan.FromSeconds(2);
 
-    readonly string _gitDir;
+    readonly string? _gitDir;
     readonly TimeSpan _delay;
     readonly List<FileSystemWatcher> _watchers = [];
     readonly Timer _timer;
@@ -24,14 +24,15 @@ public sealed class GitWatcher : IDisposable
     /// </summary>
     public event Action<bool, IReadOnlyCollection<string>>? Changed;
 
-    public GitWatcher(string workingFolder, string gitDir, TimeSpan delay)
+    /// <param name="gitDir">The repository's git directory, or null when the folder is not in a repository.</param>
+    public GitWatcher(string workingFolder, string? gitDir, TimeSpan delay)
     {
-        _gitDir = Path.GetFullPath(gitDir).TrimEnd('/');
+        _gitDir = gitDir is null ? null : Path.GetFullPath(gitDir).TrimEnd('/');
         _delay = delay;
         _timer = new Timer(_ => Fire(), null, Timeout.Infinite, Timeout.Infinite);
         var folder = Path.GetFullPath(workingFolder).TrimEnd('/');
         Watch(folder);
-        if (!IsUnder(_gitDir, folder))
+        if (_gitDir is not null && !IsUnder(_gitDir, folder))
             Watch(_gitDir);
     }
 
@@ -61,7 +62,7 @@ public sealed class GitWatcher : IDisposable
 
     void OnEvent(string path)
     {
-        if (IsUnder(path, _gitDir))
+        if (_gitDir is not null && IsUnder(path, _gitDir))
         {
             if (IsRepositoryState(path[(_gitDir.Length + 1)..]))
                 Pending(repository: true, null);

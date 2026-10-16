@@ -1,0 +1,85 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VSL.ViewModels"
+        xmlns:v="using:VSL.Views"
+        x:Class="VSL.Views.AddItemWindow"
+        x:DataType="vm:AddItemViewModel"
+        Width="780" Height="520" MinWidth="560" MinHeight="380"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Icon="/Assets/vsl.png"
+        Background="{StaticResource VsEnvironmentBrush}"
+        Foreground="{StaticResource VsTextBrush}">
+  <Window.Styles>
+    <Style Selector="TextBlock.gray">
+      <Setter Property="Foreground" Value="#A0A0A0" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Background" Value="#333337" />
+      <Setter Property="BorderBrush" Value="#434346" />
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="#333337" />
+      <Setter Property="BorderBrush" Value="#007ACC" />
+    </Style>
+    <Style Selector="ListBox.templates">
+      <Setter Property="Background" Value="{StaticResource VsToolWindowBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource VsBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="ListBox.templates > ListBoxItem">
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+    <Style Selector="Button.primary, Button.secondary">
+      <Setter Property="MinWidth" Value="88" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="Padding" Value="14,5" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#0E639C" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#1177BB" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.secondary">
+      <Setter Property="Background" Value="#3F3F46" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="16,12,16,14">
+    <TextBox Name="SearchBox" Text="{Binding Search}" PlaceholderText="Search (Ctrl+E)" Margin="0,0,0,8" />
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,250">
+      <ListBox Name="TemplateList" Classes="templates" ItemsSource="{Binding Templates}" SelectedItem="{Binding SelectedTemplate}"
+               DoubleTapped="OnTemplateDoubleTapped">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:ItemTemplateEntry">
+            <Grid ColumnDefinitions="24,*,Auto">
+              <ContentControl Content="{Binding Icon, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="8,0,0,0" />
+              <TextBlock Grid.Column="2" Text="{Binding Extension}" Classes="gray" VerticalAlignment="Center" Margin="8,0,4,0" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <StackPanel Grid.Column="1" Margin="16,4,0,0" Spacing="6">
+        <TextBlock Classes="gray" Text="Type:" />
+        <TextBlock Text="{Binding SelectedTemplate.Name}" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding SelectedTemplate.Description}" TextWrapping="Wrap" Classes="gray" />
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" Margin="0,12,0,0">
+      <TextBlock Text="Name:" VerticalAlignment="Center" Margin="0,0,10,0" />
+      <TextBox Name="NameBox" Grid.Column="1" Text="{Binding Name}" />
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
+        <Button Name="AddButton" Classes="primary" Content="Add" IsEnabled="{Binding CanAdd}" Click="OnAdd" />
+        <Button Classes="secondary" Content="Cancel" Click="OnCancel" />
+      </StackPanel>
+      <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Error}" IsVisible="{Binding !CanAdd}" Foreground="#F48771" Margin="0,4,0,0" />
+    </Grid>
+  </Grid>
+</Window>

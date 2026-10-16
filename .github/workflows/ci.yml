@@ -1,10 +1,18 @@
 name: CI
 
+# Documentation, screenshots and the Visual Studio extension (built by vsix.yml) do not touch the Linux build.
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'src/VSL.VisualStudio/**', '.github/workflows/vsix.yml', '.github/workflows/release.yml']
   pull_request:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'src/VSL.VisualStudio/**', '.github/workflows/vsix.yml', '.github/workflows/release.yml']
+
+# A newer push to the same branch makes an older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
@@ -25,7 +33,7 @@ jobs:
 
       # Unit tests plus the headless UI tests of the main window; the integration tests restore and build a
       # sample Blazor solution, install roslyn-language-server and netcoredbg, and drive a fake Claude Code CLI.
-      # Normally ~3 min; a hung test fails the run instead of holding it for GitHub's 6 h limit.
+      # Normally ~3 min. Each test is listed as it finishes, and one that hangs for 5 minutes is named and the run fails.
       - name: Test
         timeout-minutes: 15
-        run: dotnet test VSL.slnx -c Release --no-build
+        run: dotnet test VSL.slnx -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type none --logger "console;verbosity=normal"

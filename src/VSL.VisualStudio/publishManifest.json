@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json.schemastore.org/vsix-publish",
+  "categories": [ "coding", "other" ],
+  "identity": {
+    "internalName": "claude-code-vsl"
+  },
+  "overview": "README.md",
+  "assetFiles": [
+    { "pathOnDisk": "images/welcome.png", "targetPath": "images/welcome.png" },
+    { "pathOnDisk": "images/answer.png", "targetPath": "images/answer.png" },
+    { "pathOnDisk": "images/approval.png", "targetPath": "images/approval.png" }
+  ],
+  "priceCategory": "free",
+  "publisher": "",
+  "private": false,
+  "qna": true
+}

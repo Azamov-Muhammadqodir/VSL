@@ -119,6 +119,7 @@ public sealed partial class EditorHost : IDisposable, IDebugLineSource
         Editor.TextArea.RightClickMovesCaret = true;
         Editor.ContextMenu = BuildContextMenu();
         InitializeOutlining();
+        InitializeSemanticColors();
     }
 
     public string FilePath { get; }
@@ -333,6 +334,7 @@ public sealed partial class EditorHost : IDisposable, IDebugLineSource
         _ = lsp.DidOpenAsync(FilePath, Document.Text);
         ScheduleDiagnostics(200);
         ScheduleOutlining(300);
+        ScheduleSemanticTokens(300);
     }
 
     public void Detach()
@@ -1104,6 +1106,7 @@ public sealed partial class EditorHost : IDisposable, IDebugLineSource
         if (_lsp is { } lsp)
             _ = lsp.DidCloseAsync(FilePath);
         _lsp = null;
+        _semanticCts?.Cancel();
         _textMate?.Dispose();
         _gitTimer?.Stop();
         if (_breakpoints is not null)

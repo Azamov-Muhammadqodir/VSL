@@ -22,6 +22,18 @@ public static class TextMateSupport
     /// <summary>Token colors layered on top of the stock theme so editors look like Visual Studio, not VS Code.</summary>
     static readonly (string Scope, string Foreground, string FontStyle)[] Overrides =
     [
+        // Visual Studio 2022 Dark's colors where VS Code's differ (C# gets Roslyn's classifications on top, see
+        // SemanticColorizer; these also cover other languages and the moment before the server answers).
+        ("comment", "#57A64A", ""),
+        ("punctuation.definition.comment", "#57A64A", ""),
+        ("string", "#D69D85", ""),
+        ("constant.character.escape", "#FFD68F", ""),
+        ("constant.numeric", "#B5CEA8", ""),
+        ("keyword.control", "#D8A0DF", ""),
+        ("meta.preprocessor", "#9B9B9B", ""),
+        ("keyword.preprocessor", "#9B9B9B", ""),
+        ("entity.name.function", "#DCDCAA", ""),
+        ("entity.name.type", "#4EC9B0", ""),
         // The HTML grammar flags capitalised tags as illegal (red + underline); in Razor they are components.
         ("invalid.illegal.unrecognized-tag.html", "#4EC9B0", ""),
         // Diff view (Git > Compare): the stock theme leaves these uncolored.
