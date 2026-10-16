@@ -17,6 +17,7 @@
     <v:Not x:Key="Not" />
     <v:ThumbnailSource x:Key="Thumbnail" />
     <v:SameAccount x:Key="SameAccount" />
+    <v:SameItem x:Key="SameItem" />
     <v:LimitLevel x:Key="Level" />
 
     <!-- Colors: the VS theme for text and surfaces, translucent overlays that work on dark and light themes, Claude's accent. -->
@@ -236,11 +237,53 @@
     </Style>
     <Style x:Key="SendButton" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
       <Setter Property="Background" Value="{StaticResource ClaudeAccent}" />
-      <Setter Property="Width" Value="28" />
-      <Setter Property="Height" Value="28" />
+      <Setter Property="Width" Value="30" />
+      <Setter Property="Height" Value="30" />
       <Setter Property="Padding" Value="0" />
-      <Setter Property="v:ClaudeControl.CornerRadius" Value="14" />
+      <Setter Property="v:ClaudeControl.CornerRadius" Value="9" />
       <Setter Property="v:ClaudeControl.HoverBrush" Value="#38FFFFFF" />
+      <Style.Triggers>
+        <!-- Nothing to send yet: a quiet grey square instead of a dimmed accent. -->
+        <Trigger Property="IsEnabled" Value="False">
+          <Setter Property="Background" Value="{DynamicResource ClaudeFaintBrush}" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+    <!-- The rounded chips under the prompt: attach, the open file, the mode, the model. -->
+    <Style x:Key="ToolChip" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+      <Setter Property="Height" Value="26" />
+      <Setter Property="MinWidth" Value="26" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="Margin" Value="0,0,4,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="BorderBrush" Value="{StaticResource ClaudeLine}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="v:ClaudeControl.CornerRadius" Value="13" />
+    </Style>
+    <Style x:Key="IconChip" TargetType="Button" BasedOn="{StaticResource ToolChip}">
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <!-- The mode chip takes the mode's color (Tag colors the icon): purple edits on their own, teal plans, accent runs on auto. -->
+    <Style x:Key="ModeChip" TargetType="Button" BasedOn="{StaticResource ToolChip}">
+      <Setter Property="Tag" Value="{Binding Foreground, RelativeSource={RelativeSource Self}}" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding PermissionMode}" Value="acceptEdits">
+          <Setter Property="Tag" Value="#A592E8" />
+          <Setter Property="Background" Value="#1FA592E8" />
+          <Setter Property="BorderBrush" Value="#80A592E8" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding PermissionMode}" Value="plan">
+          <Setter Property="Tag" Value="#3FB8AF" />
+          <Setter Property="Background" Value="#1F3FB8AF" />
+          <Setter Property="BorderBrush" Value="#803FB8AF" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding PermissionMode}" Value="auto">
+          <Setter Property="Tag" Value="#D97757" />
+          <Setter Property="Background" Value="#1FD97757" />
+          <Setter Property="BorderBrush" Value="#80D97757" />
+        </DataTrigger>
+      </Style.Triggers>
     </Style>
     <Style x:Key="MenuRow" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
       <Setter Property="Padding" Value="12,7" />
@@ -788,7 +831,7 @@
       <!-- ===== Keyboard hints under the prompt ===== -->
       <TextBlock DockPanel.Dock="Bottom" Margin="16,0,12,8" FontSize="11" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis"
                  Visibility="{Binding IsCliMissing, Converter={StaticResource Hidden}}">
-        <Run Text="{v:L 'Enter'}" FontWeight="SemiBold" /><Run Text="{v:L ' to send  ·  '}" /><Run Text="{v:L 'Shift+Enter'}" FontWeight="SemiBold" /><Run Text="{v:L ' new line  ·  '}" /><Run Text="/" FontWeight="SemiBold" /><Run Text="{v:L ' commands  ·  '}" /><Run Text="@" FontWeight="SemiBold" /><Run Text="{v:L ' files'}" />
+        <Run Text="{v:L 'Enter'}" FontWeight="SemiBold" /><Run Text="{v:L ' to send  ·  '}" /><Run Text="{v:L 'Shift+Enter'}" FontWeight="SemiBold" /><Run Text="{v:L ' new line  ·  '}" /><Run Text="/" FontWeight="SemiBold" /><Run Text="{v:L ' commands  ·  '}" /><Run Text="@" FontWeight="SemiBold" /><Run Text="{v:L ' files  ·  '}" /><Run Text="Ctrl+V" FontWeight="SemiBold" /><Run Text="{v:L ' paste images'}" />
       </TextBlock>
 
       <!-- ===== Prompt ===== -->
@@ -809,7 +852,34 @@
         <StackPanel>
           <ListBox x:Name="SuggestionList" ItemsSource="{Binding Suggestions}" Visibility="{Binding Suggestions.Count, Converter={StaticResource Visible}}" MaxHeight="220"
                    Background="Transparent" BorderThickness="0" Margin="4,4,4,0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}">
+                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" FocusVisualStyle="{x:Null}">
+            <!-- Rows like the menus': rounded, a soft layer under the pointer and a tinted chosen row, without the
+                 system highlight and its focus frame. -->
+            <ListBox.ItemContainerStyle>
+              <Style TargetType="ListBoxItem">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Padding" Value="10,5" />
+                <Setter Property="Margin" Value="0,1" />
+                <Setter Property="Template">
+                  <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                      <Border x:Name="Row" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter />
+                      </Border>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                          <Setter TargetName="Row" Property="Background" Value="{StaticResource ClaudeOverlayStrong}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                          <Setter TargetName="Row" Property="Background" Value="{StaticResource ClaudeAccentSoft}" />
+                        </Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Setter.Value>
+                </Setter>
+              </Style>
+            </ListBox.ItemContainerStyle>
             <ListBox.ItemTemplate>
               <DataTemplate DataType="{x:Type vm:ClaudeSuggestion}">
                 <Grid>
@@ -829,23 +899,35 @@
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
-          <ItemsControl ItemsSource="{Binding Attachments}" Visibility="{Binding HasAttachments, Converter={StaticResource Visible}}" Margin="10,8,10,0"
+          <ItemsControl ItemsSource="{Binding Attachments}" Visibility="{Binding HasAttachments, Converter={StaticResource Visible}}" Margin="10,10,4,0"
                         ItemsPanel="{StaticResource WrapItems}">
             <ItemsControl.ItemTemplate>
               <DataTemplate DataType="{x:Type vm:ClaudeAttachment}">
-                <Border Style="{StaticResource Chip}" Margin="0,0,6,6" Padding="3" ToolTip="{Binding Name}">
-                  <StackPanel Orientation="Horizontal">
-                    <Image Source="{Binding Thumbnail, Converter={StaticResource Thumbnail}}" Width="38" Height="38" Stretch="UniformToFill" Margin="0,0,6,0" />
-                    <StackPanel VerticalAlignment="Center" MaxWidth="120" Margin="0,0,6,0">
-                      <TextBlock Text="{Binding Name}" FontSize="11" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Text="{Binding SizeText}" FontSize="11" Style="{StaticResource Muted}" />
+                <!-- A card with a rounded preview; the remove button sits on its corner. -->
+                <Grid Margin="0,0,10,8" ToolTip="{Binding Name}">
+                  <Border Background="{StaticResource ClaudeOverlayStrong}" BorderBrush="{StaticResource ClaudeLine}" BorderThickness="1" CornerRadius="8" Padding="4,4,10,4">
+                    <StackPanel Orientation="Horizontal">
+                      <Grid Width="40" Height="40" Margin="0,0,8,0">
+                        <v:VsIcon Kind="Attach" Width="16" Height="16" Opacity="0.6" />
+                        <Border CornerRadius="6">
+                          <Border.Background>
+                            <ImageBrush ImageSource="{Binding Thumbnail, Converter={StaticResource Thumbnail}}" Stretch="UniformToFill" />
+                          </Border.Background>
+                        </Border>
+                      </Grid>
+                      <StackPanel VerticalAlignment="Center" MaxWidth="130">
+                        <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding SizeText}" FontSize="11" Style="{StaticResource Muted}" />
+                      </StackPanel>
                     </StackPanel>
-                    <Button Style="{StaticResource ClaudeIconButton}" VerticalAlignment="Top" ToolTip="{v:L 'Remove'}"
-                            Command="{Binding DataContext.RemoveAttachmentCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
-                      <v:VsIcon Kind="Close" Width="10" Height="10" />
-                    </Button>
-                  </StackPanel>
-                </Border>
+                  </Border>
+                  <Button Style="{StaticResource ClaudeIconButton}" Width="18" Height="18" Padding="0" Margin="0,-6,-6,0" HorizontalAlignment="Right" VerticalAlignment="Top"
+                          Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}" BorderBrush="{StaticResource ClaudeLine}" BorderThickness="1"
+                          v:ClaudeControl.CornerRadius="9" ToolTip="{v:L 'Remove'}"
+                          Command="{Binding DataContext.RemoveAttachmentCommand, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}" CommandParameter="{Binding}">
+                    <v:VsIcon Kind="Close" Width="10" Height="10" />
+                  </Button>
+                </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
@@ -854,7 +936,7 @@
           <TextBox x:Name="PromptBox" Style="{StaticResource ClaudePrompt}" Text="{Binding Prompt, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True"
                    TextWrapping="Wrap" MinHeight="58" MaxHeight="240" Padding="13,11,13,4" VerticalScrollBarVisibility="Auto"
                    Tag="{v:L 'Ask Claude to build, fix or explain something…'}" />
-          <Grid Margin="6,0,6,6">
+          <Grid Margin="8,0,8,8">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
@@ -863,46 +945,49 @@
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <Button Style="{StaticResource Pill}" Click="OnAttachClick" ToolTip="{v:L 'Attach images or files — or just paste or drop them here'}">
-              <v:VsIcon Kind="Attach" Width="14" Height="14" />
+            <Button Style="{StaticResource IconChip}" Click="OnAttachClick" ToolTip="{v:L 'Attach images or files (Ctrl+V pastes them, or drop them here)'}">
+              <v:VsIcon Kind="Attach" Width="15" Height="15" />
             </Button>
-            <Button Grid.Column="1" Style="{StaticResource Pill}" Command="{Binding ToggleContextCommand}" Visibility="{Binding HasEditorContext, Converter={StaticResource Visible}}"
+            <!-- The open file: shown with its icon, struck through when Claude does not see it. -->
+            <Button Grid.Column="1" Style="{StaticResource ToolChip}" Command="{Binding ToggleContextCommand}" Visibility="{Binding HasEditorContext, Converter={StaticResource Visible}}"
                     ToolTip="{v:L 'Claude sees this file and your selection. Click to include or leave it out.'}">
               <StackPanel Orientation="Horizontal">
-                <v:VsIcon Kind="Eye" Width="13" Height="13" Visibility="{Binding IncludeContext, Converter={StaticResource Visible}}" Margin="0,0,5,0" />
-                <v:VsIcon Kind="EyeOff" Width="13" Height="13" Visibility="{Binding IncludeContext, Converter={StaticResource Hidden}}" Margin="0,0,5,0" />
-                <TextBlock Text="{Binding ContextLabel}" VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis" />
+                <v:VsIcon Kind="FileCode" Width="14" Height="14" Margin="0,0,5,0" />
+                <TextBlock Text="{Binding ContextLabel}" VerticalAlignment="Center" MaxWidth="170" TextTrimming="CharacterEllipsis">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding IncludeContext}" Value="False">
+                          <Setter Property="TextDecorations" Value="Strikethrough" />
+                          <Setter Property="Foreground" Value="{DynamicResource ClaudeFaintBrush}" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+                <v:VsIcon Kind="Eye" Width="13" Height="13" Margin="6,0,0,0" Opacity="0.75" Visibility="{Binding IncludeContext, Converter={StaticResource Visible}}" />
+                <v:VsIcon Kind="EyeOff" Width="13" Height="13" Margin="6,0,0,0" Opacity="0.75" Visibility="{Binding IncludeContext, Converter={StaticResource Hidden}}" />
               </StackPanel>
             </Button>
-            <Button Grid.Column="2" Style="{StaticResource Pill}" Command="{Binding ToggleModesCommand}" ToolTip="{v:L 'How much Claude may do on its own, and how hard it thinks (Shift+Tab to switch)'}">
+            <Button Grid.Column="2" Style="{StaticResource ModeChip}" Command="{Binding ToggleModesCommand}" ToolTip="{v:L 'How much Claude may do on its own, and how hard it thinks (Shift+Tab to switch)'}">
               <StackPanel Orientation="Horizontal">
-                <v:VsIcon Kind="{Binding ModeIcon}" Width="13" Height="13" Margin="0,0,5,0" />
+                <v:VsIcon Kind="{Binding ModeIcon}" Width="14" Height="14" Margin="0,0,5,0"
+                          Foreground="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}" />
                 <TextBlock Text="{v:Tr ModeLabel}" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
-            <ComboBox x:Name="ModelPicker" Grid.Column="4" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" MaxWidth="170" FontSize="12"
-                      Margin="0,0,6,0" VerticalAlignment="Center" ToolTip="{v:L 'Model Claude answers with'}"
-                      Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ComboBoxStyleKey}}">
-              <ComboBox.ItemTemplate>
-                <DataTemplate DataType="{x:Type vm:ClaudeModelChoice}">
-                  <StackPanel Margin="0,2">
-                    <TextBlock x:Name="Label" Text="{v:Tr Label}" TextTrimming="CharacterEllipsis" />
-                    <TextBlock x:Name="Description" Text="{v:Tr Description}" Visibility="{Binding HasDescription, Converter={StaticResource Visible}}"
-                               Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" MaxWidth="320" />
-                  </StackPanel>
-                  <DataTemplate.Triggers>
-                    <!-- In the closed picker (no ComboBoxItem around it): the short label only. -->
-                    <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ComboBoxItem}}" Value="{x:Null}">
-                      <Setter TargetName="Label" Property="Text" Value="{Binding ShortLabel}" />
-                      <Setter TargetName="Description" Property="Visibility" Value="Collapsed" />
-                    </DataTrigger>
-                  </DataTemplate.Triggers>
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
+            <!-- The model: a chip that opens the model menu above the prompt. -->
+            <Button x:Name="ModelButton" Grid.Column="4" Style="{StaticResource ToolChip}" Margin="0,0,6,0" Click="OnModelClick" MaxWidth="180"
+                    ToolTip="{v:L 'Model Claude answers with'}" Visibility="{Binding Models.Count, Converter={StaticResource Visible}}">
+              <StackPanel Orientation="Horizontal">
+                <v:VsIcon Kind="Sparkle" Width="14" Height="14" Margin="0,0,5,0" Foreground="{StaticResource ClaudeAccent}" />
+                <TextBlock Text="{Binding SelectedModel.ShortLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <v:VsIcon Kind="ChevronUp" Width="11" Height="11" Margin="4,0,0,0" Opacity="0.7" />
+              </StackPanel>
+            </Button>
             <Button Grid.Column="5" Style="{StaticResource SendButton}" Command="{Binding SendCommand}" Visibility="{Binding IsRunning, Converter={StaticResource Hidden}}"
                     ToolTip="{v:L 'Send (Enter)'}">
-              <v:VsIcon Kind="Send" Width="15" Height="15" Foreground="White" />
+              <v:VsIcon Kind="Send" Width="16" Height="16" Foreground="White" />
             </Button>
             <Button Grid.Column="5" Style="{StaticResource SendButton}" Command="{Binding StopCommand}" Visibility="{Binding IsRunning, Converter={StaticResource Visible}}"
                     ToolTip="{v:L 'Stop Claude (Esc)'}">
@@ -1107,7 +1192,7 @@
     <!-- ===== Modes menu (above the prompt) ===== -->
     <Grid Visibility="{Binding IsModesOpen, Converter={StaticResource Visible}}">
       <Border Background="Transparent" MouseDown="OnBackdropPressed" />
-      <Border Style="{StaticResource MenuCard}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="10,0,10,96" Width="330">
+      <Border x:Name="ModesMenuCard" Style="{StaticResource MenuCard}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="10,0,10,96" Width="330">
         <StackPanel>
           <Grid Margin="12,8,10,6">
             <Grid.ColumnDefinitions>
@@ -1179,6 +1264,57 @@
             </ItemsControl>
           </Grid>
         </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- ===== Model menu (above the prompt, at the model chip) ===== -->
+    <Grid x:Name="ModelMenu" Visibility="Collapsed">
+      <Border Background="Transparent" MouseDown="OnModelMenuBackdrop" />
+      <Border x:Name="ModelMenuCard" Style="{StaticResource MenuCard}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="10,10,10,96" Width="300">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="12,9,12,5">
+            <v:VsIcon Kind="Sparkle" Width="13" Height="13" Margin="0,0,6,0" Foreground="{StaticResource ClaudeAccent}" />
+            <TextBlock Text="{v:L 'Model'}" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" />
+          </StackPanel>
+          <ScrollViewer MaxHeight="360" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Margin="0,0,0,4"
+                        Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ScrollViewerStyleKey}}">
+            <ItemsControl ItemsSource="{Binding Models}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:ClaudeModelChoice}">
+                  <Button x:Name="Row" Style="{StaticResource ClaudeButtonBase}" Padding="12,7" Margin="4,1" HorizontalContentAlignment="Stretch"
+                          v:ClaudeControl.CornerRadius="6" Click="OnModelPicked">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <!-- The chosen model: a tinted row and a tick. -->
+                      <StackPanel>
+                        <TextBlock x:Name="Label" Text="{v:Tr Label}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{v:Tr Description}" Visibility="{Binding HasDescription, Converter={StaticResource Visible}}"
+                                   Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <v:VsIcon x:Name="Tick" Grid.Column="1" Kind="Check" Width="14" Height="14" Margin="8,0,0,0" Foreground="{StaticResource ClaudeAccent}" Visibility="Hidden" />
+                    </Grid>
+                  </Button>
+                  <DataTemplate.Triggers>
+                    <DataTrigger Value="True">
+                      <DataTrigger.Binding>
+                        <MultiBinding Converter="{StaticResource SameItem}">
+                          <Binding />
+                          <Binding Path="DataContext.SelectedModel" RelativeSource="{RelativeSource AncestorType=v:ClaudeControl}" />
+                        </MultiBinding>
+                      </DataTrigger.Binding>
+                      <Setter TargetName="Row" Property="Background" Value="{StaticResource ClaudeAccentSoft}" />
+                      <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                      <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
+                    </DataTrigger>
+                  </DataTemplate.Triggers>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
       </Border>
     </Grid>
 

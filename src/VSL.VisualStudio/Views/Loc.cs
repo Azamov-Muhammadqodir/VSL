@@ -110,6 +110,10 @@ public sealed class Loc : INotifyPropertyChanged
         [" new line  ·  "] = " — yangi qator  ·  ",
         [" commands  ·  "] = " buyruqlar  ·  ",
         [" files"] = " fayllar",
+        [" files  ·  "] = " fayllar  ·  ",
+        [" paste images"] = " rasm joylash",
+        ["Attach images or files (Ctrl+V pastes them, or drop them here)"] = "Rasm yoki fayl biriktirish (Ctrl+V bilan joylang yoki shu yerga tashlang)",
+        ["Model"] = "Model",
         ["Drop images or files to attach"] = "Biriktirish uchun rasm yoki faylni shu yerga tashlang",
         ["Remove"] = "Olib tashlash",
 

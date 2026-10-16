@@ -63,3 +63,12 @@ public sealed class LimitLevel : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>True when both values are the same item (the chosen row of the model menu).</summary>
+public sealed class SameItem : IMultiValueConverter
+{
+    public object Convert(object?[] values, Type targetType, object? parameter, CultureInfo culture) =>
+        values is [{ } a, { } b] && Equals(a, b);
+
+    public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
