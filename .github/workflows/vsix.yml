@@ -16,6 +16,8 @@ on:
       - 'src/VSL/ViewModels/Claude*'
       - 'src/VSL/Views/MarkdownParser.cs'
       - '.github/workflows/vsix.yml'
+      - '!src/VSL.VisualStudio/**/*.md'
+      - '!src/VSL.VisualStudio/images/**'
   pull_request:
     branches: [main]
     paths:
@@ -24,6 +26,8 @@ on:
       - 'src/VSL/ViewModels/Claude*'
       - 'src/VSL/Views/MarkdownParser.cs'
       - '.github/workflows/vsix.yml'
+      - '!src/VSL.VisualStudio/**/*.md'
+      - '!src/VSL.VisualStudio/images/**'
   workflow_dispatch:
     inputs:
       publish:
