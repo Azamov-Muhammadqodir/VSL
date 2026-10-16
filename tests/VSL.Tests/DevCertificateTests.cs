@@ -82,6 +82,25 @@ public class DevCertificateTests
     }
 
     [AvaloniaFact]
+    public async Task Does_not_ask_when_trusted_for_dotnet_but_not_every_browser()
+    {
+        SampleSolution.EnsureConfigIsolated();
+        var dialogs = new Dialogs(answer: true);
+        // Every start of VSL is a new session; a Partial trust (no NSS trust for Chromium) must not ask each time.
+        for (var session = 0; session < 2; session++)
+        {
+            var vm = new MainViewModel
+            {
+                Dialogs = dialogs,
+                CheckDevCertificate = _ => Task.FromResult(DevCertificateTrust.Partial),
+                TrustDevCertificateTool = (_, _) => throw new InvalidOperationException("must not trust again"),
+            };
+            await vm.OfferDevCertificateTrustAsync(Profile("https://localhost:7101"));
+        }
+        Assert.Empty(dialogs.Asked);
+    }
+
+    [AvaloniaFact]
     public async Task Declining_points_to_the_tools_command()
     {
         SampleSolution.EnsureConfigIsolated();

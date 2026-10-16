@@ -120,6 +120,7 @@ public sealed partial class EditorHost : IDisposable, IDebugLineSource
         Editor.ContextMenu = BuildContextMenu();
         InitializeOutlining();
         InitializeSemanticColors();
+        InitializeViewState();
     }
 
     public string FilePath { get; }

@@ -623,7 +623,7 @@
               <TextBox Name="ExplorerSearch" DockPanel.Dock="Top" Classes="search" Margin="4,0,4,4"
                        PlaceholderText="Search Solution Explorer (Ctrl+;)" TextChanged="OnExplorerSearchChanged" />
               <Panel>
-                <TreeView Name="ExplorerTree" ItemsSource="{Binding ExplorerRoots}"
+                <TreeView Name="ExplorerTree" ItemsSource="{Binding ExplorerRoots}" SelectedItem="{Binding SelectedExplorerNode, Mode=TwoWay}"
                           KeyDown="OnExplorerKeyDown" Background="Transparent">
                   <TreeView.Styles>
                     <Style Selector="TreeViewItem" x:DataType="ws:ExplorerNode">

@@ -57,6 +57,9 @@ public partial class MainWindow : Window, IDialogService
         }, RoutingStrategies.Tunnel);
         // Following the output keeps its last line at the bottom; scrolling below the document would push it out of view.
         OutputEditor.Options.AllowScrollBelowDocument = false;
+        OutputEditor.TextArea.TextView.LineTransformers.Add(new Editor.OutputColorizer(() => Vm?.SelectedOutput));
+        // URLs stay Ctrl+clickable, in VSL's link color instead of AvaloniaEdit's default pure blue (unreadable on dark).
+        OutputEditor.TextArea.TextView.LinkTextForegroundBrush = new SolidColorBrush(Color.Parse("#3794FF"));
         OutputEditor.AttachedToVisualTree += (_, _) =>
         {
             if (!_outputScrollPending)
@@ -77,6 +80,7 @@ public partial class MainWindow : Window, IDialogService
         if (_closingConfirmed || Vm is not { } vm)
             return;
         e.Cancel = true;
+        SaveDockLayout(vm);
         vm.SaveSession();
         if (await vm.CloseSolutionCoreAsync())
         {

@@ -103,6 +103,7 @@ public sealed partial class EditorHost
         foreach (var section in _folding.AllFoldings)
             if (kinds.TryGetValue((section.StartOffset, section.EndOffset), out var kind))
                 _outlineKinds.AddOrUpdate(section, kind);
+        ApplyPendingCollapsed();
         OutliningUpdated?.Invoke();
     }
 

@@ -120,6 +120,86 @@ public class SolutionExplorerTests
     static IEnumerable<string> Headers(IEnumerable<object> items) => items.OfType<MenuItem>().Select(m => (string)m.Header!);
 
     [AvaloniaFact]
+    public async Task Restores_the_whole_solution_state_from_the_dot_vs_folder()
+    {
+        var sln = CopySample();
+        var dir = Path.GetDirectoryName(sln)!;
+        var longFile = Path.Combine(dir, "Web", "Long.cs");
+        File.WriteAllText(longFile, string.Concat(Enumerable.Range(1, 300).Select(i => $"// line {i}\n")));
+        var program = Path.Combine(dir, "Web", "Program.cs");
+        var greeting = Path.Combine(dir, "Components", "Greeting.razor.cs");
+
+        var vm = NewViewModel();
+        vm.RestoresSolutionState = true;
+        var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+        var root = vm.ExplorerRoots[0];
+        root.Children.First(n => n.Name == "Components").IsExpanded = true;
+        var web = root.Children.First(n => n.Name == "Web");
+        web.IsExpanded = true;
+        vm.SelectedExplorerNode = web.Children.First(n => n.Name == "Program.cs");
+
+        vm.OpenDocument(program)!.IsPinned = true;
+        vm.Breakpoints.Toggle(program, 2);
+        await vm.AddWatchCommand.ExecuteAsync("args");
+        vm.Configuration = "Release";
+        var longDoc = vm.OpenDocument(longFile)!;
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        longDoc.Host.Editor.ScrollToLine(200);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(300));
+        var scrolledTo = longDoc.Host.CaptureViewState().FirstVisibleLine;
+        Assert.True(scrolledTo > 100, $"first visible line {scrolledTo}");
+        var code = vm.OpenDocument(greeting)!.Host;
+        code.Editor.TextArea.Caret.Position = new AvaloniaEdit.TextViewPosition(8, 5);
+        var classBlock = code.Outlines.First(f => code.Document.GetLineByOffset(f.StartOffset).LineNumber == 5);
+        classBlock.IsFolded = true;
+        var sessionId = Guid.NewGuid().ToString();
+        var transcript = FakeClaude.WriteTranscript(dir, sessionId);
+        await vm.Claude.ResumeConversationCommand.ExecuteAsync(new VSL.Claude.ClaudeConversation(sessionId, "", DateTime.Now, transcript));
+        Assert.True(await vm.CloseSolutionCoreAsync());
+        window.Close();
+
+        // Kept next to the solution, like Visual Studio's .vs/<Solution>/v17/.suo, with paths relative to its folder.
+        var file = Path.Combine(dir, ".vs", "BlazorSample", "VSL", "state.json");
+        Assert.True(File.Exists(file));
+        var json = File.ReadAllText(file);
+        Assert.Contains("\"Web/Program.cs\"", json);
+        Assert.DoesNotContain(dir, json);
+        Assert.Equal("*\n", File.ReadAllText(Path.Combine(dir, ".vs", ".gitignore")));
+
+        var reopened = NewViewModel();
+        reopened.RestoresSolutionState = true;
+        var second = new MainWindow { DataContext = reopened, Width = 1280, Height = 800 };
+        second.Show();
+        await reopened.OpenSolutionAsync(sln);
+        var editors = reopened.Editors.ToList();
+        Assert.Equal(["Program.cs", "Long.cs", "Greeting.razor.cs"], editors.Select(d => d.FileName));
+        Assert.True(editors[0].IsPinned);
+        Assert.False(editors[1].IsPinned);
+        Assert.Equal("Greeting.razor.cs", reopened.ActiveEditor?.FileName);
+        var restored = reopened.ActiveEditor!.Host;
+        Assert.Equal((8, 5), restored.CaretPosition);
+        Assert.Contains(restored.Outlines, f => f.IsFolded && restored.Document.GetLineByOffset(f.StartOffset).LineNumber == 5);
+        Assert.Equal([2], reopened.Breakpoints.For(program));
+        Assert.Equal(["args"], reopened.Watches.Select(w => w.Expression));
+        Assert.Equal("Release", reopened.Configuration);
+        var reopenedRoot = reopened.ExplorerRoots[0];
+        Assert.True(reopenedRoot.Children.First(n => n.Name == "Components").IsExpanded);
+        Assert.True(reopenedRoot.Children.First(n => n.Name == "Web").IsExpanded);
+        Assert.Equal(program, reopened.SelectedExplorerNode?.Path);
+        // The Claude Code conversation is back as it was, and continues it when the user sends.
+        Assert.Equal(sessionId, reopened.Claude.SessionId);
+        Assert.Equal("Fix the build", Assert.IsType<UserChatItem>(reopened.Claude.Items[0]).Text);
+        Assert.Equal("Fixed.", reopened.Claude.Items.OfType<TextChatItem>().Last().Text);
+        // A document opens where it was scrolled to once it is shown.
+        reopened.ActiveDocument = editors[1];
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(500));
+        Assert.Equal(scrolledTo, editors[1].Host.CaptureViewState().FirstVisibleLine);
+        Assert.True(await reopened.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
     public async Task Adds_renames_and_deletes_files_like_visual_studio()
     {
         var sln = CopySample();
@@ -211,5 +291,37 @@ public class SolutionExplorerTests
         Assert.True(models.IsExpanded);
 
         Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+}
+
+public class SolutionStateTests
+{
+    [Fact]
+    public void Moves_older_state_out_of_settings_and_survives_a_broken_file()
+    {
+        SampleSolution.EnsureConfigIsolated();
+        var dir = Path.Combine(Path.GetTempPath(), "vsl-state-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var sln = Path.Combine(dir, "Shop.slnx");
+        File.WriteAllText(sln, "<Solution />");
+        var settings = new VSL.Services.Settings();
+        settings.Solutions[sln] = new VSL.Services.Settings.SolutionState
+        {
+            OpenDocuments = [Path.Combine(dir, "A.cs")],
+            ActiveDocument = Path.Combine(dir, "A.cs"),
+            Configuration = "Release",
+            Breakpoints = new() { [Path.Combine(dir, "A.cs")] = [3] },
+        };
+
+        var state = VSL.Services.SolutionState.Load(sln, settings);
+        Assert.Empty(settings.Solutions);
+        Assert.Equal([Path.Combine(dir, "A.cs")], state.Documents.Select(d => d.Path));
+        Assert.Equal("Release", state.Configuration);
+        Assert.True(state.Save(sln));
+        Assert.Contains("\"A.cs\"", File.ReadAllText(VSL.Services.SolutionState.FileFor(sln)));
+        Assert.Equal([3], VSL.Services.SolutionState.Load(sln, settings).Breakpoints[Path.Combine(dir, "A.cs")]);
+
+        File.WriteAllText(VSL.Services.SolutionState.FileFor(sln), "{ not json");
+        Assert.Empty(VSL.Services.SolutionState.Load(sln, settings).Documents);
     }
 }

@@ -10,6 +10,24 @@ public sealed class Settings
 
     /// <summary>Tool window id → dock side ("Left", "Right", "Bottom") for windows the user moved.</summary>
     public Dictionary<string, string> ToolLayout { get; set; } = [];
+
+    /// <summary>Tool group sizes, their front tabs and the main window's size (per user, like Visual Studio's window layout).</summary>
+    public WindowLayout Layout { get; set; } = new();
+
+    public sealed class WindowLayout
+    {
+        public double? LeftWidth { get; set; }
+        public double? RightWidth { get; set; }
+        public double? BottomHeight { get; set; }
+
+        /// <summary>Dock side ("Left", "Right", "Bottom") → the tool window in front.</summary>
+        public Dictionary<string, string> SelectedTools { get; set; } = [];
+
+        /// <summary>The window's size when it is not maximized.</summary>
+        public double? Width { get; set; }
+        public double? Height { get; set; }
+        public bool Maximized { get; set; }
+    }
     public List<string> RecentSolutions { get; set; } = [];
 
     /// <summary>When each recent solution was last opened (for the start window's Today / This week groups).</summary>
@@ -33,6 +51,10 @@ public sealed class Settings
 
     /// <summary>The Claude Code account (its configuration folder) the panel runs with; null for the CLI's own choice.</summary>
     public string? ClaudeAccount { get; set; }
+    /// <summary>
+    /// Per-solution state of older VSL versions; it now lives in each solution's .vs folder (see
+    /// <see cref="Services.SolutionState"/>), which moves an entry out of here the first time the solution opens.
+    /// </summary>
     public Dictionary<string, SolutionState> Solutions { get; set; } = [];
 
     public sealed class SolutionState
@@ -50,13 +72,6 @@ public sealed class Settings
         Environment.GetEnvironmentVariable("VSL_CONFIG_DIR") is { Length: > 0 } dir ? dir
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VSL"),
         "settings.json");
-
-    public SolutionState For(string solutionPath)
-    {
-        if (!Solutions.TryGetValue(solutionPath, out var state))
-            Solutions[solutionPath] = state = new SolutionState();
-        return state;
-    }
 
     const int MaxRecent = 20;
 

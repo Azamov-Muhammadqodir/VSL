@@ -48,8 +48,11 @@ public partial class MainViewModel
 
     async Task OnBreakpointsChangedAsync(string file)
     {
-        if (Solution is not null)
-            Settings.For(Solution.FilePath).Breakpoints = Breakpoints.Snapshot();
+        if (Solution is not null && !_restoringState)
+        {
+            _state.Breakpoints = Breakpoints.Snapshot();
+            SaveSession();
+        }
         if (_session is not { HasEnded: false } session)
             return;
         // Breakpoints added or removed while debugging take effect immediately.
@@ -65,7 +68,7 @@ public partial class MainViewModel
         }
     }
 
-    void LoadDebugState(Services.Settings.SolutionState state)
+    void LoadDebugState(Services.SolutionState state)
     {
         Breakpoints.Load(state.Breakpoints);
         Watches.Clear();
@@ -73,7 +76,7 @@ public partial class MainViewModel
             Watches.Add(new WatchItem(w));
     }
 
-    void SaveDebugState(Services.Settings.SolutionState state)
+    void SaveDebugState(Services.SolutionState state)
     {
         state.Breakpoints = Breakpoints.Snapshot();
         state.Watches = Watches.Select(w => w.Expression).ToList();
@@ -130,6 +133,8 @@ public partial class MainViewModel
         // dotnet run turns applicationUrl into ASPNETCORE_URLS; launching the dll directly must do the same.
         if (profile?.ApplicationUrl is { Length: > 0 } urls && !env.ContainsKey("ASPNETCORE_URLS"))
             env["ASPNETCORE_URLS"] = urls;
+        foreach (var (name, value) in ProgramOutputEnvironment)
+            env.TryAdd(name, value);
         var args = new List<string> { program };
         if (profile?.CommandLineArgs is { Length: > 0 } extra)
             args.AddRange(extra.Split(' ', StringSplitOptions.RemoveEmptyEntries));
@@ -155,7 +160,7 @@ public partial class MainViewModel
                         if (!browserOpened && profile is { LaunchBrowser: true } && text.Contains("Now listening on:", StringComparison.Ordinal))
                         {
                             browserOpened = true;
-                            var url = Regex.Match(text, @"https?://\S+").Value;
+                            var url = Regex.Match(text, @"https?://[^\s\u001b]+").Value;
                             if (url.Length > 0)
                                 OpenBrowser(url.TrimEnd('/') + "/" + (profile.LaunchUrl ?? ""));
                         }
@@ -415,8 +420,7 @@ public partial class MainViewModel
             return;
         var item = new WatchItem(expression.Trim());
         Watches.Add(item);
-        if (Solution is not null)
-            SaveDebugState(Settings.For(Solution.FilePath));
+        SaveSession();
         await EvaluateWatchAsync(item);
     }
 
@@ -426,8 +430,7 @@ public partial class MainViewModel
         if (item is null)
             return;
         Watches.Remove(item);
-        if (Solution is not null)
-            SaveDebugState(Settings.For(Solution.FilePath));
+        SaveSession();
     }
 
     async Task RefreshWatchesAsync()

@@ -1146,6 +1146,39 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
     {
         if (conversation is null)
             return;
+        await LoadConversationAsync(conversation);
+        FocusInputRequested?.Invoke();
+    }
+
+    /// <summary>
+    /// Reopening a solution brings back the conversation it closed with (it continues when the user sends); false
+    /// when its transcript is gone or a conversation is already showing.
+    /// </summary>
+    public async Task<bool> RestoreConversationAsync(string sessionId)
+    {
+        if (Items.Count > 0 || sessionId.Length == 0 || sessionId is "." or ".." || sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            return false;
+        var file = Path.Combine(ClaudeCli.ProjectDirectory(_workingDirectory(), SelectedAccount?.ConfigDirectory), sessionId + ".jsonl");
+        if (!File.Exists(file))
+            return false;
+        // The panel's warm-up may still be starting the CLI: it would finish into a new conversation after this one.
+        if (_starting is { } starting)
+        {
+            try
+            {
+                await starting;
+            }
+            catch (Exception)
+            {
+                // A CLI that failed to start leaves nothing to stop.
+            }
+        }
+        await LoadConversationAsync(new ClaudeConversation(sessionId, "", File.GetLastWriteTime(file), file));
+        return true;
+    }
+
+    async Task LoadConversationAsync(ClaudeConversation conversation)
+    {
         await StopSessionAsync();
         EndTurn();
         Items.Clear();
@@ -1159,7 +1192,6 @@ public sealed partial class ClaudeViewModel : ObservableObject, IAsyncDisposable
         _resumeId = conversation.SessionId;
         OnPropertyChanged(nameof(SessionId));
         IsHistoryOpen = false;
-        FocusInputRequested?.Invoke();
     }
 
     // ---- Attachments ---------------------------------------------------------------------------------------

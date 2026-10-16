@@ -35,16 +35,25 @@ public sealed record FindResultItem(string FilePath, int Line, int Column, strin
     public string Display => $"{Path.GetFileName(FilePath)}({Line},{Column}): {Preview}";
 }
 
-/// <summary>An Output window channel ("Show output from: Build"). Appends are marshalled to the UI thread.</summary>
+/// <summary>
+/// An Output window channel ("Show output from: Build"). Appends are marshalled to the UI thread. ANSI colors in the
+/// text (a program's console logger) become <see cref="Spans"/>, drawn like the integrated terminal draws them.
+/// </summary>
 public sealed partial class OutputChannel : ObservableObject
 {
     const int MaxLength = 2_000_000;
+
+    readonly AnsiText _ansi = new();
+    readonly List<OutputSpan> _spans = [];
 
     public OutputChannel(string name) => Name = name;
 
     public string Name { get; }
 
     public TextDocument Document { get; } = new();
+
+    /// <summary>The colored runs of the text, in order.</summary>
+    public IReadOnlyList<OutputSpan> Spans => _spans;
 
     public event Action? Appended;
 
@@ -70,17 +79,43 @@ public sealed partial class OutputChannel : ObservableObject
     void AppendText(string text)
     {
         if (Document.TextLength > MaxLength)
-            Document.Remove(0, Document.TextLength / 2);
-        Document.Insert(Document.TextLength, text);
+            Trim(Document.TextLength / 2);
+        var (plain, spans) = _ansi.Parse(text);
+        var at = Document.TextLength;
+        // The runs go in before the text so the editor colors the new lines when it draws them.
+        foreach (var span in spans)
+            _spans.Add(span with { Start = span.Start + at });
+        Document.Insert(at, plain);
         Appended?.Invoke();
+    }
+
+    void Trim(int length)
+    {
+        Document.Remove(0, length);
+        for (var i = _spans.Count - 1; i >= 0; i--)
+        {
+            var span = _spans[i];
+            var end = span.Start + span.Length - length;
+            if (end <= 0)
+                _spans.RemoveAt(i);
+            else
+                _spans[i] = span with { Start = Math.Max(span.Start - length, 0), Length = end - Math.Max(span.Start - length, 0) };
+        }
     }
 
     public void Clear()
     {
         if (Dispatcher.UIThread.CheckAccess())
-            Document.Text = "";
+            ClearCore();
         else
-            Dispatcher.UIThread.Post(() => Document.Text = "");
+            Dispatcher.UIThread.Post(ClearCore);
+    }
+
+    void ClearCore()
+    {
+        _spans.Clear();
+        _ansi.Reset();
+        Document.Text = "";
     }
 
     public override string ToString() => Name;
