@@ -29,6 +29,12 @@ public sealed class RoslynClient : IAsyncDisposable
     public event Action<string>? Log;
     public event Action? ProjectsLoaded;
     public event Action? DiagnosticsRefreshRequested;
+
+    /// <summary>The server's classifications changed (a project loaded, a referenced file was edited...).</summary>
+    public event Action? SemanticTokensRefreshRequested;
+
+    /// <summary>The server's semantic token types, by index (its legend); empty when it has none.</summary>
+    public IReadOnlyList<string> SemanticTokenTypes { get; private set; } = [];
     public event Action<IReadOnlyList<string>>? RestoreRequested;
 
     /// <summary>Progress text from the server (e.g. project loading); null when the operation ends.</summary>
@@ -87,7 +93,7 @@ public sealed class RoslynClient : IAsyncDisposable
         });
 
         var root = Path.GetDirectoryName(solutionPath)!;
-        await rpc.RequestAsync("initialize", new
+        var init = await rpc.RequestAsync("initialize", new
         {
             processId = Environment.ProcessId,
             clientInfo = new { name = "VSL", version = "0.1" },
@@ -95,6 +101,7 @@ public sealed class RoslynClient : IAsyncDisposable
             workspaceFolders = new[] { new { uri = ToUri(root), name = Path.GetFileName(root) } },
             capabilities = ClientCapabilities,
         }, ct);
+        client.SemanticTokenTypes = SemanticTokenLegend(init);
         await rpc.NotifyAsync("initialized", new { });
         if (Workspace.SolutionLoader.IsProjectFile(solutionPath))
             await rpc.NotifyAsync("project/open", new { projects = new[] { ToUri(solutionPath) } });
@@ -114,6 +121,7 @@ public sealed class RoslynClient : IAsyncDisposable
             applyEdit = true,
             workspaceEdit = new { documentChanges = true },
             diagnostics = new { refreshSupport = true },
+            semanticTokens = new { refreshSupport = true },
         },
         textDocument = new
         {
@@ -146,6 +154,21 @@ public sealed class RoslynClient : IAsyncDisposable
             formatting = new { },
             foldingRange = new { lineFoldingOnly = false, foldingRange = new { collapsedText = true } },
             rename = new { prepareSupport = false },
+            // Roslyn's classifications (locals, fields, methods, structs...), colored as Visual Studio does.
+            semanticTokens = new
+            {
+                requests = new { range = false, full = new { delta = false } },
+                tokenTypes = new[]
+                {
+                    "namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable", "property",
+                    "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string", "number",
+                    "regexp", "operator",
+                },
+                tokenModifiers = new[] { "declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary" },
+                formats = new[] { "relative" },
+                multilineTokenSupport = true,
+                overlappingTokenSupport = false,
+            },
             codeAction = new
             {
                 dataSupport = true,
@@ -186,6 +209,11 @@ public sealed class RoslynClient : IAsyncDisposable
         _rpc.OnRequest("workspace/diagnostic/refresh", _ =>
         {
             DiagnosticsRefreshRequested?.Invoke();
+            return Task.FromResult<object?>(null);
+        });
+        _rpc.OnRequest("workspace/semanticTokens/refresh", _ =>
+        {
+            SemanticTokensRefreshRequested?.Invoke();
             return Task.FromResult<object?>(null);
         });
         // Razor cohosting: the HTML half of .razor files is served by the client.
@@ -319,6 +347,26 @@ public sealed class RoslynClient : IAsyncDisposable
         var result = await _rpc.RequestAsync("textDocument/diagnostic", new { textDocument = new { uri = ToUri(path) } }, ct);
         return result.ValueKind == JsonValueKind.Object && result.TryGetProperty("items", out var items)
             ? LspParse.Diagnostics(items)
+            : [];
+    }
+
+    static IReadOnlyList<string> SemanticTokenLegend(JsonElement initializeResult) =>
+        initializeResult.ValueKind == JsonValueKind.Object
+        && initializeResult.TryGetProperty("capabilities", out var caps)
+        && caps.TryGetProperty("semanticTokensProvider", out var provider) && provider.ValueKind == JsonValueKind.Object
+        && provider.TryGetProperty("legend", out var legend)
+        && legend.TryGetProperty("tokenTypes", out var types) && types.ValueKind == JsonValueKind.Array
+            ? types.EnumerateArray().Select(t => t.GetString() ?? "").ToList()
+            : [];
+
+    /// <summary>The file's semantic tokens in LSP's relative encoding (5 integers per token); empty when there are none.</summary>
+    public async Task<int[]> SemanticTokensAsync(string path, CancellationToken ct)
+    {
+        if (SemanticTokenTypes.Count == 0)
+            return [];
+        var result = await _rpc.RequestAsync("textDocument/semanticTokens/full", new { textDocument = new { uri = ToUri(path) } }, ct);
+        return result.ValueKind == JsonValueKind.Object && result.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array
+            ? data.EnumerateArray().Select(v => v.GetInt32()).ToArray()
             : [];
     }
 

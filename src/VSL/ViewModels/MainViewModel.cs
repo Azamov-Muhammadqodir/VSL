@@ -383,8 +383,17 @@ public partial class MainViewModel : ObservableObject
                     if (_lsp != lsp)
                         return;
                     foreach (var d in Editors)
+                    {
                         d.Host.ScheduleDiagnostics(0);
+                        if (i == 0)
+                            d.Host.ScheduleSemanticTokens(0);
+                    }
                 }
+            });
+            lsp.SemanticTokensRefreshRequested += () => Dispatcher.UIThread.Post(() =>
+            {
+                foreach (var d in Editors)
+                    d.Host.ScheduleSemanticTokens(300);
             });
             lsp.DiagnosticsRefreshRequested += () => Dispatcher.UIThread.Post(() =>
             {

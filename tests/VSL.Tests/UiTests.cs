@@ -1430,6 +1430,50 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Colors_code_with_visual_studio_classifications()
+    {
+        var sln = await SampleSolution.GetAsync();
+        var vm = NewViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1280, Height = 800 };
+        window.Show();
+        await vm.OpenSolutionAsync(sln);
+        var doc = vm.OpenDocument(SampleSolution.PathOf(sln, "Components/Greeting.razor.cs"))!;
+        var host = doc.Host;
+        await WaitUntil(() => vm.ServerStatus == "IntelliSense: ready", TimeSpan.FromMinutes(5));
+        var text = host.Document.Text;
+        host.Document.Insert(text.IndexOf('{', text.IndexOf("class ", StringComparison.Ordinal)) + 1,
+            "\n    int Count(string text)\n    {\n        var total = 0;\n        if (text.Length > 0)\n            total = System.DateTime.Now.Day;\n        return total;\n    }\n");
+
+        // What Roslyn classifies, in Visual Studio's Dark colors: locals and parameters, control keywords, structs vs
+        // classes, methods, strings.
+        string? ColorOf(string snippet)
+        {
+            var offset = host.Document.Text.IndexOf(snippet, StringComparison.Ordinal);
+            var location = host.Document.GetLocation(offset);
+            return host.SemanticColors!.ColorAt(location.Line, location.Column - 1) is Avalonia.Media.ISolidColorBrush b
+                ? $"#{b.Color.R:X2}{b.Color.G:X2}{b.Color.B:X2}"
+                : null;
+        }
+        await WaitUntil(() => ColorOf("total = 0") == "#9CDCFE", TimeSpan.FromSeconds(60));
+        Assert.Equal("#9CDCFE", ColorOf("total = 0"));
+        Assert.Equal("#9CDCFE", ColorOf("text.Length"));
+        Assert.Equal("#D8A0DF", ColorOf("if (text"));
+        Assert.Equal("#D8A0DF", ColorOf("return total"));
+        Assert.Equal("#569CD6", ColorOf("var total"));
+        Assert.Equal("#86C691", ColorOf("DateTime"));
+        Assert.Equal("#DCDCDC", ColorOf("Now"));
+        Assert.Equal("#DCDCAA", ColorOf("Count("));
+        Assert.Equal("#4EC9B0", ColorOf("Greeting"));
+        Assert.Equal("#D69D85", ColorOf("\"world\""));
+        Assert.Equal("#B5CEA8", ColorOf("0;"));
+        Snapshot(window, "vs-colors");
+
+        while (host.Editor.CanUndo)
+            host.Editor.Undo();
+        Assert.True(await vm.CloseSolutionCoreAsync());
+    }
+
+    [AvaloniaFact]
     public async Task Opens_blazor_solution_with_intellisense()
     {
         var sln = await SampleSolution.GetAsync();
