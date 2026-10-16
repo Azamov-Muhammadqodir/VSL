@@ -69,6 +69,10 @@ public sealed partial class GitTreeNode : ObservableObject
     /// <summary>C# files show "C#" in place of the page icon, as in Visual Studio.</summary>
     public bool IsCSharp => Kind == GitNodeKind.File && Name.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Razor pages and components show a page with a green "@", as in Visual Studio.</summary>
+    public bool IsRazor => Kind == GitNodeKind.File
+        && (Name.EndsWith(".razor", StringComparison.OrdinalIgnoreCase) || Name.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase));
+
     public string Letter => Change?.Letter ?? "";
 
     public string? ToolTip => Kind switch
