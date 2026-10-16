@@ -634,7 +634,10 @@
                     <TreeDataTemplate x:DataType="ws:ExplorerNode" ItemsSource="{Binding Children}">
                       <StackPanel Orientation="Horizontal" Spacing="6" Height="20" Background="Transparent" ContextRequested="OnExplorerContextRequested">
                         <ContentControl Content="{Binding ThemeIcon, Converter={x:Static v:IconConverter.Instance}}" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" IsVisible="{Binding !IsRenaming}" />
+                        <TextBox Classes="rename" Text="{Binding EditName}" IsVisible="{Binding IsRenaming}" VerticalAlignment="Center"
+                                 MinWidth="180" MinHeight="20" Height="20" Padding="3,0" VerticalContentAlignment="Center"
+                                 KeyDown="OnRenameKeyDown" LostFocus="OnRenameLostFocus" />
                         <TextBlock Text="{Binding Detail}" VerticalAlignment="Center" Foreground="{StaticResource VsGrayTextBrush}" />
                         <TextBlock Text="{Binding GitBadge}" VerticalAlignment="Center" FontWeight="SemiBold"
                                    Foreground="{Binding GitBadgeColor, Converter={x:Static v:ColorStringConverter.Instance}}" />

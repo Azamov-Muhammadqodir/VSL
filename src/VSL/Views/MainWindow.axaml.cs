@@ -40,6 +40,8 @@ public partial class MainWindow : Window, IDialogService
                 };
                 foreach (var channel in vm.OutputChannels)
                     channel.Appended += ScrollOutputToEnd;
+                vm.ExplorerRenameRequested += BeginExplorerRename;
+                vm.ExplorerSelectRequested += SelectExplorerNode;
             }
         };
         Activated += (_, _) => Vm?.CheckExternalChanges();
@@ -102,6 +104,19 @@ public partial class MainWindow : Window, IDialogService
         if (ctrl && e.Key == Key.OemTilde && Vm is { } terminalVm)
         {
             terminalVm.ShowTerminalCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+        // Project > Add New Item (Ctrl+Shift+A) and Add Existing Item (Shift+Alt+A): into Solution Explorer's
+        // selection when it has focus, else next to the active document.
+        if (e.Key == Key.A && Vm is { HasSolution: true } addVm
+            && (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) || e.KeyModifiers == (KeyModifiers.Shift | KeyModifiers.Alt)))
+        {
+            var target = ExplorerTree.IsKeyboardFocusWithin ? ExplorerTree.SelectedItem as ExplorerNode : null;
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+                _ = addVm.AddExistingItemsAsync(target);
+            else
+                _ = addVm.AddNewItemAsync(target);
             e.Handled = true;
             return;
         }
@@ -251,6 +266,15 @@ public partial class MainWindow : Window, IDialogService
         var dialog = CreateDialog("VSL", new TextBlock { Text = $"Save changes to the following item?\n\n{fileName}", TextWrapping = TextWrapping.Wrap },
             ("Save", true), ("Don't Save", false), ("Cancel", null));
         return dialog.ShowDialog<bool?>(this);
+    }
+
+    public Task<NewItemChoice?> ChooseNewItemAsync(string title, string folder, ItemTemplate initial) =>
+        new AddItemWindow { Title = title, DataContext = new AddItemViewModel(folder, initial) }.ShowDialog<NewItemChoice?>(this);
+
+    public async Task<IReadOnlyList<string>> PickFilesAsync(string title)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = title, AllowMultiple = true });
+        return files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
     }
 
     public Task<bool?> ConfirmAsync(string title, string message)
@@ -413,13 +437,23 @@ public partial class MainWindow : Window, IDialogService
     /// <summary>Right-click in Solution Explorer: VS's context menu for solutions, projects, folders and files.</summary>
     void OnExplorerContextRequested(object? sender, ContextRequestedEventArgs e)
     {
-        if (sender is not Control { DataContext: ExplorerNode node } anchor || Vm is not { } vm)
+        if (sender is not Control { DataContext: ExplorerNode node } anchor || Vm is null)
             return;
         e.Handled = true;
         ExplorerTree.SelectedItem = node;
-        MenuItem Item(string header, Action action, bool enabled = true)
+        var items = ExplorerMenuItems(node);
+        if (items.Count > 0)
+            new ContextMenu { ItemsSource = items }.Open(anchor);
+    }
+
+    /// <summary>The context menu for a Solution Explorer node (separators and menu items, submenus included).</summary>
+    internal List<object> ExplorerMenuItems(ExplorerNode node)
+    {
+        if (Vm is not { } vm)
+            return [];
+        MenuItem Item(string header, Action action, string? gesture = null, bool enabled = true)
         {
-            var item = new MenuItem { Header = header, IsEnabled = enabled };
+            var item = new MenuItem { Header = header, IsEnabled = enabled, InputGesture = gesture is null ? null : KeyGesture.Parse(gesture) };
             item.Click += (_, _) => action();
             return item;
         }
@@ -432,6 +466,17 @@ public partial class MainWindow : Window, IDialogService
             _ => null,
         };
         var items = new List<object>();
+        MenuItem AddMenu()
+        {
+            var add = new MenuItem { Header = "Add" };
+            add.Items.Add(Item("New Item...", () => _ = vm.AddNewItemAsync(node), "Ctrl+Shift+A"));
+            add.Items.Add(Item("Existing Item...", () => _ = vm.AddExistingItemsAsync(node), "Shift+Alt+A"));
+            add.Items.Add(Item("New Folder", () => vm.AddNewFolder(node)));
+            add.Items.Add(new Separator());
+            add.Items.Add(Item("Class...", () => _ = vm.AddNewItemAsync(node, ItemTemplates.Class)));
+            add.Items.Add(Item("Razor Component...", () => _ = vm.AddNewItemAsync(node, ItemTemplates.RazorComponent)));
+            return add;
+        }
         switch (node.Kind)
         {
             case NodeKind.Solution:
@@ -446,13 +491,22 @@ public partial class MainWindow : Window, IDialogService
                 items.Add(Item("Rebuild", () => vm.RebuildProjectCommand.Execute(project)));
                 items.Add(Item("Clean", () => vm.CleanProjectCommand.Execute(project)));
                 items.Add(new Separator());
+                items.Add(AddMenu());
                 items.Add(Item("Manage NuGet Packages...", () => vm.ManageNuGetPackagesCommand.Execute(project)));
-                items.Add(Item("Set as Startup Project", () => vm.SetStartupProjectCommand.Execute(project), project.IsRunnable));
+                items.Add(Item("Set as Startup Project", () => vm.SetStartupProjectCommand.Execute(project), enabled: project.IsRunnable));
+                items.Add(new Separator());
+                items.Add(Item("Edit Project File", () => vm.EditProjectFile(project)));
                 break;
             case NodeKind.Dependencies or NodeKind.DependencyGroup or NodeKind.Package:
                 var owner = vm.Solution?.Projects.FirstOrDefault(p => vm.ExplorerRoots.FirstOrDefault()?.Children
                     .Any(c => c.Project == p && Contains(c, node)) == true);
-                items.Add(Item("Manage NuGet Packages...", () => vm.ManageNuGetPackagesCommand.Execute(owner), owner is not null));
+                items.Add(Item("Manage NuGet Packages...", () => vm.ManageNuGetPackagesCommand.Execute(owner), enabled: owner is not null));
+                break;
+            case NodeKind.Folder when path is not null:
+                items.Add(AddMenu());
+                items.Add(new Separator());
+                items.Add(Item("Rename", () => vm.BeginRename(node), "F2"));
+                items.Add(Item("Delete", () => _ = vm.DeleteAsync(node), "Delete"));
                 break;
             case NodeKind.File when path is not null:
                 items.Add(Item("Open", () => vm.OpenNode(node)));
@@ -460,7 +514,10 @@ public partial class MainWindow : Window, IDialogService
                 {
                     if (vm.OpenDocument(path) is { } doc)
                         _ = vm.CompareWithUnmodifiedAsync(doc);
-                }, vm.HasGit));
+                }, enabled: vm.HasGit));
+                items.Add(new Separator());
+                items.Add(Item("Rename", () => vm.BeginRename(node), "F2"));
+                items.Add(Item("Delete", () => _ = vm.DeleteAsync(node), "Delete"));
                 break;
         }
         if (folder is not null)
@@ -473,16 +530,89 @@ public partial class MainWindow : Window, IDialogService
         }
         if (path is not null)
             items.Add(Item("Copy Full Path", () => _ = Clipboard?.SetTextAsync(path)));
-        if (items.Count == 0)
-            return;
-        new ContextMenu { ItemsSource = items }.Open(anchor);
+        return items;
 
         static bool Contains(ExplorerNode parent, ExplorerNode target) =>
             parent.Children.Any(c => c == target || Contains(c, target));
     }
 
+    /// <summary>Renames a node in place, as VS does: a text box over its name with the base name selected.</summary>
+    void BeginExplorerRename(ExplorerNode node)
+    {
+        node.EditName = node.Name;
+        node.IsRenaming = true;
+        SelectExplorerNode(node);
+        Dispatcher.UIThread.Post(() =>
+        {
+            var box = (ExplorerTree.TreeContainerFromItem(node) as Control)?.GetVisualDescendants().OfType<TextBox>()
+                .FirstOrDefault(b => b.Classes.Contains("rename") && b.DataContext == node);
+            if (box is null)
+            {
+                node.IsRenaming = false;
+                return;
+            }
+            box.Focus();
+            box.SelectionStart = 0;
+            box.SelectionEnd = node.Kind == NodeKind.File && Path.GetFileNameWithoutExtension(node.Name) is { Length: > 0 } stem ? stem.Length : node.Name.Length;
+        }, DispatcherPriority.Loaded);
+    }
+
+    void OnRenameKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox { DataContext: ExplorerNode node })
+            return;
+        if (e.Key == Key.Enter)
+        {
+            CommitRename(node);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            node.IsRenaming = false;
+            ExplorerTree.Focus();
+            e.Handled = true;
+        }
+    }
+
+    void OnRenameLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox { DataContext: ExplorerNode node })
+            CommitRename(node);
+    }
+
+    void CommitRename(ExplorerNode node)
+    {
+        if (!node.IsRenaming)
+            return;
+        node.IsRenaming = false;
+        if (Vm is { } vm && node.EditName != node.Name)
+            vm.Rename(node, node.EditName);
+        ExplorerTree.Focus();
+    }
+
+    void SelectExplorerNode(ExplorerNode node)
+    {
+        ExplorerTree.SelectedItem = node;
+        Dispatcher.UIThread.Post(() => (ExplorerTree.TreeContainerFromItem(node) as Control)?.BringIntoView(), DispatcherPriority.Loaded);
+    }
+
     void OnExplorerKeyDown(object? sender, KeyEventArgs e)
     {
+        // Keys typed into the rename box are the box's (Delete removes a character, not the file).
+        if (e.Source is TextBox)
+            return;
+        if (e.Key == Key.F2 && ExplorerTree.SelectedItem is ExplorerNode renamed && Vm is { } renameVm)
+        {
+            renameVm.BeginRename(renamed);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Delete && e.KeyModifiers == KeyModifiers.None && ExplorerTree.SelectedItem is ExplorerNode deleted && Vm is { } deleteVm)
+        {
+            _ = deleteVm.DeleteAsync(deleted);
+            e.Handled = true;
+            return;
+        }
         if (e.Key == Key.Enter && ExplorerTree.SelectedItem is ExplorerNode node && Vm is { } vm)
         {
             if (node.Kind == NodeKind.File)

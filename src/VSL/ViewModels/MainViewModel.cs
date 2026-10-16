@@ -45,6 +45,10 @@ public interface IDialogService
     Task<bool?> ConfirmSaveAsync(string fileName);
     /// <summary>Yes/No question; returns true for Yes.</summary>
     Task<bool?> ConfirmAsync(string title, string message);
+    /// <summary>Add New Item: a template and a name for a new file in <paramref name="folder"/>, or null when cancelled.</summary>
+    Task<NewItemChoice?> ChooseNewItemAsync(string title, string folder, ItemTemplate initial);
+    /// <summary>Files to add (Add Existing Item); empty when cancelled.</summary>
+    Task<IReadOnlyList<string>> PickFilesAsync(string title);
 }
 
 public partial class MainViewModel : ObservableObject

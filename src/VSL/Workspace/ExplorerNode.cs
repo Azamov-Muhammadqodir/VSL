@@ -22,6 +22,7 @@ public enum NodeKind
 public partial class ExplorerNode : ObservableObject
 {
     Func<IEnumerable<ExplorerNode>>? _loader;
+    readonly Func<IEnumerable<ExplorerNode>>? _source;
 
     public ExplorerNode(NodeKind kind, string name, string? path = null, Func<IEnumerable<ExplorerNode>>? loader = null)
     {
@@ -29,6 +30,7 @@ public partial class ExplorerNode : ObservableObject
         Name = name;
         Path = path;
         _loader = loader;
+        _source = loader;
         if (loader is not null)
             Children.Add(new ExplorerNode(NodeKind.Placeholder, "Loading..."));
     }
@@ -146,6 +148,90 @@ public partial class ExplorerNode : ObservableObject
             n.RefreshGitBadges();
             Children.Add(n);
         }
+    }
+
+    /// <summary>Whether the children have been read (a lazy folder that was never expanded has not).</summary>
+    public bool IsLoaded => _loader is null;
+
+    /// <summary>Being renamed in place (F2): the row shows a text box with <see cref="EditName"/>.</summary>
+    [ObservableProperty]
+    public partial bool IsRenaming { get; set; }
+
+    [ObservableProperty]
+    public partial string EditName { get; set; } = "";
+
+    /// <summary>
+    /// Re-reads a loaded folder or project from disk after files were added, renamed or deleted. Nodes that are still
+    /// there are kept, with their expansion and loaded children; a folder that was never expanded stays lazy.
+    /// </summary>
+    public void Reload()
+    {
+        if (_source is null || _loader is not null)
+            return;
+        List<ExplorerNode> fresh;
+        try
+        {
+            fresh = _source().ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+        Merge(Children, fresh);
+    }
+
+    /// <summary>Makes <paramref name="target"/> list <paramref name="fresh"/>'s nodes, reusing the ones it already has.</summary>
+    static void Merge(ObservableCollection<ExplorerNode> target, List<ExplorerNode> fresh)
+    {
+        var existing = new Dictionary<(NodeKind, string), ExplorerNode>();
+        foreach (var node in target)
+            existing.TryAdd(node.Key, node);
+        var wanted = new List<ExplorerNode>(fresh.Count);
+        foreach (var node in fresh)
+        {
+            if (existing.TryGetValue(node.Key, out var kept))
+            {
+                // A file's nested files (X.razor.cs under X.razor) are built with it, not loaded lazily.
+                if (kept.Kind == NodeKind.File)
+                    Merge(kept.Children, node.Children.ToList());
+                wanted.Add(kept);
+            }
+            else
+            {
+                node.RefreshGitBadges();
+                wanted.Add(node);
+            }
+        }
+        for (var i = target.Count - 1; i >= 0; i--)
+            if (!wanted.Contains(target[i]))
+                target.RemoveAt(i);
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            var current = target.IndexOf(wanted[i]);
+            if (current == i)
+                continue;
+            if (current >= 0)
+                target.Move(current, i);
+            else
+                target.Insert(i, wanted[i]);
+        }
+    }
+
+    (NodeKind, string) Key => (Kind, Path ?? Name);
+
+    /// <summary>The loaded project or folder node showing <paramref name="directory"/>, without loading anything.</summary>
+    public ExplorerNode? FindLoadedFolder(string directory)
+    {
+        if (Kind is NodeKind.Folder && Path == directory || Kind is NodeKind.Project && Path is not null && DirectoryOf(this) == directory)
+            return this;
+        if (!IsLoaded || Kind is NodeKind.File or NodeKind.Dependencies or NodeKind.DependencyGroup or NodeKind.Placeholder)
+            return null;
+        if (Kind is NodeKind.Folder or NodeKind.Project && Path is not null && !directory.StartsWith(DirectoryOf(this) + "/", StringComparison.Ordinal))
+            return null;
+        foreach (var child in Children)
+            if (child.FindLoadedFolder(directory) is { } hit)
+                return hit;
+        return null;
     }
 
     /// <summary>Depth-first search that forces lazy folders to load along the way.</summary>

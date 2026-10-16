@@ -33,7 +33,9 @@ Working on solutions needs the .NET 10 SDK. VSL downloads `roslyn-language-serve
 - **Editor**: C# and Razor IntelliSense, Quick Info, parameter info, squiggles, Ctrl+. quick actions and refactorings,
   Go To Definition / Implementation, Find All References, Rename, Format Document, outlining (Ctrl+M), Find in Files, zoom.
 - **Solutions**: `.sln`, `.slnx` or a lone project file; Solution Explorer with VS file nesting, Dependencies and
-  [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme) icons.
+  [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme) icons. Add New Item
+  (Ctrl+Shift+A: class, interface, record, Razor component...), Existing Item, New Folder, Rename in place (F2) and
+  Delete; it follows files changed on disk.
 - **Build and run**: Build / Rebuild / Clean, Error List, launch profiles, Ctrl+F5; offers to trust the ASP.NET Core
   HTTPS development certificate.
 - **Debug** (F5, netcoredbg): breakpoints that follow edits, Step Over / Into / Out, Locals, Watch, Call Stack, data tips,

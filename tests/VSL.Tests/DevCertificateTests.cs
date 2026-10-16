@@ -42,6 +42,10 @@ public class DevCertificateTests
             Asked.Add(title);
             return Task.FromResult(answer);
         }
+
+        public Task<NewItemChoice?> ChooseNewItemAsync(string title, string folder, VSL.Workspace.ItemTemplate initial) => Task.FromResult<NewItemChoice?>(null);
+
+        public Task<IReadOnlyList<string>> PickFilesAsync(string title) => Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     static LaunchProfile Profile(string url) => new("Server", url, true, null, null, new Dictionary<string, string>());

@@ -72,12 +72,12 @@ public partial class MainViewModel
         _git = await GitRepository.OpenAsync(solution.Directory);
         HasGit = _git is not null;
         ExplorerNode.GitStatusProvider = path => _gitBadges.GetValueOrDefault(path);
-        if (_git is not { } git)
-            return;
-        await RefreshGitAsync();
+        if (_git is not null)
+            await RefreshGitAsync();
+        // Watched with or without a repository: Solution Explorer and open editors follow files changed on disk.
         try
         {
-            var watcher = new GitWatcher(solution.Directory, git.GitDir, TimeSpan.FromMilliseconds(400));
+            var watcher = new GitWatcher(solution.Directory, _git?.GitDir, TimeSpan.FromMilliseconds(400));
             watcher.Changed += (repository, files) => Dispatcher.UIThread.Post(() => _ = OnRepositoryChangedAsync(watcher, repository, files));
             _gitWatcher = watcher;
         }
@@ -92,6 +92,7 @@ public partial class MainViewModel
     {
         if (_gitWatcher != watcher)
             return;
+        ReloadExplorerFolders(files);
         await RefreshGitAsync();
         foreach (var doc in Editors.Where(d => files.Contains(d.FilePath)).ToList())
             if (doc.Host.ReloadIfChangedOnDisk())
