@@ -119,6 +119,20 @@ public sealed class VsIcon : FrameworkElement
             case "ArrowDown":
                 Line(dc, "M12 5v14 M19 12l-7 7-7-7", fg, 2.2);
                 break;
+            case "Fetch":
+                // A dashed arrow down: fetch without merging.
+                Line(dc, "M12 4v2.5 M12 9.5v2.5 M12 15v4 M19 12l-7 7-7-7", fg, 2.2);
+                break;
+            case "Sync":
+                Line(dc, "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8 M21 3v5h-5 M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16 M8 16H3v5", fg, 1.9);
+                break;
+            case "Repo":
+                // An archive box: a repository.
+                Line(dc, "M3 3h18v5H3z M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8 M10 12h4", fg, 1.8);
+                break;
+            case "Minus":
+                Stroke(dc, "M3,8 L13,8", fg, 1.4);
+                break;
             case "ArrowUp":
                 Line(dc, "M12 19V5 M5 12l7-7 7 7", fg, 2.2);
                 break;

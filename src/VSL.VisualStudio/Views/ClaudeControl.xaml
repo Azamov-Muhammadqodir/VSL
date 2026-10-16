@@ -1208,156 +1208,282 @@
           </DockPanel>
         </Border>
 
-        <!-- ===== Commit panel (DataContext: the commit panel's view model, set in code) ===== -->
+        <!-- ===== Commit panel, after Git Changes (DataContext: the commit panel's view model, set in code) ===== -->
         <Border x:Name="GitPanel" Visibility="{Binding IsOpen, Converter={StaticResource Visible}}"
                 Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}">
-          <DockPanel Margin="12,8,12,10">
-            <Grid DockPanel.Dock="Top">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
-              <v:VsIcon Kind="GitCommit" Width="16" Height="16" Margin="0,0,7,0" Foreground="{StaticResource ClaudeAccent}" />
-              <TextBlock Grid.Column="1" Text="{v:L 'Commit'}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
-              <Border Grid.Column="2" Style="{StaticResource Chip}" Margin="10,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" Padding="7,2"
-                      Visibility="{Binding IsRepository, Converter={StaticResource Visible}}">
-                <StackPanel Orientation="Horizontal">
-                  <v:VsIcon Kind="GitBranch" Width="12" Height="12" Margin="0,0,5,0" />
-                  <TextBlock Text="{Binding Branch}" Style="{StaticResource Mono}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="200" />
+          <Border.Resources>
+            <!-- The repository and branch boxes at the top. -->
+            <Style x:Key="GitBox" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+              <Setter Property="Height" Value="28" />
+              <Setter Property="Padding" Value="8,0" />
+              <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+              <Setter Property="Background" Value="{StaticResource ClaudeOverlay}" />
+              <Setter Property="BorderBrush" Value="{StaticResource ClaudeLine}" />
+              <Setter Property="BorderThickness" Value="1" />
+              <Setter Property="v:ClaudeControl.CornerRadius" Value="4" />
+            </Style>
+            <Style x:Key="GitAction" TargetType="Button" BasedOn="{StaticResource ClaudeIconButton}">
+              <Setter Property="Width" Value="26" />
+              <Setter Property="Height" Value="26" />
+              <Setter Property="Margin" Value="2,0,0,0" />
+            </Style>
+            <!-- A changed file: name, folder, repository (when there are several), status letter; stage or unstage on hover. -->
+            <DataTemplate x:Key="GitChangeRow" DataType="{x:Type git:GitChange}">
+              <Grid x:Name="Row" Background="Transparent" Height="24" ToolTip="{Binding Path}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <v:VsIcon Kind="File" Width="14" Height="14" Margin="14,0,6,0" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12">
+                  <Run Text="{Binding FileName, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Folder, Mode=OneWay}" Foreground="{DynamicResource ClaudeFaintBrush}" FontSize="11" />
+                </TextBlock>
+                <Border Grid.Column="2" Style="{StaticResource Chip}" Margin="6,0,0,0" VerticalAlignment="Center" Padding="5,0"
+                        Visibility="{Binding DataContext.IsMultiRepository, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource Visible}}">
+                  <TextBlock Text="{Binding Repo.Name}" FontSize="10" Style="{StaticResource Muted}" />
+                </Border>
+                <StackPanel x:Name="Actions" Grid.Column="3" Orientation="Horizontal" Visibility="Hidden" Margin="4,0,0,0">
+                  <Button Style="{StaticResource ClaudeIconButton}" Width="22" Height="22" ToolTip="{v:L 'Stage'}"
+                          Command="{Binding DataContext.StageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                          Visibility="{Binding IsStaged, Converter={StaticResource Hidden}}">
+                    <v:VsIcon Kind="Plus" Width="13" Height="13" />
+                  </Button>
+                  <Button Style="{StaticResource ClaudeIconButton}" Width="22" Height="22" ToolTip="{v:L 'Unstage'}"
+                          Command="{Binding DataContext.UnstageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                          Visibility="{Binding IsStaged, Converter={StaticResource Visible}}">
+                    <v:VsIcon Kind="Minus" Width="13" Height="13" />
+                  </Button>
                 </StackPanel>
-              </Border>
-              <Button Grid.Column="3" Style="{StaticResource ClaudeIconButton}" Command="{Binding RefreshCommand}" ToolTip="{v:L 'Refresh'}" Margin="1,0">
-                <v:VsIcon Kind="Refresh" Width="14" Height="14" />
-              </Button>
-              <Button Grid.Column="4" Style="{StaticResource ClaudeIconButton}" Command="{Binding CloseCommand}" ToolTip="{v:L 'Close'}" Margin="1,0">
-                <v:VsIcon Kind="Close" Width="14" Height="14" />
-              </Button>
-            </Grid>
-
-            <TextBlock DockPanel.Dock="Top" Text="{v:L 'This solution is not in a git repository.'}" Style="{StaticResource Muted}" Margin="0,14,0,0"
-                       TextWrapping="Wrap" Visibility="{Binding IsRepository, Converter={StaticResource Hidden}}" />
-
-            <!-- Who the commit is made as: the user's own git identity, never Claude. -->
-            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" FontSize="11" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"
-                       Visibility="{Binding Author, Converter={StaticResource Visible}}">
-              <Run Text="{v:L 'Commits as'}" /><Run Text=" " /><Run Text="{Binding Author, Mode=OneWay}" FontWeight="SemiBold" />
-            </TextBlock>
-
-            <!-- Pull and push, then what is happening or what went wrong. -->
-            <StackPanel DockPanel.Dock="Bottom" Visibility="{Binding IsRepository, Converter={StaticResource Visible}}">
-              <Border Height="1" Background="{StaticResource ClaudeLine}" Margin="0,12,0,10" />
-              <StackPanel Orientation="Horizontal">
-                <Button Style="{StaticResource ToolChip}" Command="{Binding PullCommand}" ToolTip="{v:L 'git pull'}">
-                  <StackPanel Orientation="Horizontal">
-                    <v:VsIcon Kind="ArrowDown" Width="13" Height="13" Margin="0,0,5,0" />
-                    <TextBlock Text="{v:L 'Pull'}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding BehindText}" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource ClaudeAccent}"
-                               Visibility="{Binding BehindText, Converter={StaticResource Visible}}" />
-                  </StackPanel>
+                <TextBlock x:Name="Letter" Grid.Column="4" Text="{Binding Letter}" ToolTip="{v:Tr Kind}" FontFamily="{StaticResource ClaudeMono}" FontSize="11" FontWeight="SemiBold"
+                           Foreground="#E2C08D" Width="16" TextAlignment="Center" Margin="4,0,0,0" VerticalAlignment="Center" />
+              </Grid>
+              <DataTemplate.Triggers>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Actions" Property="Visibility" Value="Visible" />
+                  <Setter TargetName="Row" Property="Background" Value="{StaticResource ClaudeOverlay}" />
+                </Trigger>
+                <DataTrigger Binding="{Binding Letter}" Value="A">
+                  <Setter TargetName="Letter" Property="Foreground" Value="#73C991" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Letter}" Value="D">
+                  <Setter TargetName="Letter" Property="Foreground" Value="#E5534B" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Letter}" Value="R">
+                  <Setter TargetName="Letter" Property="Foreground" Value="#4EA8DE" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Letter}" Value="U">
+                  <Setter TargetName="Letter" Property="Foreground" Value="#E5534B" />
+                </DataTrigger>
+              </DataTemplate.Triggers>
+            </DataTemplate>
+          </Border.Resources>
+          <Grid>
+            <DockPanel Margin="12,8,12,10">
+              <!-- Title -->
+              <Grid DockPanel.Dock="Top">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <v:VsIcon Kind="GitCommit" Width="16" Height="16" Margin="0,0,7,0" Foreground="{StaticResource ClaudeAccent}" />
+                <TextBlock Grid.Column="1" Text="{v:L 'Git Changes'}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+                <Button Grid.Column="2" Style="{StaticResource ClaudeIconButton}" Command="{Binding RefreshCommand}" ToolTip="{v:L 'Refresh'}" Margin="1,0">
+                  <v:VsIcon Kind="Refresh" Width="14" Height="14" />
                 </Button>
-                <Button Style="{StaticResource ToolChip}" Command="{Binding PushCommand}" ToolTip="{v:L 'git push'}">
-                  <StackPanel Orientation="Horizontal">
-                    <v:VsIcon Kind="ArrowUp" Width="13" Height="13" Margin="0,0,5,0" />
-                    <TextBlock Text="{v:L 'Push'}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding AheadText}" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource ClaudeAccent}"
-                               Visibility="{Binding AheadText, Converter={StaticResource Visible}}" />
-                  </StackPanel>
+                <Button Grid.Column="3" Style="{StaticResource ClaudeIconButton}" Command="{Binding CloseCommand}" ToolTip="{v:L 'Close'}" Margin="1,0">
+                  <v:VsIcon Kind="Close" Width="14" Height="14" />
                 </Button>
-              </StackPanel>
-              <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Visibility="{Binding Status, Converter={StaticResource Visible}}">
+              </Grid>
+
+              <TextBlock DockPanel.Dock="Top" Text="{v:L 'This solution is not in a git repository.'}" Style="{StaticResource Muted}" Margin="0,14,0,0"
+                         TextWrapping="Wrap" Visibility="{Binding IsRepository, Converter={StaticResource Hidden}}" />
+              <TextBlock DockPanel.Dock="Top" Text="{Binding RepositoryProblem}" Style="{StaticResource Mono}" FontSize="11" Margin="0,6,0,0" Opacity="0.75"
+                         TextWrapping="Wrap" Visibility="{Binding RepositoryProblem, Converter={StaticResource Visible}}" />
+
+              <!-- Repository, branch, and fetch / pull / push / sync -->
+              <Grid DockPanel.Dock="Top" Margin="0,10,0,0" Visibility="{Binding IsRepository, Converter={StaticResource Visible}}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button Style="{StaticResource GitBox}" Command="{Binding ToggleRepositoryMenuCommand}" Margin="0,0,6,0" IsEnabled="{Binding IsMultiRepository}"
+                        ToolTip="{v:L 'Repositories'}">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <v:VsIcon Kind="Repo" Width="14" Height="14" Margin="0,0,6,0" />
+                    <TextBlock Grid.Column="1" Text="{v:Tr RepositoryLabel}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <v:VsIcon Grid.Column="2" Kind="Chevron" Width="14" Height="14" Margin="4,0,0,0" />
+                  </Grid>
+                </Button>
+                <Border Grid.Column="1" Background="{StaticResource ClaudeOverlay}" BorderBrush="{StaticResource ClaudeLine}" BorderThickness="1" CornerRadius="4"
+                        Height="28" Padding="8,0" ToolTip="{v:L 'Branch'}">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <v:VsIcon Kind="GitBranch" Width="13" Height="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding BranchLabel}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  </Grid>
+                </Border>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,0,0,0">
+                  <Button Style="{StaticResource GitAction}" Command="{Binding FetchCommand}" ToolTip="{v:L 'Fetch'}">
+                    <v:VsIcon Kind="Fetch" Width="15" Height="15" />
+                  </Button>
+                  <Button Style="{StaticResource GitAction}" Command="{Binding PullCommand}" ToolTip="{v:L 'Pull'}">
+                    <v:VsIcon Kind="ArrowDown" Width="15" Height="15" />
+                  </Button>
+                  <Button Style="{StaticResource GitAction}" Command="{Binding PushCommand}" ToolTip="{v:L 'Push'}">
+                    <v:VsIcon Kind="ArrowUp" Width="15" Height="15" />
+                  </Button>
+                  <Button Style="{StaticResource GitAction}" Command="{Binding SyncCommand}" ToolTip="{v:L 'Sync (pull, then push)'}">
+                    <v:VsIcon Kind="Sync" Width="15" Height="15" />
+                  </Button>
+                </StackPanel>
+              </Grid>
+
+              <!-- Outgoing / incoming, and who the commits are made as: the user's own git identity, never Claude. -->
+              <DockPanel DockPanel.Dock="Top" Margin="0,8,0,0" Visibility="{Binding IsRepository, Converter={StaticResource Visible}}">
+                <StackPanel Orientation="Horizontal" ToolTip="{v:L 'Outgoing / incoming commits'}">
+                  <v:VsIcon Kind="ArrowUp" Width="12" Height="12" />
+                  <v:VsIcon Kind="ArrowDown" Width="12" Height="12" Margin="-3,0,5,0" />
+                  <TextBlock Text="{Binding SyncLabel}" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource Muted}" FontSize="11" Margin="12,0,0,0" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" VerticalAlignment="Center"
+                           Visibility="{Binding Author, Converter={StaticResource Visible}}">
+                  <Run Text="{v:L 'Commits as'}" /><Run Text=" " /><Run Text="{Binding Author, Mode=OneWay}" FontWeight="SemiBold" />
+                </TextBlock>
+              </DockPanel>
+
+              <!-- The message, with Claude's pen in its corner, as in Git Changes. -->
+              <Grid DockPanel.Dock="Top" Margin="0,10,0,0" Visibility="{Binding IsRepository, Converter={StaticResource Visible}}">
+                <TextBox Style="{StaticResource ClaudeField}" Text="{Binding Message, UpdateSourceTrigger=PropertyChanged}"
+                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" MaxHeight="240" VerticalContentAlignment="Top" Padding="8,7,8,30"
+                         FontFamily="{StaticResource ClaudeMono}" VerticalScrollBarVisibility="Auto" Tag="{v:L 'Enter a message &lt;Required&gt;'}">
+                  <TextBox.InputBindings>
+                    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CommitCommand}" />
+                  </TextBox.InputBindings>
+                </TextBox>
+                <Button Style="{StaticResource ClaudeIconButton}" Command="{Binding GenerateCommand}" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                        Width="26" Height="26" Margin="0,0,4,4"
+                        ToolTip="{v:L 'Claude reads the changes and writes the message. Nothing is committed until you press Commit.'}">
+                  <v:VsIcon Kind="Sparkle" Width="15" Height="15" Foreground="{StaticResource ClaudeAccent}" />
+                </Button>
+              </Grid>
+
+              <Button DockPanel.Dock="Top" Style="{StaticResource PrimaryButton}" Command="{Binding CommitCommand}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                      ToolTip="{v:L 'Commit with your git name and email (Ctrl+Enter)'}" Visibility="{Binding IsRepository, Converter={StaticResource Visible}}">
+                <TextBlock Text="{v:Tr CommitLabel}" VerticalAlignment="Center" />
+              </Button>
+
+              <!-- What is happening, or what went wrong. -->
+              <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,8,0,0" Visibility="{Binding Status, Converter={StaticResource Visible}}">
                 <v:VsIcon Kind="Claude" Width="13" Height="13" Margin="0,0,7,0" v:Motion.Spin="3" Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
                 <TextBlock Text="{v:Tr Status}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
               </StackPanel>
-              <TextBlock Text="{v:Tr Error}" Style="{StaticResource ErrorText}" FontSize="12" Margin="0,8,0,0"
+              <TextBlock DockPanel.Dock="Top" Text="{v:Tr Error}" Style="{StaticResource ErrorText}" FontSize="12" Margin="0,8,0,0"
                          Visibility="{Binding Error, Converter={StaticResource Visible}}" />
-            </StackPanel>
 
-            <!-- The message, and the buttons that write and commit it. -->
-            <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0" Visibility="{Binding IsRepository, Converter={StaticResource Visible}}">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
-              <Button Style="{StaticResource ToolChip}" Command="{Binding GenerateCommand}" ToolTip="{v:L 'Claude reads the changes and writes the message. Nothing is committed until you press Commit.'}">
-                <StackPanel Orientation="Horizontal">
-                  <v:VsIcon Kind="Sparkle" Width="14" Height="14" Margin="0,0,6,0" Foreground="{StaticResource ClaudeAccent}" />
-                  <TextBlock Text="{v:L 'Generate message'}" VerticalAlignment="Center" />
+              <TextBlock DockPanel.Dock="Top" Text="{v:L 'No changes: nothing to commit.'}" Style="{StaticResource Muted}" FontSize="12" Margin="0,14,0,0"
+                         Visibility="{Binding HasNoChanges, Converter={StaticResource Visible}}" />
+
+              <!-- Staged changes, then the rest. -->
+              <ScrollViewer Margin="0,10,0,0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                            Visibility="{Binding IsRepository, Converter={StaticResource Visible}}"
+                            Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ScrollViewerStyleKey}}">
+                <StackPanel>
+                  <DockPanel Margin="0,0,0,2" Visibility="{Binding HasStagedChanges, Converter={StaticResource Visible}}">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource ClaudeIconButton}" Width="22" Height="22" Command="{Binding UnstageAllCommand}" ToolTip="{v:L 'Unstage all'}">
+                      <v:VsIcon Kind="Minus" Width="13" Height="13" />
+                    </Button>
+                    <TextBlock Style="{StaticResource Section}" VerticalAlignment="Center" Margin="0">
+                      <Run Text="{v:L 'Staged Changes'}" /><Run Text=" (" /><Run Text="{Binding StagedChanges.Count, Mode=OneWay}" /><Run Text=")" />
+                    </TextBlock>
+                  </DockPanel>
+                  <ItemsControl ItemsSource="{Binding StagedChanges}" ItemTemplate="{StaticResource GitChangeRow}" Margin="0,0,0,8" />
+                  <DockPanel Margin="0,0,0,2" Visibility="{Binding UnstagedChanges.Count, Converter={StaticResource Visible}}">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource ClaudeIconButton}" Width="22" Height="22" Command="{Binding StageAllCommand}" ToolTip="{v:L 'Stage all'}">
+                      <v:VsIcon Kind="Plus" Width="13" Height="13" />
+                    </Button>
+                    <TextBlock Style="{StaticResource Section}" VerticalAlignment="Center" Margin="0">
+                      <Run Text="{v:L 'Changes'}" /><Run Text=" (" /><Run Text="{Binding UnstagedChanges.Count, Mode=OneWay}" /><Run Text=")" />
+                    </TextBlock>
+                  </DockPanel>
+                  <ItemsControl ItemsSource="{Binding UnstagedChanges}" ItemTemplate="{StaticResource GitChangeRow}" />
                 </StackPanel>
-              </Button>
-              <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" Command="{Binding CommitCommand}" ToolTip="{v:L 'Commit with your git name and email (Ctrl+Enter)'}">
-                <StackPanel Orientation="Horizontal">
-                  <v:VsIcon Kind="Check" Width="13" Height="13" Margin="0,0,6,0" Foreground="White" />
-                  <TextBlock Text="{v:L 'Commit'}" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
+              </ScrollViewer>
+            </DockPanel>
+
+            <!-- The repository menu: a filter, all repositories, each one. -->
+            <Grid Visibility="{Binding IsRepositoryMenuOpen, Converter={StaticResource Visible}}">
+              <Border Background="Transparent">
+                <Border.InputBindings>
+                  <MouseBinding MouseAction="LeftClick" Command="{Binding CloseRepositoryMenuCommand}" />
+                </Border.InputBindings>
+              </Border>
+              <Border Style="{StaticResource MenuCard}" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="12,72,12,0" MaxWidth="420">
+                <DockPanel Margin="0,0,0,6">
+                  <TextBox DockPanel.Dock="Top" Style="{StaticResource ClaudeField}" Text="{Binding RepositoryFilter, UpdateSourceTrigger=PropertyChanged}"
+                           Tag="{v:L 'Filter repositories'}" Margin="8,8,8,6">
+                    <TextBox.InputBindings>
+                      <KeyBinding Key="Escape" Command="{Binding CloseRepositoryMenuCommand}" />
+                    </TextBox.InputBindings>
+                  </TextBox>
+                  <Button DockPanel.Dock="Top" Command="{Binding SelectRepositoryCommand}" CommandParameter="{x:Null}">
+                    <Button.Style>
+                      <Style TargetType="Button" BasedOn="{StaticResource MenuRow}">
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding IsAllSelected}" Value="True">
+                            <Setter Property="Background" Value="{StaticResource ClaudeAccentSoft}" />
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </Button.Style>
+                    <StackPanel Orientation="Horizontal">
+                      <v:VsIcon Kind="Repo" Width="15" Height="15" Margin="0,0,10,0" />
+                      <TextBlock Text="{v:Tr AllRepositoriesLabel}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <ScrollViewer MaxHeight="300" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                                Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ScrollViewerStyleKey}}">
+                    <ItemsControl ItemsSource="{Binding FilteredRepositories}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type git:GitRepo}">
+                          <Button Style="{StaticResource MenuRow}" ToolTip="{Binding Root}"
+                                  Command="{Binding DataContext.SelectRepositoryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
+                            <Grid>
+                              <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                              </Grid.ColumnDefinitions>
+                              <v:VsIcon Kind="Repo" Width="15" Height="15" Margin="0,0,10,0" />
+                              <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                              <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,0,0" ToolTip="{v:L 'Outgoing commits'}"
+                                          Visibility="{Binding AheadText, Converter={StaticResource Visible}}">
+                                <v:VsIcon Kind="ArrowUp" Width="12" Height="12" Foreground="#73C991" />
+                                <TextBlock Text="{Binding AheadText}" FontSize="11" Foreground="#73C991" Margin="2,0,0,0" VerticalAlignment="Center" />
+                              </StackPanel>
+                            </Grid>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </ScrollViewer>
+                </DockPanel>
+              </Border>
             </Grid>
-            <TextBox DockPanel.Dock="Bottom" Style="{StaticResource ClaudeField}" Text="{Binding Message, UpdateSourceTrigger=PropertyChanged}" Margin="0,10,0,0"
-                     AcceptsReturn="True" TextWrapping="Wrap" MinHeight="110" MaxHeight="260" VerticalContentAlignment="Top" Padding="8,7"
-                     FontFamily="{StaticResource ClaudeMono}" VerticalScrollBarVisibility="Auto" Tag="{v:L 'Commit message'}"
-                     Visibility="{Binding IsRepository, Converter={StaticResource Visible}}">
-              <TextBox.InputBindings>
-                <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CommitCommand}" />
-              </TextBox.InputBindings>
-            </TextBox>
-            <CheckBox DockPanel.Dock="Bottom" IsChecked="{Binding StageAll}" Margin="0,10,0,0" FontSize="12"
-                      Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=v:ClaudeControl}}"
-                      Visibility="{Binding HasStaged, Converter={StaticResource Visible}}"
-                      Content="{v:L 'Also commit the changes that are not staged (git add -A)'}" />
-
-            <!-- The changed files: a colored letter and the path. -->
-            <StackPanel DockPanel.Dock="Top" Margin="0,12,0,0" Visibility="{Binding IsRepository, Converter={StaticResource Visible}}">
-              <TextBlock Style="{StaticResource Section}" Margin="0,0,0,6">
-                <Run Text="{v:L 'Changes'}" /><Run Text=" · " /><Run Text="{Binding Changes.Count, Mode=OneWay}" />
-              </TextBlock>
-              <TextBlock Text="{v:L 'No changes: nothing to commit.'}" Style="{StaticResource Muted}" FontSize="12"
-                         Visibility="{Binding Changes.Count, Converter={StaticResource Hidden}}" />
-            </StackPanel>
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Visibility="{Binding IsRepository, Converter={StaticResource Visible}}"
-                          Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ScrollViewerStyleKey}}">
-              <ItemsControl ItemsSource="{Binding Changes}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate DataType="{x:Type git:GitChange}">
-                    <Grid Margin="0,1" ToolTip="{v:Tr Kind}">
-                      <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                      </Grid.ColumnDefinitions>
-                      <Border x:Name="Badge" Width="18" Height="16" CornerRadius="3" Background="#33E2C08D" Margin="0,0,8,0">
-                        <TextBlock x:Name="Letter" Text="{Binding Letter}" FontFamily="{StaticResource ClaudeMono}" FontSize="11" FontWeight="SemiBold"
-                                   Foreground="#E2C08D" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                      </Border>
-                      <TextBlock Grid.Column="1" Text="{Binding Path}" Style="{StaticResource Mono}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="2" Text="{v:L 'staged'}" Style="{StaticResource Muted}" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center"
-                                 Visibility="{Binding IsStaged, Converter={StaticResource Visible}}" />
-                    </Grid>
-                    <DataTemplate.Triggers>
-                      <DataTrigger Binding="{Binding Letter}" Value="A">
-                        <Setter TargetName="Badge" Property="Background" Value="#3373C991" />
-                        <Setter TargetName="Letter" Property="Foreground" Value="#73C991" />
-                      </DataTrigger>
-                      <DataTrigger Binding="{Binding Letter}" Value="D">
-                        <Setter TargetName="Badge" Property="Background" Value="#33E5534B" />
-                        <Setter TargetName="Letter" Property="Foreground" Value="#E5534B" />
-                      </DataTrigger>
-                      <DataTrigger Binding="{Binding Letter}" Value="R">
-                        <Setter TargetName="Badge" Property="Background" Value="#334EA8DE" />
-                        <Setter TargetName="Letter" Property="Foreground" Value="#4EA8DE" />
-                      </DataTrigger>
-                      <DataTrigger Binding="{Binding Letter}" Value="U">
-                        <Setter TargetName="Badge" Property="Background" Value="#33E5534B" />
-                        <Setter TargetName="Letter" Property="Foreground" Value="#E5534B" />
-                      </DataTrigger>
-                    </DataTemplate.Triggers>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
-          </DockPanel>
+          </Grid>
         </Border>
       </Grid>
     </DockPanel>
