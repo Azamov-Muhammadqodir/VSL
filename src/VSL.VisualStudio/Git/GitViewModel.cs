@@ -36,6 +36,13 @@ public sealed partial class GitRepo(string root) : ObservableObject
     public bool HasStaged => Changes.Any(c => c.IsStaged);
 }
 
+/// <summary>A branch in the branch menu: local ("main") or remote ("origin/main"), and in how many repositories in scope.</summary>
+public sealed record GitBranch(string Name, bool IsRemote, bool IsCurrent, int Repositories)
+{
+    /// <summary>Highlights the current branch in the menu.</summary>
+    public bool IsSelected => IsCurrent;
+}
+
 /// <summary>
 /// One row of the changes list: a file of a repository, staged or not. A file changed in both the index and the
 /// working tree (git status "MM") is two rows, one in each section, as in Git Changes.
@@ -105,6 +112,52 @@ public sealed partial class GitViewModel : ObservableObject
 
     public ObservableCollection<GitChange> UnstagedChanges { get; } = [];
 
+    /// <summary>The visible rows of the staged tree and of the changes tree.</summary>
+    public ObservableCollection<GitTreeNode> StagedRows { get; } = [];
+
+    public ObservableCollection<GitTreeNode> UnstagedRows { get; } = [];
+
+    List<GitTreeNode> _stagedTree = [];
+    List<GitTreeNode> _unstagedTree = [];
+
+    /// <summary>The folders the user collapsed (everything starts expanded, as in Git Changes).</summary>
+    readonly HashSet<string> _collapsed = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StagedChevron))]
+    public partial bool IsStagedSectionExpanded { get; set; } = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ChangesChevron))]
+    public partial bool IsChangesSectionExpanded { get; set; } = true;
+
+    public string StagedChevron => IsStagedSectionExpanded ? "Chevron" : "ChevronRight";
+
+    public string ChangesChevron => IsChangesSectionExpanded ? "Chevron" : "ChevronRight";
+
+    /// <summary>Branches of the repositories in scope, for the branch menu (narrowed by its filter).</summary>
+    public ObservableCollection<GitBranch> LocalBranches { get; } = [];
+
+    public ObservableCollection<GitBranch> RemoteBranches { get; } = [];
+
+    List<GitBranch> _branches = [];
+
+    [ObservableProperty]
+    public partial bool IsBranchMenuOpen { get; set; }
+
+    [ObservableProperty]
+    public partial string BranchFilter { get; set; } = "";
+
+    partial void OnBranchFilterChanged(string value) => FilterBranches();
+
+    /// <summary>The name typed for a new branch.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CreateBranchCommand))]
+    public partial string NewBranchName { get; set; } = "";
+
+    /// <summary>A file to open in the editor (double-click on a row).</summary>
+    public event Action<string>? FileOpenRequested;
+
     [ObservableProperty]
     public partial bool IsOpen { get; set; }
 
@@ -138,7 +191,7 @@ public sealed partial class GitViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CommitCommand), nameof(GenerateCommand), nameof(FetchCommand), nameof(PullCommand), nameof(PushCommand),
-        nameof(SyncCommand), nameof(StageCommand), nameof(UnstageCommand), nameof(StageAllCommand), nameof(UnstageAllCommand))]
+        nameof(SyncCommand), nameof(StageCommand), nameof(UnstageCommand), nameof(StageAllCommand), nameof(UnstageAllCommand), nameof(CreateBranchCommand))]
     public partial bool IsBusy { get; set; }
 
     /// <summary>What is happening ("Writing the message…") or what just happened ("Committed a1b2c3d").</summary>
@@ -193,6 +246,7 @@ public sealed partial class GitViewModel : ObservableObject
     [RelayCommand]
     void ToggleRepositoryMenu()
     {
+        IsBranchMenuOpen = false;
         IsRepositoryMenuOpen = !IsRepositoryMenuOpen;
         RepositoryFilter = "";
         Filter();
@@ -200,6 +254,91 @@ public sealed partial class GitViewModel : ObservableObject
 
     [RelayCommand]
     void CloseRepositoryMenu() => IsRepositoryMenuOpen = false;
+
+    /// <summary>Opens the branch menu with the branches of the repositories in scope.</summary>
+    [RelayCommand]
+    async Task ToggleBranchMenuAsync()
+    {
+        IsRepositoryMenuOpen = false;
+        if (IsBranchMenuOpen)
+        {
+            IsBranchMenuOpen = false;
+            return;
+        }
+        BranchFilter = "";
+        NewBranchName = "";
+        IsBranchMenuOpen = true;
+        var scope = Scope.ToList();
+        var lists = await Task.WhenAll(scope.Select(repo =>
+            GitProcess.RunGitAsync(repo.Root, "for-each-ref --format=%(refname) refs/heads refs/remotes")));
+        var branches = new Dictionary<string, (bool Remote, bool Current, int Count)>(StringComparer.Ordinal);
+        for (var i = 0; i < scope.Count; i++)
+        {
+            foreach (var line in lists[i].Output.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0))
+            {
+                var remote = line.StartsWith("refs/remotes/", StringComparison.Ordinal);
+                var name = line.Substring(remote ? "refs/remotes/".Length : "refs/heads/".Length);
+                if (remote && name.EndsWith("/HEAD", StringComparison.Ordinal))
+                    continue;
+                var current = !remote && name == scope[i].Branch;
+                branches[(remote ? "r:" : "l:") + name] = branches.TryGetValue((remote ? "r:" : "l:") + name, out var known)
+                    ? (remote, known.Current || current, known.Count + 1)
+                    : (remote, current, 1);
+            }
+        }
+        _branches = branches.Select(b => new GitBranch(b.Key.Substring(2), b.Value.Remote, b.Value.Current, b.Value.Count))
+            .OrderByDescending(b => b.IsCurrent).ThenBy(b => b.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        FilterBranches();
+    }
+
+    [RelayCommand]
+    void CloseBranchMenu() => IsBranchMenuOpen = false;
+
+    void FilterBranches()
+    {
+        LocalBranches.Clear();
+        RemoteBranches.Clear();
+        var filter = BranchFilter.Trim();
+        foreach (var branch in _branches.Where(b => filter.Length == 0 || b.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0))
+            (branch.IsRemote ? RemoteBranches : LocalBranches).Add(branch);
+    }
+
+    /// <summary>
+    /// git switch in every repository in scope that has the branch. A remote branch ("origin/feature") switches to its
+    /// local branch, made to track it when there is none yet, as Git Changes does.
+    /// </summary>
+    [RelayCommand]
+    async Task CheckoutBranchAsync(GitBranch? branch)
+    {
+        if (branch is null || IsBusy)
+            return;
+        IsBranchMenuOpen = false;
+        var local = branch.IsRemote ? branch.Name.Substring(branch.Name.IndexOf('/') + 1) : branch.Name;
+        var done = await RunAsync($"Switching to {local}…", Scope, async repo =>
+        {
+            var hasLocal = (await GitProcess.RunGitAsync(repo.Root, $"rev-parse --verify --quiet refs/heads/{local}")).Ok;
+            if (hasLocal)
+                return await GitProcess.RunGitAsync(repo.Root, $"switch {Quote(local)}");
+            if (branch.IsRemote && (await GitProcess.RunGitAsync(repo.Root, $"rev-parse --verify --quiet refs/remotes/{branch.Name}")).Ok)
+                return await GitProcess.RunGitAsync(repo.Root, $"switch -c {Quote(local)} --track {Quote(branch.Name)}");
+            return new ProcessResult(1, "", $"There is no branch {branch.Name}");
+        });
+        if (done > 0)
+            Status = $"Switched to {local}";
+    }
+
+    bool CanCreateBranch => !IsBusy && NewBranchName.Trim().Length > 0;
+
+    /// <summary>git switch -c: a new branch from the current commit, in every repository in scope.</summary>
+    [RelayCommand(CanExecute = nameof(CanCreateBranch))]
+    async Task CreateBranchAsync()
+    {
+        var name = NewBranchName.Trim().Replace(' ', '-');
+        IsBranchMenuOpen = false;
+        NewBranchName = "";
+        if (await RunAsync($"Creating {name}…", Scope, repo => GitProcess.RunGitAsync(repo.Root, $"switch -c {Quote(name)}")) > 0)
+            Status = $"Switched to {name}";
+    }
 
     /// <summary>Picks the scope: a repository, or null for all of them.</summary>
     [RelayCommand]
@@ -358,10 +497,16 @@ public sealed partial class GitViewModel : ObservableObject
         UnstagedChanges.Clear();
         foreach (var change in Scope.SelectMany(r => r.Changes))
             (change.IsStaged ? StagedChanges : UnstagedChanges).Add(change);
+        _stagedTree = GitTreeNode.Build(StagedChanges, true, IsMultiRepository && Scope.Count > 1);
+        _unstagedTree = GitTreeNode.Build(UnstagedChanges, false, IsMultiRepository && Scope.Count > 1);
+        foreach (var node in GitTreeNode.All(_stagedTree.Concat(_unstagedTree)))
+            node.IsExpanded = !_collapsed.Contains(node.Key);
+        ShowRows();
         foreach (var name in new[] { nameof(IsRepository), nameof(IsMultiRepository), nameof(RepositoryLabel), nameof(AllRepositoriesLabel), nameof(BranchLabel),
                      nameof(SyncLabel), nameof(IsAllSelected), nameof(CommitLabel), nameof(HasStagedChanges), nameof(HasNoChanges) })
             OnPropertyChanged(name);
         CommitCommand.NotifyCanExecuteChanged();
+        GenerateCommand.NotifyCanExecuteChanged();
         StageAllCommand.NotifyCanExecuteChanged();
         UnstageAllCommand.NotifyCanExecuteChanged();
         FetchCommand.NotifyCanExecuteChanged();
@@ -370,15 +515,91 @@ public sealed partial class GitViewModel : ObservableObject
         SyncCommand.NotifyCanExecuteChanged();
     }
 
-    bool CanStage(GitChange? change) => !IsBusy && change is not null;
+    void ShowRows()
+    {
+        StagedRows.Clear();
+        UnstagedRows.Clear();
+        foreach (var row in GitTreeNode.Visible(_stagedTree))
+            StagedRows.Add(row);
+        foreach (var row in GitTreeNode.Visible(_unstagedTree))
+            UnstagedRows.Add(row);
+    }
 
-    [RelayCommand(CanExecute = nameof(CanStage))]
-    Task StageAsync(GitChange? change) => change is null ? Task.CompletedTask
-        : RunAsync(null, [change.Repo], repo => GitProcess.RunGitAsync(repo.Root, $"add -A -- {Quote(change.Path)}"));
+    /// <summary>Expands or collapses a folder, repository or the root.</summary>
+    [RelayCommand]
+    void ToggleNode(GitTreeNode? node)
+    {
+        if (node is not { IsExpandable: true })
+            return;
+        node.IsExpanded = !node.IsExpanded;
+        if (node.IsExpanded)
+            _collapsed.Remove(node.Key);
+        else
+            _collapsed.Add(node.Key);
+        ShowRows();
+    }
 
+    /// <summary>"staged" or "changes": shows or hides that section.</summary>
+    [RelayCommand]
+    void ToggleSection(string? section)
+    {
+        if (section == "staged")
+            IsStagedSectionExpanded = !IsStagedSectionExpanded;
+        else
+            IsChangesSectionExpanded = !IsChangesSectionExpanded;
+    }
+
+    /// <summary>A click on a row: a folder opens or closes, a file opens in the editor.</summary>
+    [RelayCommand]
+    void ActivateNode(GitTreeNode? node)
+    {
+        if (node is { IsExpandable: true })
+            ToggleNode(node);
+        else
+            OpenNode(node);
+    }
+
+    void OpenNode(GitTreeNode? node)
+    {
+        if (node is { Kind: GitNodeKind.File, Repo: { } repo } && Path.Combine(repo.Root, node.Path.Replace('/', Path.DirectorySeparatorChar)) is var path && File.Exists(path))
+            FileOpenRequested?.Invoke(path);
+    }
+
+    /// <summary>What a row stands for in git: each repository under it, with the path inside it (null for all of it).</summary>
+    static IEnumerable<(GitRepo Repo, string? Path)> Targets(GitTreeNode node) => node.Kind switch
+    {
+        GitNodeKind.Root => node.Children.Select(c => (c.Repo!, (string?)null)),
+        GitNodeKind.Repository => [(node.Repo!, null)],
+        _ => [(node.Repo!, node.Path)],
+    };
+
+    bool CanStage(GitTreeNode? node) => !IsBusy && node is not null;
+
+    /// <summary>git add for a file, a folder, a repository or all of them.</summary>
     [RelayCommand(CanExecute = nameof(CanStage))]
-    Task UnstageAsync(GitChange? change) => change is null ? Task.CompletedTask
-        : RunAsync(null, [change.Repo], repo => GitProcess.RunGitAsync(repo.Root, $"reset -q -- {Paths(change)}"));
+    Task StageAsync(GitTreeNode? node)
+    {
+        if (node is null)
+            return Task.CompletedTask;
+        var targets = Targets(node).ToList();
+        return RunAsync(null, targets.Select(t => t.Repo).ToList(), repo =>
+            targets.First(t => t.Repo == repo).Path is { } path
+                ? GitProcess.RunGitAsync(repo.Root, $"add -A -- {Quote(path)}")
+                : GitProcess.RunGitAsync(repo.Root, "add -A"));
+    }
+
+    /// <summary>git reset for a file (and the name it had before a rename), a folder, a repository or all of them.</summary>
+    [RelayCommand(CanExecute = nameof(CanStage))]
+    Task UnstageAsync(GitTreeNode? node)
+    {
+        if (node is null)
+            return Task.CompletedTask;
+        var targets = Targets(node).ToList();
+        return RunAsync(null, targets.Select(t => t.Repo).ToList(), repo =>
+            targets.First(t => t.Repo == repo).Path is { } path
+                ? GitProcess.RunGitAsync(repo.Root, $"reset -q -- {(node.Change is { } change ? Paths(change) : Quote(path))}")
+                : GitProcess.RunGitAsync(repo.Root, "reset -q"));
+    }
 
     bool CanStageAll => !IsBusy && UnstagedChanges.Count > 0;
 

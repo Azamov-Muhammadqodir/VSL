@@ -99,6 +99,12 @@ public sealed class VsIcon : FrameworkElement
                 Stroke(dc, "M2.6,8 A5.4,5.4 0 1 0 4.2,4.2 M8,4.8 L8,8.3 L10.4,9.8", fg, 1.3);
                 Fill(dc, "M1.4,2.6 L4.9,2.9 L4.4,6.3 Z", fg);
                 break;
+            case "ChevronRight":
+                Stroke(dc, "M6.5,4.5 L10,8 L6.5,11.5", fg, 1.3);
+                break;
+            case "Folder":
+                Line(dc, "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z", fg, 1.8);
+                break;
             case "ChevronUp":
                 Stroke(dc, "M4.5,9.5 L8,6 L11.5,9.5", fg, 1.3);
                 break;

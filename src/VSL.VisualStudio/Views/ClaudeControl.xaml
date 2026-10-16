@@ -1227,44 +1227,64 @@
               <Setter Property="Height" Value="26" />
               <Setter Property="Margin" Value="2,0,0,0" />
             </Style>
-            <!-- A changed file: name, folder, repository (when there are several), status letter; stage or unstage on hover. -->
-            <DataTemplate x:Key="GitChangeRow" DataType="{x:Type git:GitChange}">
-              <Grid x:Name="Row" Background="Transparent" Height="24" ToolTip="{Binding Path}">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="Auto" />
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                  <ColumnDefinition Width="Auto" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <v:VsIcon Kind="File" Width="14" Height="14" Margin="14,0,6,0" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12">
-                  <Run Text="{Binding FileName, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Folder, Mode=OneWay}" Foreground="{DynamicResource ClaudeFaintBrush}" FontSize="11" />
-                </TextBlock>
-                <Border Grid.Column="2" Style="{StaticResource Chip}" Margin="6,0,0,0" VerticalAlignment="Center" Padding="5,0"
-                        Visibility="{Binding DataContext.IsMultiRepository, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource Visible}}">
-                  <TextBlock Text="{Binding Repo.Name}" FontSize="10" Style="{StaticResource Muted}" />
-                </Border>
-                <StackPanel x:Name="Actions" Grid.Column="3" Orientation="Horizontal" Visibility="Hidden" Margin="4,0,0,0">
-                  <Button Style="{StaticResource ClaudeIconButton}" Width="22" Height="22" ToolTip="{v:L 'Stage'}"
-                          Command="{Binding DataContext.StageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
-                          Visibility="{Binding IsStaged, Converter={StaticResource Hidden}}">
-                    <v:VsIcon Kind="Plus" Width="13" Height="13" />
-                  </Button>
-                  <Button Style="{StaticResource ClaudeIconButton}" Width="22" Height="22" ToolTip="{v:L 'Unstage'}"
-                          Command="{Binding DataContext.UnstageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
-                          Visibility="{Binding IsStaged, Converter={StaticResource Visible}}">
-                    <v:VsIcon Kind="Minus" Width="13" Height="13" />
-                  </Button>
-                </StackPanel>
-                <TextBlock x:Name="Letter" Grid.Column="4" Text="{Binding Letter}" ToolTip="{v:Tr Kind}" FontFamily="{StaticResource ClaudeMono}" FontSize="11" FontWeight="SemiBold"
-                           Foreground="#E2C08D" Width="16" TextAlignment="Center" Margin="4,0,0,0" VerticalAlignment="Center" />
-              </Grid>
+            <!-- A row of the changes tree, as in Git Changes: indent, chevron, icon, name; stage or unstage on hover; the status letter. -->
+            <Style x:Key="GitTreeButton" TargetType="Button" BasedOn="{StaticResource ClaudeButtonBase}">
+              <Setter Property="Height" Value="24" />
+              <Setter Property="Padding" Value="0" />
+              <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+              <Setter Property="v:ClaudeControl.CornerRadius" Value="3" />
+            </Style>
+            <DataTemplate x:Key="GitTreeRow" DataType="{x:Type git:GitTreeNode}">
+              <Button x:Name="Row" Style="{StaticResource GitTreeButton}" ToolTip="{Binding ToolTip}"
+                      Command="{Binding DataContext.ActivateNodeCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="20" />
+                  </Grid.ColumnDefinitions>
+                  <Border Width="{Binding Indent}" />
+                  <v:VsIcon Grid.Column="1" Kind="{Binding Chevron}" Width="13" Height="13" VerticalAlignment="Center"
+                            Visibility="{Binding IsExpandable, Converter={StaticResource Visible}}" />
+                  <Grid Grid.Column="2" Width="16" Height="16" Margin="3,0,6,0" VerticalAlignment="Center">
+                    <v:VsIcon x:Name="Icon" Kind="{Binding Icon}" Width="15" Height="15" />
+                    <TextBlock x:Name="CSharp" Text="C#" FontSize="10" FontWeight="Bold" Foreground="#73C991" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Visibility="Collapsed" />
+                  </Grid>
+                  <TextBlock Grid.Column="3" Text="{Binding Name}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  <StackPanel x:Name="Actions" Grid.Column="4" Orientation="Horizontal" Visibility="Hidden" Margin="4,0,0,0">
+                    <Button Style="{StaticResource ClaudeIconButton}" Width="20" Height="20" ToolTip="{v:L 'Stage'}"
+                            Command="{Binding DataContext.StageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                            Visibility="{Binding IsStaged, Converter={StaticResource Hidden}}">
+                      <v:VsIcon Kind="Plus" Width="13" Height="13" />
+                    </Button>
+                    <Button Style="{StaticResource ClaudeIconButton}" Width="20" Height="20" ToolTip="{v:L 'Unstage'}"
+                            Command="{Binding DataContext.UnstageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                            Visibility="{Binding IsStaged, Converter={StaticResource Visible}}">
+                      <v:VsIcon Kind="Minus" Width="13" Height="13" />
+                    </Button>
+                  </StackPanel>
+                  <TextBlock x:Name="Letter" Grid.Column="5" Text="{Binding Letter}" FontFamily="{StaticResource ClaudeMono}" FontSize="11" FontWeight="SemiBold"
+                             Foreground="#E2C08D" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
+              </Button>
               <DataTemplate.Triggers>
                 <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
                   <Setter TargetName="Actions" Property="Visibility" Value="Visible" />
-                  <Setter TargetName="Row" Property="Background" Value="{StaticResource ClaudeOverlay}" />
                 </Trigger>
+                <DataTrigger Binding="{Binding Icon}" Value="Folder">
+                  <Setter TargetName="Icon" Property="Foreground" Value="#DCB67A" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Icon}" Value="File">
+                  <Setter TargetName="Icon" Property="Foreground" Value="#9CB4D8" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsCSharp}" Value="True">
+                  <Setter TargetName="Icon" Property="Visibility" Value="Collapsed" />
+                  <Setter TargetName="CSharp" Property="Visibility" Value="Visible" />
+                </DataTrigger>
                 <DataTrigger Binding="{Binding Letter}" Value="A">
                   <Setter TargetName="Letter" Property="Foreground" Value="#73C991" />
                 </DataTrigger>
@@ -1276,6 +1296,26 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Letter}" Value="U">
                   <Setter TargetName="Letter" Property="Foreground" Value="#E5534B" />
+                </DataTrigger>
+              </DataTemplate.Triggers>
+            </DataTemplate>
+            <DataTemplate x:Key="GitBranchRow" DataType="{x:Type git:GitBranch}">
+              <Button Style="{StaticResource MenuRow}" Padding="12,5"
+                      Command="{Binding DataContext.CheckoutBranchCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <v:VsIcon Kind="GitBranch" Width="13" Height="13" Margin="0,0,8,0" />
+                  <TextBlock x:Name="Name" Grid.Column="1" Text="{Binding Name}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  <v:VsIcon Grid.Column="2" Kind="Check" Width="13" Height="13" Margin="8,0,0,0" Visibility="{Binding IsCurrent, Converter={StaticResource Visible}}" />
+                </Grid>
+              </Button>
+              <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                  <Setter TargetName="Name" Property="FontWeight" Value="SemiBold" />
                 </DataTrigger>
               </DataTemplate.Triggers>
             </DataTemplate>
@@ -1325,17 +1365,18 @@
                     <v:VsIcon Grid.Column="2" Kind="Chevron" Width="14" Height="14" Margin="4,0,0,0" />
                   </Grid>
                 </Button>
-                <Border Grid.Column="1" Background="{StaticResource ClaudeOverlay}" BorderBrush="{StaticResource ClaudeLine}" BorderThickness="1" CornerRadius="4"
-                        Height="28" Padding="8,0" ToolTip="{v:L 'Branch'}">
+                <Button Grid.Column="1" Style="{StaticResource GitBox}" Command="{Binding ToggleBranchMenuCommand}" ToolTip="{v:L 'Branches'}">
                   <Grid>
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <v:VsIcon Kind="GitBranch" Width="13" Height="13" Margin="0,0,6,0" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1" Text="{Binding BranchLabel}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <v:VsIcon Grid.Column="2" Kind="Chevron" Width="14" Height="14" Margin="4,0,0,0" />
                   </Grid>
-                </Border>
+                </Button>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,0,0,0">
                   <Button Style="{StaticResource GitAction}" Command="{Binding FetchCommand}" ToolTip="{v:L 'Fetch'}">
                     <v:VsIcon Kind="Fetch" Width="15" Height="15" />
@@ -1397,29 +1438,41 @@
               <TextBlock DockPanel.Dock="Top" Text="{v:L 'No changes: nothing to commit.'}" Style="{StaticResource Muted}" FontSize="12" Margin="0,14,0,0"
                          Visibility="{Binding HasNoChanges, Converter={StaticResource Visible}}" />
 
-              <!-- Staged changes, then the rest. -->
+              <!-- Staged changes, then the rest: each a tree of root folder, repositories, folders and files. -->
               <ScrollViewer Margin="0,10,0,0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
                             Visibility="{Binding IsRepository, Converter={StaticResource Visible}}"
                             Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ScrollViewerStyleKey}}">
                 <StackPanel>
-                  <DockPanel Margin="0,0,0,2" Visibility="{Binding HasStagedChanges, Converter={StaticResource Visible}}">
+                  <DockPanel Visibility="{Binding HasStagedChanges, Converter={StaticResource Visible}}">
                     <Button DockPanel.Dock="Right" Style="{StaticResource ClaudeIconButton}" Width="22" Height="22" Command="{Binding UnstageAllCommand}" ToolTip="{v:L 'Unstage all'}">
                       <v:VsIcon Kind="Minus" Width="13" Height="13" />
                     </Button>
-                    <TextBlock Style="{StaticResource Section}" VerticalAlignment="Center" Margin="0">
-                      <Run Text="{v:L 'Staged Changes'}" /><Run Text=" (" /><Run Text="{Binding StagedChanges.Count, Mode=OneWay}" /><Run Text=")" />
-                    </TextBlock>
+                    <Button Style="{StaticResource GitTreeButton}" Command="{Binding ToggleSectionCommand}" CommandParameter="staged">
+                      <StackPanel Orientation="Horizontal">
+                        <v:VsIcon Kind="{Binding StagedChevron}" Width="13" Height="13" Margin="0,0,4,0" />
+                        <TextBlock FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center">
+                          <Run Text="{v:L 'Staged Changes'}" /><Run Text=" (" /><Run Text="{Binding StagedChanges.Count, Mode=OneWay}" /><Run Text=")" />
+                        </TextBlock>
+                      </StackPanel>
+                    </Button>
                   </DockPanel>
-                  <ItemsControl ItemsSource="{Binding StagedChanges}" ItemTemplate="{StaticResource GitChangeRow}" Margin="0,0,0,8" />
-                  <DockPanel Margin="0,0,0,2" Visibility="{Binding UnstagedChanges.Count, Converter={StaticResource Visible}}">
+                  <ItemsControl ItemsSource="{Binding StagedRows}" ItemTemplate="{StaticResource GitTreeRow}" Margin="0,0,0,8"
+                                Visibility="{Binding IsStagedSectionExpanded, Converter={StaticResource Visible}}" />
+                  <DockPanel Visibility="{Binding UnstagedChanges.Count, Converter={StaticResource Visible}}">
                     <Button DockPanel.Dock="Right" Style="{StaticResource ClaudeIconButton}" Width="22" Height="22" Command="{Binding StageAllCommand}" ToolTip="{v:L 'Stage all'}">
                       <v:VsIcon Kind="Plus" Width="13" Height="13" />
                     </Button>
-                    <TextBlock Style="{StaticResource Section}" VerticalAlignment="Center" Margin="0">
-                      <Run Text="{v:L 'Changes'}" /><Run Text=" (" /><Run Text="{Binding UnstagedChanges.Count, Mode=OneWay}" /><Run Text=")" />
-                    </TextBlock>
+                    <Button Style="{StaticResource GitTreeButton}" Command="{Binding ToggleSectionCommand}" CommandParameter="changes">
+                      <StackPanel Orientation="Horizontal">
+                        <v:VsIcon Kind="{Binding ChangesChevron}" Width="13" Height="13" Margin="0,0,4,0" />
+                        <TextBlock FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center">
+                          <Run Text="{v:L 'Changes'}" /><Run Text=" (" /><Run Text="{Binding UnstagedChanges.Count, Mode=OneWay}" /><Run Text=")" />
+                        </TextBlock>
+                      </StackPanel>
+                    </Button>
                   </DockPanel>
-                  <ItemsControl ItemsSource="{Binding UnstagedChanges}" ItemTemplate="{StaticResource GitChangeRow}" />
+                  <ItemsControl ItemsSource="{Binding UnstagedRows}" ItemTemplate="{StaticResource GitTreeRow}"
+                                Visibility="{Binding IsChangesSectionExpanded, Converter={StaticResource Visible}}" />
                 </StackPanel>
               </ScrollViewer>
             </DockPanel>
@@ -1479,6 +1532,53 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                  </ScrollViewer>
+                </DockPanel>
+              </Border>
+            </Grid>
+
+            <!-- The branch menu: a filter, a new branch, then local and remote branches. -->
+            <Grid Visibility="{Binding IsBranchMenuOpen, Converter={StaticResource Visible}}">
+              <Border Background="Transparent">
+                <Border.InputBindings>
+                  <MouseBinding MouseAction="LeftClick" Command="{Binding CloseBranchMenuCommand}" />
+                </Border.InputBindings>
+              </Border>
+              <Border Style="{StaticResource MenuCard}" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="12,72,12,0" MaxWidth="420">
+                <DockPanel Margin="0,0,0,6">
+                  <TextBox DockPanel.Dock="Top" Style="{StaticResource ClaudeField}" Text="{Binding BranchFilter, UpdateSourceTrigger=PropertyChanged}"
+                           Tag="{v:L 'Filter branches'}" Margin="8,8,8,6">
+                    <TextBox.InputBindings>
+                      <KeyBinding Key="Escape" Command="{Binding CloseBranchMenuCommand}" />
+                    </TextBox.InputBindings>
+                  </TextBox>
+                  <Grid DockPanel.Dock="Top" Margin="8,0,8,6">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Style="{StaticResource ClaudeField}" Text="{Binding NewBranchName, UpdateSourceTrigger=PropertyChanged}" Tag="{v:L 'New branch name'}">
+                      <TextBox.InputBindings>
+                        <KeyBinding Key="Enter" Command="{Binding CreateBranchCommand}" />
+                        <KeyBinding Key="Escape" Command="{Binding CloseBranchMenuCommand}" />
+                      </TextBox.InputBindings>
+                    </TextBox>
+                    <Button Grid.Column="1" Style="{StaticResource ToolChip}" Command="{Binding CreateBranchCommand}" Margin="6,0,0,0"
+                            ToolTip="{v:L 'Create the branch from the current commit and switch to it'}">
+                      <StackPanel Orientation="Horizontal">
+                        <v:VsIcon Kind="Plus" Width="12" Height="12" Margin="0,0,4,0" />
+                        <TextBlock Text="{v:L 'New branch'}" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </Grid>
+                  <ScrollViewer MaxHeight="340" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                                Style="{DynamicResource {x:Static vsshell:VsResourceKeys.ScrollViewerStyleKey}}">
+                    <StackPanel>
+                      <TextBlock Text="{v:L 'Local'}" Style="{StaticResource Section}" Margin="12,4,12,2" Visibility="{Binding LocalBranches.Count, Converter={StaticResource Visible}}" />
+                      <ItemsControl ItemsSource="{Binding LocalBranches}" ItemTemplate="{StaticResource GitBranchRow}" />
+                      <TextBlock Text="{v:L 'Remote'}" Style="{StaticResource Section}" Margin="12,8,12,2" Visibility="{Binding RemoteBranches.Count, Converter={StaticResource Visible}}" />
+                      <ItemsControl ItemsSource="{Binding RemoteBranches}" ItemTemplate="{StaticResource GitBranchRow}" />
+                    </StackPanel>
                   </ScrollViewer>
                 </DockPanel>
               </Border>

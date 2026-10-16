@@ -60,7 +60,16 @@ public sealed class VisualStudioHost : IAsyncDisposable
         get
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            return _git ??= new GitViewModel(WorkingDirectory, ProjectDirectories, () => Claude);
+            if (_git is null)
+            {
+                _git = new GitViewModel(WorkingDirectory, ProjectDirectories, () => Claude);
+                _git.FileOpenRequested += path =>
+                {
+                    ThreadHelper.ThrowIfNotOnUIThread();
+                    OpenFile(path, null);
+                };
+            }
+            return _git;
         }
     }
 
