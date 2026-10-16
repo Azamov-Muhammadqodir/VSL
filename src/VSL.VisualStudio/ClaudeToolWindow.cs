@@ -21,7 +21,7 @@ public sealed class ClaudeToolWindow : ToolWindowPane
         ThreadHelper.ThrowIfNotOnUIThread();
         Caption = Title;
         BitmapImageMoniker = Microsoft.VisualStudio.Imaging.KnownMonikers.Comment;
-        Content = _control = new ClaudeControl { DataContext = host.Claude };
+        Content = _control = new ClaudeControl { DataContext = host.Claude, Git = host.Git };
     }
 
     /// <summary>

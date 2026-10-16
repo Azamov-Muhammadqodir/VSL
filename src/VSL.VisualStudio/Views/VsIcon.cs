@@ -110,6 +110,21 @@ public sealed class VsIcon : FrameworkElement
                 // A four-pointed star with a small one beside it: the model.
                 Line(dc, "M12 3C12.6 8.4 15.6 11.4 21 12C15.6 12.6 12.6 15.6 12 21C11.4 15.6 8.4 12.6 3 12C8.4 11.4 11.4 8.4 12 3Z M19.5 2v4 M17.5 4h4", fg, 1.8);
                 break;
+            case "GitBranch":
+                Line(dc, "M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 9a9 9 0 0 1-9 9", fg, 1.9);
+                break;
+            case "GitCommit":
+                Line(dc, "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z M3 12h6 M15 12h6", fg, 1.9);
+                break;
+            case "ArrowDown":
+                Line(dc, "M12 5v14 M19 12l-7 7-7-7", fg, 2.2);
+                break;
+            case "ArrowUp":
+                Line(dc, "M12 19V5 M5 12l7-7 7 7", fg, 2.2);
+                break;
+            case "Refresh":
+                Line(dc, "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5", fg, 1.9);
+                break;
             case "FileCode":
                 // A page with code brackets: the open file.
                 Line(dc, "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M10 12.5l-2.5 3 2.5 3 M14 12.5l2.5 3-2.5 3", fg, 1.8);

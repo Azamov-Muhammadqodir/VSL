@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using Microsoft.Win32;
 using VSL.Claude;
 using VSL.ViewModels;
+using VSL.VisualStudio.Git;
 
 namespace VSL.VisualStudio.Views;
 
@@ -37,6 +38,19 @@ public partial class ClaudeControl : UserControl
     public static void SetHoverBrush(DependencyObject element, Brush value) => element.SetValue(HoverBrushProperty, value);
 
     ClaudeViewModel? _vm;
+    GitViewModel? _git;
+
+    /// <summary>The commit panel's view model (Visual Studio only: the shared view model knows nothing of git).</summary>
+    public GitViewModel? Git
+    {
+        get => _git;
+        set
+        {
+            _git = value;
+            GitPanel.DataContext = value;
+            GitButton.DataContext = value;
+        }
+    }
     bool _stickToBottom = true;
 
     public ClaudeControl()
