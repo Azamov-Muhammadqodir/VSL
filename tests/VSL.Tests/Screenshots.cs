@@ -87,13 +87,7 @@ public class Screenshots
         TempRepo.Git(dir, "add", "-A");
         TempRepo.Git(dir, "-c", "user.name=VSL", "-c", "user.email=vsl@example.invalid", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "Todo app");
 
-        var psi = new ProcessStartInfo(DotnetCli.Executable, ["restore", Path.Combine(dir, "BlazorSample.sln")]) { RedirectStandardOutput = true };
-        DotnetCli.ApplyEnvironment(psi);
-        using var restore = Process.Start(psi)!;
-        var output = await restore.StandardOutput.ReadToEndAsync();
-        await restore.WaitForExitAsync();
-        if (restore.ExitCode != 0)
-            throw new InvalidOperationException("Restoring the demo solution failed:\n" + output);
+        await SampleSolution.RunDotnetAsync("Restoring the demo solution", "restore", Path.Combine(dir, "BlazorSample.sln"));
         return Path.Combine(dir, "BlazorSample.sln");
     }
 
