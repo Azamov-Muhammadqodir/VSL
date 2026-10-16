@@ -52,6 +52,9 @@ public class UiTests
         // Other tests may be building in parallel: never shut down the shared build servers.
         vm.ShutdownBuildServers = () => Task.CompletedTask;
         vm.Settings.Solutions.Clear();
+        vm.Settings.Layout = new();
+        // Each test starts from a clean solution state (the shared sample's .vs folder outlives a test).
+        vm.RestoresSolutionState = false;
         vm.Settings.ClaudePermissionMode = null;
         vm.Settings.ClaudeModel = null;
         vm.Settings.EditorZoom = 1.0;
@@ -112,6 +115,9 @@ public class UiTests
         await WaitUntil(() => vm.DebugOutput.Document.Text.Contains("Now listening on: http://localhost:5280"), TimeSpan.FromMinutes(2));
         Assert.Contains("Now listening on: http://localhost:5280", vm.DebugOutput.Document.Text);
         Assert.True(vm.IsRunning);
+        // The console logger's colors show as in the terminal ("info" in green), without escape codes in the text.
+        Assert.Contains(vm.DebugOutput.Spans, s => vm.DebugOutput.Document.GetText(s.Start, s.Length) == "info" && s.Foreground == VSL.ViewModels.AnsiText.Palette[2]);
+        Assert.DoesNotContain('\u001b', vm.DebugOutput.Document.Text);
         vm.StopCommand.Execute(null);
         await run.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         Assert.False(vm.IsRunning);
@@ -178,6 +184,8 @@ public class UiTests
         await vm.StartDebuggingCommand.ExecuteAsync(null);
         await WaitUntil(() => vm.DebugOutput.Document.Text.Contains("Now listening on: http://localhost:5280"), TimeSpan.FromSeconds(60));
         Assert.Equal(DebugMode.Running, vm.Mode);
+        // Under the debugger the Debug logger would repeat every console line ("Category: Information: ...").
+        Assert.DoesNotContain("Microsoft.Hosting.Lifetime: Information:", vm.DebugOutput.Document.Text);
         Assert.Null(host.ExecutionLine);
         await vm.StopCommand.ExecuteAsync(null);
         await WaitUntil(() => vm.Mode == DebugMode.Design, TimeSpan.FromSeconds(30));
@@ -1416,6 +1424,44 @@ public class UiTests
         Assert.Empty(vm.Settings.ToolLayout);
         second.Close();
         window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task Window_layout_comes_back_with_group_sizes_and_front_tabs()
+    {
+        var vm = NewViewModel();
+        var window = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+        window.Show();
+        Avalonia.Controls.Grid Grid(MainWindow w, string name) => w.GetVisualDescendants().OfType<Avalonia.Controls.Grid>().Single(g => g.Name == name);
+        Avalonia.Controls.TabControl Tabs(MainWindow w, string name) => w.GetVisualDescendants().OfType<Avalonia.Controls.TabControl>().Single(t => t.Name == name);
+        // Splitters dragged, other tabs in front.
+        Grid(window, "MainGrid").ColumnDefinitions[4].Width = new Avalonia.Controls.GridLength(650);
+        Grid(window, "LeftGrid").RowDefinitions[2].Height = new Avalonia.Controls.GridLength(320);
+        vm.ShowToolWindow(ToolWindows.GitChanges);
+        vm.ShowToolWindow(ToolWindows.Output);
+        await WaitUntil(() => false, TimeSpan.FromMilliseconds(100));
+        window.Close();
+        await WaitUntil(() => !window.IsVisible, TimeSpan.FromSeconds(10));
+
+        var layout = vm.Settings.Layout;
+        Assert.Equal((650.0, 320.0), (layout.RightWidth, layout.BottomHeight));
+        Assert.Equal(ToolWindows.GitChanges, layout.SelectedTools["Right"]);
+        Assert.Equal(ToolWindows.Output, layout.SelectedTools["Bottom"]);
+        Assert.Equal((1400.0, 900.0), (layout.Width, layout.Height));
+
+        var second = new MainWindow { DataContext = vm };
+        second.Show();
+        Assert.Equal((1400.0, 900.0), (second.Width, second.Height));
+        Assert.Equal(650, Grid(second, "MainGrid").ColumnDefinitions[4].Width.Value);
+        Assert.Equal(320, Grid(second, "LeftGrid").RowDefinitions[2].Height.Value);
+        Assert.Equal(ToolWindows.GitChanges, (Tabs(second, "RightTabs").SelectedItem as Avalonia.Controls.TabItem)?.Tag);
+        Assert.Equal(ToolWindows.Output, (Tabs(second, "BottomTabs").SelectedItem as Avalonia.Controls.TabItem)?.Tag);
+
+        // Reset Window Layout forgets the sizes too.
+        second.ResetWindowLayout();
+        Assert.Equal(400, Grid(second, "MainGrid").ColumnDefinitions[4].Width.Value);
+        Assert.Null(vm.Settings.Layout.RightWidth);
+        second.Close();
     }
 
     [AvaloniaFact]

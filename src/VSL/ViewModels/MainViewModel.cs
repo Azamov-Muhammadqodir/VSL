@@ -199,8 +199,8 @@ public partial class MainViewModel : ObservableObject
             return;
         // Like VS, refresh squiggles for the document the user switches to.
         editor.Host.ScheduleDiagnostics(150);
-        if (Solution is not null)
-            Settings.For(Solution.FilePath).ActiveDocument = editor.FilePath;
+        if (Solution is not null && !_restoringState)
+            _state.ActiveDocument = editor.FilePath;
     }
 
     partial void OnStartupProjectChanged(ProjectInfo? value)
@@ -208,22 +208,31 @@ public partial class MainViewModel : ObservableObject
         LaunchProfiles.Clear();
         foreach (var p in value?.LaunchProfiles ?? [])
             LaunchProfiles.Add(p.Name);
-        var saved = Solution is null ? null : Settings.For(Solution.FilePath).LaunchProfile;
+        var saved = Solution is null ? null : _state.LaunchProfile;
         LaunchProfile = LaunchProfiles.Contains(saved ?? "") ? saved : LaunchProfiles.FirstOrDefault();
-        if (Solution is not null && value is not null)
-            Settings.For(Solution.FilePath).StartupProject = value.FilePath;
+        if (Solution is not null && value is not null && !_restoringState)
+        {
+            _state.StartupProject = value.FilePath;
+            SaveSession();
+        }
     }
 
     partial void OnLaunchProfileChanged(string? value)
     {
-        if (Solution is not null && value is not null)
-            Settings.For(Solution.FilePath).LaunchProfile = value;
+        if (Solution is not null && value is not null && !_restoringState)
+        {
+            _state.LaunchProfile = value;
+            SaveSession();
+        }
     }
 
     partial void OnConfigurationChanged(string value)
     {
-        if (Solution is not null)
-            Settings.For(Solution.FilePath).Configuration = value;
+        if (Solution is not null && !_restoringState)
+        {
+            _state.Configuration = value;
+            SaveSession();
+        }
     }
 
     void SetStatus(string text, StatusKind? kind = null)
@@ -266,19 +275,16 @@ public partial class MainViewModel : ObservableObject
         ExplorerRoots.Add(solution.Root);
         Settings.AddRecent(path);
         OnPropertyChanged(nameof(RecentSolutions));
-        var state = Settings.For(path);
-        Configuration = state.Configuration;
-        LoadDebugState(state);
-
-        foreach (var p in solution.Projects.Where(p => p.IsRunnable))
-            StartupProjects.Add(p);
-        StartupProject = StartupProjects.FirstOrDefault(p => p.FilePath == state.StartupProject)
-            ?? StartupProjects.FirstOrDefault(p => p.IsWeb)
-            ?? StartupProjects.FirstOrDefault();
-
-        foreach (var file in state.OpenDocuments.Where(File.Exists).ToList())
-            OpenDocument(file, activate: false);
-        ActiveDocument = Editors.FirstOrDefault(d => d.FilePath == state.ActiveDocument) ?? Documents.FirstOrDefault();
+        _state = RestoresSolutionState ? SolutionState.Load(path, Settings) : new SolutionState();
+        _restoringState = true;
+        try
+        {
+            RestoreSolutionState(solution, _state);
+        }
+        finally
+        {
+            _restoringState = false;
+        }
         Settings.Save();
 
         SetStatus("Ready", StatusKind.Ready);
@@ -287,6 +293,8 @@ public partial class MainViewModel : ObservableObject
         if (_terminal is { } terminal)
             terminal.WorkingDirectory = solution.Directory;
         await OnClaudeSolutionChangedAsync();
+        if (_state.ClaudeConversation is { } conversation)
+            await Claude.RestoreConversationAsync(conversation);
         await StartLanguageServerAsync();
     }
 
@@ -306,14 +314,7 @@ public partial class MainViewModel : ObservableObject
             if (answer == true)
                 doc.Host.Save();
         }
-        if (Solution is not null)
-        {
-            var state = Settings.For(Solution.FilePath);
-            state.OpenDocuments = Editors.Select(d => d.FilePath).ToList();
-            state.ActiveDocument = ActiveEditor?.FilePath;
-            SaveDebugState(state);
-            Settings.Save();
-        }
+        SaveSession();
 
         _runProcess?.Kill();
         if (_session is { } debugSession)
@@ -340,15 +341,13 @@ public partial class MainViewModel : ObservableObject
         return true;
     }
 
+    /// <summary>Writes the solution's state to its .vs folder (documents with caret and scroll, explorer, debugging...).</summary>
     public void SaveSession()
     {
-        if (Solution is null)
+        if (Solution is not { } solution || _restoringState)
             return;
-        var state = Settings.For(Solution.FilePath);
-        state.OpenDocuments = Editors.Select(d => d.FilePath).ToList();
-        state.ActiveDocument = ActiveEditor?.FilePath;
-        SaveDebugState(state);
-        Settings.Save();
+        CaptureSolutionState(_state);
+        _state.Save(solution.FilePath);
     }
 
     // ---- Language server -------------------------------------------------------------------------------------
@@ -956,6 +955,17 @@ public partial class MainViewModel : ObservableObject
 
     bool CanStart => Solution is not null && StartupProject is not null && !IsBuilding && !IsRunning && Mode == DebugMode.Design;
 
+    /// <summary>
+    /// For the program VSL runs or debugs: the console logger keeps its colors although the output is redirected (the
+    /// Output window draws them as the terminal does), and the Debug logger stays quiet, since under the debugger it
+    /// would repeat every console log line in the same window (Visual Studio shows them in separate windows).
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string> ProgramOutputEnvironment = new Dictionary<string, string>
+    {
+        ["DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION"] = "1",
+        ["Logging__Debug__LogLevel__Default"] = "None",
+    };
+
     [RelayCommand(CanExecute = nameof(CanStart))]
     async Task StartWithoutDebugging()
     {
@@ -987,11 +997,11 @@ public partial class MainViewModel : ObservableObject
             if (!browserOpened && profile is { LaunchBrowser: true } && line.Contains("Now listening on:", StringComparison.Ordinal))
             {
                 browserOpened = true;
-                var url = Regex.Match(line, @"https?://\S+").Value;
+                var url = Regex.Match(line, @"https?://[^\s\u001b]+").Value;
                 if (url.Length > 0)
                     OpenBrowser(url.TrimEnd('/') + "/" + (profile.LaunchUrl ?? ""));
             }
-        });
+        }, ProgramOutputEnvironment);
         _runProcess = runner;
         var exit = await runner.WaitAsync();
         DebugOutput.Append($"The program '{project.Name}' has exited with code {exit} (0x{exit:x}).");

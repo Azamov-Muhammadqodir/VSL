@@ -177,6 +177,9 @@ public sealed class DiffView : DockPanel
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
         };
+        // Like the code editor: code, not hyperlinks (AvaloniaEdit would draw URLs in pure blue).
+        editor.Options.EnableHyperlinks = false;
+        editor.Options.EnableEmailHyperlinks = false;
         editor.TextArea.TextView.BackgroundRenderers.Add(new RowRenderer(Rows, spans, left));
         editor.TextArea.LeftMargins.Insert(0, new RowNumberMargin(Rows, left));
         TextMateSupport.Install(editor, filePath);

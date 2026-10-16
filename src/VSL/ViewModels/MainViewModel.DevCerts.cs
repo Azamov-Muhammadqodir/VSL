@@ -16,7 +16,8 @@ public partial class MainViewModel
 
     /// <summary>
     /// Before running a profile that listens on https: if the development certificate is not trusted, ask once per
-    /// session whether to trust it (VS: "Trust the ASP.NET Core SSL certificate?").
+    /// session whether to trust it (VS: "Trust the ASP.NET Core SSL certificate?"). Trusted for .NET but not by every
+    /// browser (Partial) is as far as trusting goes on many Linux desktops, so that is not asked again on every start.
     /// </summary>
     internal async Task OfferDevCertificateTrustAsync(LaunchProfile? profile)
     {
@@ -24,7 +25,7 @@ public partial class MainViewModel
             return;
         _devCertificateOffered = true;
         var trust = await CheckDevCertificate(CancellationToken.None);
-        if (trust is DevCertificateTrust.Trusted or DevCertificateTrust.Unknown)
+        if (trust is DevCertificateTrust.Trusted or DevCertificateTrust.Partial or DevCertificateTrust.Unknown)
             return;
         var answer = await Dialogs.ConfirmAsync("Trust the ASP.NET Core SSL certificate?",
             "This project is configured to use SSL. To avoid certificate warnings in the browser and from Kestrel, you can trust "
