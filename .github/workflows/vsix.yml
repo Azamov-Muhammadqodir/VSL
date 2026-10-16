@@ -9,7 +9,6 @@ name: vsix
 on:
   push:
     branches: [main]
-    tags: ['v*']
     paths:
       - 'src/VSL.VisualStudio/**'
       - 'src/VSL/Claude/**'
